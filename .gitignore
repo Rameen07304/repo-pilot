@@ -28,7 +28,8 @@ htmlcov/
 .ruff_cache/
 
 # App-specific: local data & caches
-data/
+data/*
+!data/.gitkeep
 *.sqlite3
 *.db
 chroma_db/
