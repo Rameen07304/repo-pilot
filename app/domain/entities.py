@@ -6,7 +6,7 @@ these shapes, not the other way around.
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
-from app.domain.value_objects import RepoUrl, Citation, QuestionMode
+from app.domain.value_objects import RepoUrl, Citation, QuestionMode, ConfidenceScore
 
 
 @dataclass
@@ -74,6 +74,16 @@ class Question:
         if not self.text.strip():
             raise ValueError("Question text cannot be empty")
 
+
+@dataclass
+class Answer:
+    """Explainer Agent's output — the result of answering a Question."""
+    question: Question
+    text: str
+    citations: list[Citation] = field(default_factory=list)
+    confidence: ConfidenceScore = field(default_factory=lambda: ConfidenceScore(0.5))
+    mode_used: QuestionMode = QuestionMode.QUICK
+    steps_taken: int = 1  # 1 for quick mode, up to DEEP_INVESTIGATION_MAX_STEPS for deep mode
 
 @dataclass
 class DiagramSpec:

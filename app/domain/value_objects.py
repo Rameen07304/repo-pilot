@@ -44,6 +44,11 @@ class RepoUrl:
     def normalized(self) -> str:
         return f"https://github.com/{self.owner}/{self.repo}"
 
+    @property
+    def full_name(self) -> str:
+        """e.g. 'octocat/Hello-World' — used as a cache key."""
+        return f"{self.owner}/{self.repo}"
+
 
 @dataclass(frozen=True)
 class Citation:
