@@ -91,3 +91,40 @@ class DiagramSpec:
     mermaid_syntax: str
     modules: list[str] = field(default_factory=list)
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+@dataclass
+class ParsedSymbol:
+    """
+    One function/class/method tree-sitter found in a file, plus the
+    names it calls (used for name-based call tracing, with import-aware
+    disambiguation — see CodeParser.trace_calls).
+    """
+    name: str
+    kind: str  # "function" | "class" | "method"
+    file_path: str
+    start_line: int
+    end_line: int
+    calls: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ParsedRepoIndex:
+    """
+    Explorer Agent's second output (alongside RepoManifest) — the
+    parsed structure Explainer and Diagram agents actually work from.
+    Kept separate from RepoManifest deliberately: RepoManifest is the
+    human-readable "what is this repo" summary, this is the large,
+    purely-internal data structure nobody looks at directly.
+    Cached under the same repo_full_name + commit_sha as the manifest.
+    """
+    repo_full_name: str
+    commit_sha: str
+    symbols: list[ParsedSymbol] = field(default_factory=list)
+    module_edges: list[tuple[str, str]] = field(default_factory=list)  # (from_module, to_module)
+
+    def symbols_in_file(self, file_path: str) -> list[ParsedSymbol]:
+        return [s for s in self.symbols if s.file_path == file_path]
+
+    def find_by_name(self, name: str) -> list[ParsedSymbol]:
+        """May return multiple matches across files — disambiguation happens in trace_calls."""
+        return [s for s in self.symbols if s.name == name]

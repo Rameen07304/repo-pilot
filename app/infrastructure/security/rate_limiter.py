@@ -26,7 +26,7 @@ class _Window:
     count: int = 0
 
 
-class SlidingWindowRateLimiter:
+class FixedWindowRateLimiter:
     """
     Simple fixed-window limiter (not sliding, for simplicity — good
     enough at this traffic scale; resets exactly on the hour boundary

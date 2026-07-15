@@ -15,9 +15,9 @@ circumstance. Parsing is 100% static analysis.
 """
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
-
+from app.domain.entities import ParsedRepoIndex
 from app.domain.entities import CodeChunk
-
+from app.domain.entities import ParsedSymbol
 
 @dataclass(frozen=True)
 class TraceStep:
@@ -51,12 +51,12 @@ class CodeParser(Protocol):
         ...
 
     def trace_calls(
-        self,
-        *,
-        entry_file: str,
-        entry_symbol: str,
-        all_files: dict[str, str],  # path -> content, for hop resolution
-        max_hops: int = 3,
+    self,
+    *,
+    entry_file: str,
+    entry_symbol: str,
+    parsed_index: "ParsedRepoIndex",
+    max_hops: int = 3,
     ) -> list[TraceStep]:
         """
         Follow imports/calls a bounded number of hops from a starting
@@ -71,5 +71,17 @@ class CodeParser(Protocol):
         Build the whole-repo import graph. This is what the Diagram
         Agent draws from directly — deterministic, no LLM involved in
         producing the edges themselves.
+        """
+        ...
+
+    def extract_symbols(
+        self, *, file_path: str, content: str, language: str
+    ) -> list["ParsedSymbol"]:
+        """
+        Extract all functions/classes/methods from one file's content.
+        Used by IngestRepoUseCase to build the ParsedRepoIndex once
+        during ingestion — a legitimate application-layer need, so
+        this must be a public interface method, not a reach into a
+        concrete implementation's internals.
         """
         ...

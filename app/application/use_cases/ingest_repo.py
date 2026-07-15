@@ -25,8 +25,8 @@ from app.application.interfaces.code_parser import CodeParser
 from app.application.interfaces.github_client import GitHubClient, GitHubRateLimitError
 from app.application.interfaces.llm_client import LLMClient, LLMProviderError
 from app.application.interfaces.vector_store import VectorStore
-from app.domain.entities import FileNode, RepoManifest
 from app.domain.value_objects import RepoUrl
+from app.domain.entities import FileNode, ParsedRepoIndex, RepoManifest
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,12 @@ class RepoCache:
         raise NotImplementedError
 
     async def set(self, manifest: RepoManifest) -> None:
+        raise NotImplementedError
+
+    async def get_parsed_index(self, repo_full_name: str, commit_sha: str) -> "ParsedRepoIndex | None":
+        raise NotImplementedError
+
+    async def set_parsed_index(self, parsed_index: "ParsedRepoIndex") -> None:
         raise NotImplementedError
 
 
@@ -89,10 +95,15 @@ class IngestRepoUseCase:
 
         # Step 2: cache check — this is what makes "re-asking about the
         # same commit" free. No GitHub/LLM calls at all on a cache hit.
-        cached = await self._cache.get(repo.normalized, commit_sha)
-        if cached is not None:
+        cached_manifest = await self._cache.get(repo.normalized, commit_sha)
+        cached_index = await self._cache.get_parsed_index(repo.normalized, commit_sha)
+        if cached_manifest is not None and cached_index is not None:
             logger.info("Cache hit for %s@%s", repo.normalized, commit_sha)
-            return cached, True
+            return cached_manifest, True
+        # Partial cache (one exists, not the other) falls through to a
+        # full re-ingestion rather than trying to patch just the missing
+        # half — simpler and avoids a whole class of inconsistent-state
+        # bugs for a cache that's meant to be cheap to rebuild anyway.
 
         # Step 3: fetch tree, enforce caps BEFORE fetching any content
         tree = await self._github.get_repo_tree(repo, commit_sha=commit_sha)
@@ -103,18 +114,18 @@ class IngestRepoUseCase:
                 "This tool is designed for small-to-medium repos."
             )
 
-        total_size = sum(f.size_bytes for f in tree)
-        if total_size > self._max_total_size_bytes:
-            raise IngestionLimitExceeded(
-                f"Repo is {total_size} bytes, cap is {self._max_total_size_bytes}."
-            )
-
         # Drop anything individually oversized or binary before we even
         # try to fetch it — cheaper than fetching then discarding.
         fetchable = [
             f for f in tree
             if not f.is_binary_guess and f.size_bytes <= self._max_file_size_bytes
         ]
+
+        total_size = sum(f.size_bytes for f in fetchable)
+        if total_size > self._max_total_size_bytes:
+            raise IngestionLimitExceeded(
+                f"Repo is {total_size} bytes, cap is {self._max_total_size_bytes}."
+            )
 
         # Step 4: fetch contents with BOUNDED concurrency.
         # asyncio.gather(*[fetch(f) for f in fetchable]) unbounded would
@@ -149,7 +160,6 @@ class IngestRepoUseCase:
         # GitHubClient implementations own redaction.
 
         # Step 6: detect stack, chunk, embed, store
-        all_files_map = {f.path: f.content for f in file_nodes if f.content}
         detected_stack = self._detect_stack(file_nodes)
 
         chunks = []
@@ -167,7 +177,33 @@ class IngestRepoUseCase:
                 chunks=chunks,
                 embeddings=embeddings,
             )
+    # Build the ParsedRepoIndex — symbols + module edges — the
+    # structure Explainer's trace_calls() and the Diagram Agent
+    # will read from later. Built once here, cached below, so no
+    # question ever has to re-parse this repo's files again.
+        all_files_map = {f.path: f.content for f in file_nodes if f.content}
 
+        symbols = []
+        for node in file_nodes:
+            if node.content:
+                language = self._parser.detect_language(node.path)
+                if language is not None:
+                    symbols.extend(
+                        self._parser.extract_symbols(
+                            file_path=node.path, content=node.content, language=language
+                        )
+                    )
+
+        module_edges_raw = self._parser.build_module_graph(all_files_map)
+        module_edges = [(e.from_module, e.to_module) for e in module_edges_raw]
+
+        parsed_index = ParsedRepoIndex(
+            repo_full_name=repo.normalized,
+            commit_sha=commit_sha,
+            symbols=symbols,
+            module_edges=module_edges,
+        )
+        await self._cache.set_parsed_index(parsed_index)
         # Step 7: one LLM call for the summary — bounded, single call,
         # not a loop. README + entry points only, not the whole repo,
         # to keep the prompt small and cheap.
