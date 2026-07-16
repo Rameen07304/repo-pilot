@@ -1,0 +1,26 @@
+# --- Web framework (interface layer) ---
+fastapi
+uvicorn[standard]
+python-multipart
+jinja2
+
+# --- HTTP client (GitHub API) ---
+httpx
+
+# --- LLM provider ---
+google-genai
+
+# --- Vector store ---
+chromadb
+
+# --- Code parsing ---
+tree-sitter
+tree-sitter-python
+tree-sitter-javascript
+tree-sitter-typescript
+
+# --- Config / environment ---
+python-dotenv
+
+# --- Rate limiting (route layer) ---
+slowapi
