@@ -1,0 +1,53 @@
+"""
+FastAPI application entry point. Wires the composition root
+(dependencies.py) into app.state at startup via lifespan, mounts
+routes, and serves the frontend.
+"""
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+
+from dotenv import load_dotenv
+load_dotenv()
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+from app.interface.dependencies import build_container
+from app.interface.routes import ask, diagram, ingest
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Building application container (LLM client, vector store, cache, etc)...")
+    app.state.container = build_container()
+    logger.info("Application container ready.")
+    yield
+    logger.info("Shutting down.")
+
+
+app = FastAPI(title="Repo Pilot", lifespan=lifespan)
+
+app.include_router(ingest.router)
+app.include_router(ask.router)
+app.include_router(diagram.router)
+
+templates = Jinja2Templates(directory="app/interface/templates")
+app.mount("/static", StaticFiles(directory="app/interface/static"), name="static")
+
+
+@app.get("/")
+async def home(request: Request):
+    return templates.TemplateResponse(request, "index.html", {})
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled exception on %s", request.url.path)
+    return JSONResponse(status_code=500, content={"error": "internal_error", "detail": "Something went wrong."})

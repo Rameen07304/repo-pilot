@@ -6,11 +6,15 @@ Deterministic pipeline, not an agent loop:
   2. Check cache — if we already have a manifest for this exact SHA,
      return it immediately, zero LLM/GitHub calls spent
   3. Fetch tree, apply size/count caps
-  4. Fetch file contents (bounded concurrency)
+  4. Fetch file contents (bounded concurrency, tolerant of individual
+     transient failures — one dropped connection doesn't kill the
+     whole ingestion)
   5. Scan for secrets, redact before anything touches an LLM
   6. Detect language/stack, chunk files, embed, store vectors
-  7. One LLM call to generate the repo summary
-  8. Build and cache the RepoManifest
+  7. Build the ParsedRepoIndex (symbols + module edges) for Explainer
+     and Diagram agents to use later
+  8. One LLM call to generate the repo summary
+  9. Build and cache the RepoManifest + ParsedRepoIndex
 
 Every external call is async. The only place we parallelize is step 4
 (file fetching), and it's capped — not asyncio.gather(*everything),
@@ -20,13 +24,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-
+from app.domain.entities import FileNode, ParsedRepoIndex, RepoManifest
 from app.application.interfaces.code_parser import CodeParser
 from app.application.interfaces.github_client import GitHubClient, GitHubRateLimitError
 from app.application.interfaces.llm_client import LLMClient, LLMProviderError
 from app.application.interfaces.vector_store import VectorStore
 from app.domain.value_objects import RepoUrl
-from app.domain.entities import FileNode, ParsedRepoIndex, RepoManifest
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +40,15 @@ class IngestionLimitExceeded(Exception):
 
 class RepoCache:
     """
-    Minimal interface the use case needs from whatever caching layer
-    sits in front of it (SQLite-backed in infrastructure). Kept tiny
+    Minimal interface the use cases need from whatever caching layer
+    sits in front of them (SQLite-backed in infrastructure). Kept tiny
     and defined right here since it's use-case-specific, not a general
     infrastructure contract like the four Protocols in interfaces/.
+
+    Two independent things get cached under the same (repo_full_name,
+    commit_sha) key: the human-readable RepoManifest, and the large
+    internal ParsedRepoIndex (symbols + module edges) that Explainer
+    and Diagram agents actually work from.
     """
     async def get(self, repo_full_name: str, commit_sha: str) -> RepoManifest | None:
         raise NotImplementedError
@@ -95,10 +103,10 @@ class IngestRepoUseCase:
 
         # Step 2: cache check — this is what makes "re-asking about the
         # same commit" free. No GitHub/LLM calls at all on a cache hit.
-        cached_manifest = await self._cache.get(repo.normalized, commit_sha)
-        cached_index = await self._cache.get_parsed_index(repo.normalized, commit_sha)
+        cached_manifest = await self._cache.get(repo.full_name, commit_sha)
+        cached_index = await self._cache.get_parsed_index(repo.full_name, commit_sha)
         if cached_manifest is not None and cached_index is not None:
-            logger.info("Cache hit for %s@%s", repo.normalized, commit_sha)
+            logger.info("Cache hit for %s@%s", repo.full_name, commit_sha)
             return cached_manifest, True
         # Partial cache (one exists, not the other) falls through to a
         # full re-ingestion rather than trying to patch just the missing
@@ -150,14 +158,35 @@ class IngestRepoUseCase:
                     is_binary=False,
                 )
 
-        file_nodes = await asyncio.gather(*[fetch_one(m) for m in fetchable])
+        # return_exceptions=True: a transient network blip on ONE file
+        # (dropped connection, read timeout) should not fail the entire
+        # ingestion when dozens of other files fetched successfully.
+        # A GitHubRateLimitError is the one exception we still treat as
+        # fatal for the whole run — see the loop below.
+        fetch_results = await asyncio.gather(
+            *[fetch_one(m) for m in fetchable], return_exceptions=True
+        )
+
+        file_nodes: list[FileNode] = []
+        failed_count = 0
+        for result in fetch_results:
+            if isinstance(result, GitHubRateLimitError):
+                raise result
+            if isinstance(result, Exception):
+                failed_count += 1
+                logger.warning("Skipping one file due to fetch error: %s", result)
+                continue
+            file_nodes.append(result)
+
+        if failed_count:
+            logger.info(
+                "Ingestion completed with %d file(s) skipped due to fetch errors out of %d total",
+                failed_count, len(fetchable),
+            )
 
         # Step 5: secret scanning happens in infrastructure BEFORE this
-        # point in the real wiring (a SecretScanningGitHubClient decorator,
-        # or inline in get_file_content) — content arriving here is
-        # already expected to be redacted. We don't re-scan here to avoid
-        # duplicating that logic in two layers; the contract is that
-        # GitHubClient implementations own redaction.
+        # point in the real wiring (inline in get_file_content) — content
+        # arriving here is already expected to be redacted.
 
         # Step 6: detect stack, chunk, embed, store
         detected_stack = self._detect_stack(file_nodes)
@@ -172,15 +201,16 @@ class IngestRepoUseCase:
         if chunks:
             embeddings = await self._llm.embed([c.content for c in chunks])
             await self._vectors.upsert_chunks(
-                repo_full_name=repo.normalized,
+                repo_full_name=repo.full_name,
                 commit_sha=commit_sha,
                 chunks=chunks,
                 embeddings=embeddings,
             )
-    # Build the ParsedRepoIndex — symbols + module edges — the
-    # structure Explainer's trace_calls() and the Diagram Agent
-    # will read from later. Built once here, cached below, so no
-    # question ever has to re-parse this repo's files again.
+
+        # Build the ParsedRepoIndex — symbols + module edges — the
+        # structure Explainer's trace_calls() and the Diagram Agent
+        # will read from later. Built once here, cached below, so no
+        # question ever has to re-parse this repo's files again.
         all_files_map = {f.path: f.content for f in file_nodes if f.content}
 
         symbols = []
@@ -198,12 +228,13 @@ class IngestRepoUseCase:
         module_edges = [(e.from_module, e.to_module) for e in module_edges_raw]
 
         parsed_index = ParsedRepoIndex(
-            repo_full_name=repo.normalized,
+            repo_full_name=repo.full_name,
             commit_sha=commit_sha,
             symbols=symbols,
             module_edges=module_edges,
         )
         await self._cache.set_parsed_index(parsed_index)
+
         # Step 7: one LLM call for the summary — bounded, single call,
         # not a loop. README + entry points only, not the whole repo,
         # to keep the prompt small and cheap.
