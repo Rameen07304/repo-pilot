@@ -43,8 +43,13 @@ app.mount("/static", StaticFiles(directory="app/interface/static"), name="static
 
 
 @app.get("/")
-async def home(request: Request):
-    return templates.TemplateResponse(request, "index.html", {})
+async def landing(request: Request):
+    return templates.TemplateResponse(request, "landing.html", {})
+
+
+@app.get("/app")
+async def app_page(request: Request):
+    return templates.TemplateResponse(request, "app.html", {})
 
 
 @app.exception_handler(Exception)

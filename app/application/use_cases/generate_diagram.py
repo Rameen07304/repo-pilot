@@ -75,7 +75,7 @@ class GenerateDiagramUseCase:
 
         node_ids = self._build_node_id_map(edges)
 
-        labels = node_ids  # default: use the file path itself as the label
+        labels = {path: path for path in node_ids}  # default: use the file path itself as the label
         if self._use_llm_labels:
             try:
                 labels = await self._suggest_labels(node_ids)

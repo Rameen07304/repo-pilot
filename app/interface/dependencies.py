@@ -18,7 +18,11 @@ from app.application.use_cases.generate_diagram import GenerateDiagramUseCase
 from app.application.use_cases.ingest_repo import IngestRepoUseCase
 from app.infrastructure.cache.sqlite_cache import SqliteRepoCache
 from app.infrastructure.github.github_api_client import GitHubApiClient
+from app.infrastructure.llm.composite_llm_client import CompositeLLMClient
+from app.infrastructure.llm.fallback_llm_client import FallbackLLMClient
 from app.infrastructure.llm.gemini_client import GeminiClient
+from app.infrastructure.llm.groq_client import GroqClient
+from app.infrastructure.llm.local_embedding_client import LocalEmbeddingClient
 from app.infrastructure.llm.quota_aware_llm_client import QuotaAwareLLMClient
 from app.infrastructure.parsing.tree_sitter_parser import TreeSitterCodeParser
 from app.infrastructure.security.rate_limiter import DailyQuotaGuard, FixedWindowRateLimiter
@@ -61,10 +65,40 @@ def build_container() -> AppContainer:
 
     # --- Infrastructure singletons ---
     github_client = GitHubApiClient(token=github_token)
-    raw_llm_client = GeminiClient(api_key=api_key)
+
+    # Gemini's AQ.-format keys currently hit a known, unresolved
+    # Google-side auth bug (ACCESS_TOKEN_TYPE_UNSUPPORTED). Gemini stays
+    # the PRIMARY generate() provider — once Google fixes this, calls
+    # succeed again automatically, no code change needed. Groq is the
+    # fallback for generate() only. Embeddings are ALWAYS local (never
+    # fallback-routed) to keep the vector space consistent across every
+    # ingestion, regardless of which text-gen path is currently live.
+    gemini_client = GeminiClient(api_key=api_key)
+
+    groq_api_key = os.getenv("GROQ_API_KEY", "")
+    if not groq_api_key or groq_api_key == "your_groq_api_key_here":
+        raise RuntimeError(
+            "GROQ_API_KEY is not set. Get a free key at https://console.groq.com/keys "
+            "and add it to .env."
+        )
+    groq_client = GroqClient(
+        api_key=groq_api_key,
+        model_name=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
+    )
+
+    generate_client = FallbackLLMClient(
+        primary=gemini_client,
+        secondary=groq_client,
+        primary_name="gemini",
+        secondary_name="groq",
+    )
+    embed_client = LocalEmbeddingClient()
+    raw_llm_client = CompositeLLMClient(generate_client=generate_client, embed_client=embed_client)
 
     quota_guard = DailyQuotaGuard(daily_cap=daily_cap, soft_limit_percent=soft_limit_percent)
-    llm_client = QuotaAwareLLMClient(wrapped=raw_llm_client, quota_guard=quota_guard, provider_name="gemini")
+    llm_client = QuotaAwareLLMClient(
+        wrapped=raw_llm_client, quota_guard=quota_guard, provider_name="gemini/groq+local"
+    )
 
     vector_store = ChromaVectorStore(persist_dir=chroma_dir)
     code_parser = TreeSitterCodeParser()

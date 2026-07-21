@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Repo Pilot — App</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.0/purify.min.js"></script>
+</head>
+<body class="app-body">
+    <div class="app-shell">
+        <aside class="sidebar">
+            <a href="/" class="sidebar-logo">🧭 Repo Pilot</a>
+
+            <div class="sidebar-nav">
+                <button class="tab-btn active" data-tab="ask-tab">Ask a Question</button>
+                <button class="tab-btn" data-tab="diagram-tab">Architecture Diagram</button>
+            </div>
+
+            <div id="repo-info" class="hidden sidebar-repo-info">
+                <h3>Current Repo</h3>
+                <p id="repo-summary"></p>
+                <div class="meta-row">
+                    <span id="repo-files"></span>
+                    <span id="repo-stack"></span>
+                </div>
+            </div>
+        </aside>
+
+        <main class="app-main">
+            <section class="ingest-bar">
+                <form id="ingest-form">
+                    <input type="text" id="repo-url" placeholder="https://github.com/owner/repo" required />
+                    <button type="submit" id="ingest-btn">Ingest Repo</button>
+                </form>
+                <div id="ingest-status"></div>
+            </section>
+
+            <section id="tabs" class="hidden">
+                <div id="ask-tab" class="tab-content active">
+                    <form id="ask-form">
+                        <input type="text" id="question-input" placeholder="How does authentication work?" required />
+                        <label class="deep-mode-toggle">
+                            <input type="checkbox" id="deep-mode-checkbox" />
+                            Deep investigation mode
+                        </label>
+                        <button type="submit" id="ask-btn">Ask</button>
+                    </form>
+                    <div id="ask-status"></div>
+                    <div id="answer-box" class="hidden">
+                        <h3>Answer</h3>
+                        <div id="answer-text"></div>
+                        <div id="answer-meta"></div>
+                        <h4>Citations</h4>
+                        <ul id="citations-list"></ul>
+                    </div>
+                </div>
+
+                <div id="diagram-tab" class="tab-content">
+                    <div class="diagram-controls">
+                        <button id="diagram-btn">Generate Diagram</button>
+                        <label class="orientation-toggle">
+                            <input type="checkbox" id="orientation-checkbox" />
+                            Wide layout
+                        </label>
+                        <button id="download-btn" class="secondary-btn hidden">Download PNG</button>
+                    </div>
+                    <div id="diagram-status"></div>
+                    <div id="mermaid-container" class="hidden">
+                        <pre class="mermaid" id="mermaid-diagram"></pre>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -19,19 +19,26 @@ Design decisions locked in during discussion:
     level chunks; anything else falls back to paragraph/fixed-window
     chunking so ingestion never fails just because a file's language
     isn't one of our two supported ones.
+  - UI-file relations (Python -> HTML template, template -> static
+    JS/CSS) are deliberately regex-based, NOT a real HTML parser — we
+    have no HTML grammar wired into tree-sitter. This covers the two
+    connection types that actually matter for a diagram without
+    adding a new dependency or parsing HTML structurally.
 """
 from __future__ import annotations
-
 import logging
 import re
-
 import tree_sitter_javascript as ts_javascript
 import tree_sitter_python as ts_python
 import tree_sitter_typescript as ts_typescript
 from tree_sitter import Language, Node, Parser
-
 from app.application.interfaces.code_parser import ModuleEdge, TraceStep
 from app.domain.entities import CodeChunk, ParsedRepoIndex, ParsedSymbol
+try:
+    from tree_sitter_language_pack import get_language as get_ts_language
+    _DART_AVAILABLE = True
+except ImportError:
+    _DART_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +48,7 @@ _EXTENSION_TO_LANGUAGE = {
     ".jsx": "javascript",
     ".ts": "typescript",
     ".tsx": "typescript",
+    ".dart": "dart",
 }
 
 # Tree-sitter node types that count as a "symbol" worth extracting,
@@ -57,15 +65,34 @@ _DEFINITION_NODE_TYPES = {
         "class_declaration": "class",
         "method_definition": "method",
     },
+    # Best-effort node type names for Dart — not independently verified
+    # against a real parse tree the way Python/JS/TS were. If symbol
+    # extraction comes back empty on real Dart files, these names are
+    # the first thing to check and adjust.
+    "dart": {
+        "class_definition": "class",
+        "mixin_declaration": "class",
+        "method_signature": "method",
+        "function_signature": "function",
+    },
 }
 
 _CALL_NODE_TYPE = {
     "python": "call",
     "javascript": "call_expression",
     "typescript": "call_expression",
+    "dart": "method_invocation",  # best-effort, same caveat as above
 }
 
 _NAME_FIELD = "name"  # consistent across these grammars for def/class nodes
+
+# Matches render("x.html", ...) or render_template("x.html", ...) —
+# covers both Flask's render_template and Django's render(request, "x.html", ...)
+_RENDER_TEMPLATE_PATTERN = re.compile(
+    r"render(?:_template)?\([^)]*?[\"']([^\"']+\.html)[\"']", re.DOTALL
+)
+# Matches <script src="..."> and <link href="..."> pointing at JS/CSS
+_HTML_ASSET_PATTERN = re.compile(r"""(?:src|href)=["']([^"']+\.(?:js|css))["']""")
 
 
 class TreeSitterCodeParser:
@@ -75,6 +102,19 @@ class TreeSitterCodeParser:
             "javascript": Language(ts_javascript.language()),
             "typescript": Language(ts_typescript.language_typescript()),
         }
+
+        if _DART_AVAILABLE:
+            try:
+                self._languages["dart"] = get_ts_language("dart")
+                logger.info("Dart grammar loaded successfully.")
+            except Exception as e:
+                logger.warning("Dart grammar unavailable, Dart files will use fallback chunking: %s", e)
+        else:
+            logger.warning(
+                "tree-sitter-language-pack not installed — Dart files will use "
+                "fallback chunking, no import graph or symbol extraction for Dart."
+            )
+
         self._parsers: dict[str, Parser] = {
             lang: Parser(grammar) for lang, grammar in self._languages.items()
         }
@@ -86,7 +126,12 @@ class TreeSitterCodeParser:
     def detect_language(self, file_path: str) -> str | None:
         for ext, lang in _EXTENSION_TO_LANGUAGE.items():
             if file_path.lower().endswith(ext):
-                return lang
+                # Only claim a language is "supported" if its parser
+                # actually loaded — e.g. Dart's grammar can be missing if
+                # tree-sitter-language-pack isn't installed. Returning None
+                # here routes the file through fallback chunking instead
+                # of crashing later when self._parsers[lang] doesn't exist.
+                return lang if lang in self._parsers else None
         return None
 
     def extract_symbols(
@@ -157,15 +202,29 @@ class TreeSitterCodeParser:
         edges: list[ModuleEdge] = []
         for path, content in all_files.items():
             language = self.detect_language(path)
-            if language is None:
-                continue
-            imports = self._extract_imports(content=content, language=language)
-            for imported in imports:
-                resolved = self._resolve_import_to_path(
-                    importing_file=path, import_name=imported, all_files=all_files
+
+            if language is not None:
+                imports = self._extract_imports(content=content, language=language)
+                for imported in imports:
+                    resolved = self._resolve_import_to_path(
+                        importing_file=path, import_name=imported, all_files=all_files
+                    )
+                    if resolved:
+                        edges.append(ModuleEdge(from_module=path, to_module=resolved))
+
+            # UI-file relations — deliberately regex-based, not a real
+            # HTML parser (see class docstring). Covers the two
+            # connection types that matter for a diagram: Python ->
+            # template, and template -> static JS/CSS.
+            if language == "python":
+                edges.extend(
+                    self._extract_template_edges(path=path, content=content, all_files=all_files)
                 )
-                if resolved:
-                    edges.append(ModuleEdge(from_module=path, to_module=resolved))
+            if path.lower().endswith(".html"):
+                edges.extend(
+                    self._extract_html_asset_edges(path=path, content=content, all_files=all_files)
+                )
+
         return edges
 
     def trace_calls(
@@ -223,35 +282,57 @@ class TreeSitterCodeParser:
         return calls
 
     def _extract_imports(self, *, content: str, language: str) -> list[str]:
-        """
-        Returns raw imported module names/paths as written in source —
-        resolution to an actual file path happens in _resolve_import_to_path.
-        """
         imports: list[str] = []
         if language == "python":
             for line in content.splitlines():
                 stripped = line.strip()
                 match = re.match(r"^from\s+([\w.]+)\s+import", stripped) or re.match(
-                    r"^import\s+([\w.]+)", stripped
+                r"^import\s+([\w.]+)", stripped
                 )
                 if match:
-                    imports.append(match.group(1))
+                  imports.append(match.group(1))
+        elif language == "dart":
+        # Covers both: import 'package:craftore/core/x.dart';
+        # and relative: import '../domain/entities/x.dart';
+           for match in re.finditer(r"""import\s+['"]([^'"]+)['"]""", content):
+                imports.append(match.group(1))
         else:  # javascript / typescript
             for line in content.splitlines():
                 match = re.search(r"""(?:from|require\()\s*['"]([^'"]+)['"]""", line)
                 if match:
-                    imports.append(match.group(1))
+                   imports.append(match.group(1))
         return imports
-
+     
     def _resolve_import_to_path(
         self, *, importing_file: str, import_name: str, all_files: dict[str, str]
     ) -> str | None:
-        """
-        Best-effort mapping from an import string to a file we actually
-        have. External/third-party packages (e.g. "requests", "react")
-        correctly resolve to None — we only draw edges for internal
-        modules, never guess at external library internals.
-        """
+        # Dart package imports: "package:craftore/core/x.dart" always maps
+        # to "lib/core/x.dart" regardless of the actual pubspec package
+        # name — this is a fixed Dart convention, not a guess.
+        if import_name.startswith("package:"):
+            if "/" not in import_name:
+                return None
+            remainder = import_name.split("/", 1)[1]
+            candidate = f"lib/{remainder}"
+            for path in all_files:
+                if path == candidate or path.endswith("/" + candidate):
+                    return path
+            return None
+
+        # Dart relative imports: "../domain/entities/x.dart" — resolve
+        # against the importing file's own directory.
+        if import_name.startswith(".") and importing_file.endswith(".dart"):
+            importing_dir = importing_file.rsplit("/", 1)[0] if "/" in importing_file else ""
+            parts = importing_dir.split("/") if importing_dir else []
+            for segment in import_name.split("/"):
+                if segment == "..":
+                    if parts:
+                        parts.pop()
+                elif segment != ".":
+                    parts.append(segment)
+            candidate = "/".join(parts)
+            return candidate if candidate in all_files else None
+
         candidate_suffixes = [
             import_name.replace(".", "/") + ".py",
             import_name.replace(".", "/") + "/__init__.py",
@@ -263,6 +344,38 @@ class TreeSitterCodeParser:
             for suffix in candidate_suffixes:
                 if path == suffix or path.endswith("/" + suffix):
                     return path
+        return None
+
+    # ------------------------------------------------------------------
+    # Internal: UI-file relation extraction (templates, static assets)
+    # ------------------------------------------------------------------
+
+    def _extract_template_edges(
+        self, *, path: str, content: str, all_files: dict[str, str]
+    ) -> list[ModuleEdge]:
+        edges: list[ModuleEdge] = []
+        for match in _RENDER_TEMPLATE_PATTERN.finditer(content):
+            resolved = self._resolve_static_path(match.group(1), all_files)
+            if resolved:
+                edges.append(ModuleEdge(from_module=path, to_module=resolved))
+        return edges
+
+    def _extract_html_asset_edges(
+        self, *, path: str, content: str, all_files: dict[str, str]
+    ) -> list[ModuleEdge]:
+        edges: list[ModuleEdge] = []
+        for match in _HTML_ASSET_PATTERN.finditer(content):
+            resolved = self._resolve_static_path(match.group(1), all_files)
+            if resolved:
+                edges.append(ModuleEdge(from_module=path, to_module=resolved))
+        return edges
+
+    @staticmethod
+    def _resolve_static_path(name: str, all_files: dict[str, str]) -> str | None:
+        name = name.lstrip("/")
+        for candidate_path in all_files:
+            if candidate_path == name or candidate_path.endswith("/" + name):
+                return candidate_path
         return None
 
     # ------------------------------------------------------------------

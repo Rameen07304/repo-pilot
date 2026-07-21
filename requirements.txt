@@ -24,3 +24,10 @@ python-dotenv
 
 # --- Rate limiting (route layer) ---
 slowapi
+
+#--- Groq api use if gemini not available ---
+groq
+sentence-transformers
+
+#--- for dart ---
+tree-sitter-language-pack

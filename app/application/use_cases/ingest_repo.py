@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import json
+import re
 from app.domain.entities import FileNode, ParsedRepoIndex, RepoManifest
 from app.application.interfaces.code_parser import CodeParser
 from app.application.interfaces.github_client import GitHubClient, GitHubRateLimitError
@@ -266,21 +268,79 @@ class IngestRepoUseCase:
         return manifest, False
 
     def _detect_stack(self, files: list[FileNode]) -> list[str]:
-        """Cheap heuristic based on filenames present — no LLM needed."""
+        """
+        Cheap heuristic based on filenames present — no LLM needed.
+        Matches by BASENAME, not full path — most real repos nest these
+        marker files inside a project subfolder (e.g. "road_safety/manage.py"),
+        so matching only the exact root-level path silently misses nearly
+        every real-world repo. This was confirmed as the actual cause of
+        "stack not detected" across every repo tested so far.
+        """
         stack: set[str] = set()
-        paths = {f.path for f in files}
-        if "package.json" in paths:
+        basename_to_path: dict[str, str] = {}
+        for f in files:
+            basename = f.path.rsplit("/", 1)[-1]
+            basename_to_path.setdefault(basename, f.path)  # first occurrence wins
+        basenames = set(basename_to_path.keys())
+        content_by_path = {f.path: f.content for f in files if f.content}
+
+        if "package.json" in basenames:
             stack.add("node")
-        if "requirements.txt" in paths or "pyproject.toml" in paths:
-            stack.add("python")
-        if "manage.py" in paths:
+            pkg_content = content_by_path.get(basename_to_path["package.json"])
+            if pkg_content:
+                try:
+                    pkg = json.loads(pkg_content)
+                    deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+                    if "react" in deps:
+                        stack.add("react")
+                    if "vue" in deps:
+                        stack.add("vue")
+                    if "next" in deps:
+                        stack.add("next.js")
+                    if "@angular/core" in deps:
+                        stack.add("angular")
+                    if "express" in deps:
+                        stack.add("express")
+                    if "svelte" in deps:
+                        stack.add("svelte")
+                except (ValueError, TypeError):
+                    logger.debug("Could not parse package.json for stack detection")
+
+        py_manifest_text = ""
+        for marker in ("requirements.txt", "pyproject.toml"):
+            if marker in basenames:
+                stack.add("python")
+                content = content_by_path.get(basename_to_path[marker])
+                if content:
+                    py_manifest_text += content
+
+        if re.search(r"(?i)\bflask\b", py_manifest_text):
+            stack.add("flask")
+        if re.search(r"(?i)\bfastapi\b", py_manifest_text):
+            stack.add("fastapi")
+
+        if "manage.py" in basenames:
             stack.add("django")
-        if any(p.endswith("main.py") for p in paths):
+        if any(b == "main.py" for b in basenames):
             stack.add("python-entrypoint")
-        if "Cargo.toml" in paths:
+        if "Cargo.toml" in basenames:
             stack.add("rust")
-        if "go.mod" in paths:
+        if "go.mod" in basenames:
             stack.add("go")
+        if "Gemfile" in basenames:
+            stack.add("ruby")
+        if "pom.xml" in basenames or "build.gradle" in basenames:
+            stack.add("java")
+        if "composer.json" in basenames:
+            stack.add("php")
+        if "Dockerfile" in basenames:
+            stack.add("docker")
+        if "pubspec.yaml" in basenames:
+            stack.add("dart")
+            pubspec_content = content_by_path.get(basename_to_path["pubspec.yaml"])
+        if pubspec_content and re.search(r"(?i)^\s*flutter\s*:", pubspec_content, re.MULTILINE):
+            stack.add("flutter")
+
         return sorted(stack)
 
     def _detect_entry_points(self, files: list[FileNode]) -> list[str]:

@@ -101,7 +101,16 @@ askForm.addEventListener("submit", async (e) => {
         }
 
         setStatus(askStatus, "", "success");
-        document.getElementById("answer-text").textContent = data.answer_text;
+
+        // Render the LLM's Markdown output as real HTML, then sanitize
+        // it before insertion. This is NOT optional: the answer text
+        // ultimately traces back to repo content the LLM was shown, so
+        // we never trust it enough to skip DOMPurify, even though it's
+        // "our own" model's output.
+        const rawHtml = marked.parse(data.answer_text);
+        const safeHtml = DOMPurify.sanitize(rawHtml);
+        document.getElementById("answer-text").innerHTML = safeHtml;
+
         document.getElementById("answer-meta").textContent =
             `Mode: ${data.mode_used} · Confidence: ${(data.confidence * 100).toFixed(0)}% · Steps: ${data.steps_taken}`;
 

@@ -50,11 +50,19 @@ _NOISE_DIR_FRAGMENTS = {
     "__pycache__/", ".venv/", "venv/", ".next/", "target/",
     "coverage/", ".pytest_cache/",
     ".github/issue_template/", ".github/discussion_template/", ".github/pull_request_template",
+    # Flutter/Dart: platform-specific scaffolding, hundreds of files
+    # of pure boilerplate (Gradle configs, Xcode project files,
+    # generated plugin registrants) with zero relevance to the app's
+    # actual logic. Confirmed as the cause of very slow ingestion on
+    # Flutter repos — these folders alone can be 200+ files.
+    "android/", "ios/", "windows/", "macos/", "linux/", "web/",
+    ".dart_tool/", ".pub-cache/", ".pub/",
 }
 
 _NOISE_FILENAMES = {
     "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
     "poetry.lock", "Pipfile.lock", "Cargo.lock",
+    "pubspec.lock",
 }
 
 
@@ -115,11 +123,8 @@ class GitHubApiClient(GitHubClient):
         if encoding != "base64":
             raise ValueError(f"Unexpected encoding {encoding!r} for {path}")
 
-        try:
-            raw_bytes = base64.b64decode(data["content"])
-            content = raw_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-            raise ValueError(f"File {path} is not valid UTF-8 text, skipping")
+        raw_bytes = base64.b64decode(data["content"])
+        content = self._decode_text(raw_bytes, path)
 
         if looks_like_env_file(path):
             return "[FILE OMITTED: environment file, not processed]"
@@ -164,7 +169,13 @@ class GitHubApiClient(GitHubClient):
         if any(fragment in lower for fragment in _NOISE_DIR_FRAGMENTS):
             return True
         filename = path.rsplit("/", 1)[-1]
-        return filename in _NOISE_FILENAMES
+        if filename in _NOISE_FILENAMES:
+            return True
+        # Dart's code-generation output (json_serializable, freezed,
+        # etc) — pure generated boilerplate, not hand-written logic.
+        if filename.endswith((".g.dart", ".freezed.dart", ".gr.dart")):
+            return True
+        return False
 
     @staticmethod
     def _looks_binary(path: str) -> bool:
@@ -180,3 +191,18 @@ class GitHubApiClient(GitHubClient):
                 import time
                 retry_after = max(0, int(reset_header) - int(time.time()))
             raise GitHubRateLimitError(retry_after_seconds=retry_after)
+    @staticmethod
+    def _decode_text(raw_bytes: bytes, path: str) -> str:
+        """
+        Tries a few common encodings before giving up. Plain UTF-8 first
+        (the common case), then UTF-8 with BOM (common from Windows
+        editors), then UTF-16 (also common from Windows tools saving
+        "Unicode" text). Only raises if none of these work — genuinely
+        binary content correctly still gets skipped.
+        """
+        for encoding in ("utf-8", "utf-8-sig", "utf-16"):
+            try:
+                return raw_bytes.decode(encoding)
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        raise ValueError(f"File {path} is not decodable as UTF-8, UTF-8-BOM, or UTF-16, skipping")
