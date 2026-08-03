@@ -303,12 +303,8 @@ class TreeSitterCodeParser:
                    imports.append(match.group(1))
         return imports
      
-    def _resolve_import_to_path(
-        self, *, importing_file: str, import_name: str, all_files: dict[str, str]
-    ) -> str | None:
-        # Dart package imports: "package:craftore/core/x.dart" always maps
-        # to "lib/core/x.dart" regardless of the actual pubspec package
-        # name — this is a fixed Dart convention, not a guess.
+    def _resolve_import_to_path( self, *, importing_file: str, import_name: str, all_files: dict[str, str]) -> str | None:
+        # Dart package imports: fixed convention, package:name/x.dart -> lib/x.dart
         if import_name.startswith("package:"):
             if "/" not in import_name:
                 return None
@@ -319,27 +315,45 @@ class TreeSitterCodeParser:
                     return path
             return None
 
-        # Dart relative imports: "../domain/entities/x.dart" — resolve
-        # against the importing file's own directory.
-        if import_name.startswith(".") and importing_file.endswith(".dart"):
+        # Common Vite/webpack alias convention: "@/x" -> "src/x". Pragmatic
+        # best-effort assumption, not a guarantee — real alias mappings
+        # live in vite.config.js/tsconfig.json and could point elsewhere.
+        if import_name.startswith("@/"):
+            remainder = import_name[2:]
+            for suffix in ("", ".js", ".jsx", ".ts", ".tsx", "/index.js", "/index.ts"):
+                candidate = f"src/{remainder}{suffix}"
+                if candidate in all_files:
+                    return candidate
+            return None
+
+        # Relative imports — Dart, JS, TS all use "./x" / "../y/z" — resolve
+        # against the importing file's OWN directory. Applies regardless of
+        # which of these three languages the file is, not just Dart.
+        if import_name.startswith("."):
             importing_dir = importing_file.rsplit("/", 1)[0] if "/" in importing_file else ""
             parts = importing_dir.split("/") if importing_dir else []
             for segment in import_name.split("/"):
                 if segment == "..":
                     if parts:
-                        parts.pop()
-                elif segment != ".":
+                       parts.pop()
+                elif segment not in (".", ""):
                     parts.append(segment)
-            candidate = "/".join(parts)
-            return candidate if candidate in all_files else None
+            base_candidate = "/".join(parts)
 
+            for suffix in ("", ".js", ".jsx", ".ts", ".tsx", ".dart", "/index.js", "/index.ts"):
+                candidate = base_candidate + suffix
+                if candidate in all_files:
+                    return candidate
+            return None
+
+        # Absolute-style: Python dotted modules, or bare specifiers that
+        # happen to match an internal path.
         candidate_suffixes = [
-            import_name.replace(".", "/") + ".py",
-            import_name.replace(".", "/") + "/__init__.py",
-            import_name.lstrip("./") + ".js",
-            import_name.lstrip("./") + ".ts",
-            import_name.lstrip("./") + "/index.js",
-        ]
+          import_name.replace(".", "/") + ".py",
+          import_name.replace(".", "/") + "/__init__.py",
+          import_name + ".js",
+          import_name + ".ts",
+          import_name + "/index.js",]
         for path in all_files:
             for suffix in candidate_suffixes:
                 if path == suffix or path.endswith("/" + suffix):

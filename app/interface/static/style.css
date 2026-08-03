@@ -297,8 +297,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .secondary-btn { background: var(--surface); color: var(--accent); border: 1px solid var(--accent); }
 .secondary-btn:hover { background: var(--surface-tint); }
 
-#mermaid-container { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--hairline); }
-
+#mermaid-container {
+    width: 100%;
+    overflow-x: auto;
+}
 #mermaid-diagram {
     background: var(--surface);
     border: 1px solid var(--hairline);
@@ -307,4 +309,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     overflow-x: auto;
     overflow-y: auto;
     max-height: 80vh;
+}
+
+/* Override Mermaid's default max-width:100%, which was scaling the
+   entire diagram down to fit the container — shrinking width AND
+   height together, making wide diagrams look tiny. We want the
+   diagram at its real size, with scrolling for anything that doesn't
+   fit, not a shrunk-down thumbnail. */
+#mermaid-diagram svg {
+    max-width: none !important;
+    width: auto !important;
+    height: auto !important;
 }

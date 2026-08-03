@@ -135,7 +135,11 @@ const diagramBtn = document.getElementById("diagram-btn");
 const diagramStatus = document.getElementById("diagram-status");
 const mermaidContainer = document.getElementById("mermaid-container");
 
-mermaid.initialize({ startOnLoad: false, theme: "default" });
+mermaid.initialize({
+    startOnLoad: false,
+    theme: "default",
+    flowchart: { useMaxWidth: false },
+});
 
 diagramBtn.addEventListener("click", async () => {
     if (!currentRepo) {

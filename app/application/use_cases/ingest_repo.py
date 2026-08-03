@@ -270,17 +270,14 @@ class IngestRepoUseCase:
     def _detect_stack(self, files: list[FileNode]) -> list[str]:
         """
         Cheap heuristic based on filenames present — no LLM needed.
-        Matches by BASENAME, not full path — most real repos nest these
-        marker files inside a project subfolder (e.g. "road_safety/manage.py"),
-        so matching only the exact root-level path silently misses nearly
-        every real-world repo. This was confirmed as the actual cause of
-        "stack not detected" across every repo tested so far.
+        Matches by BASENAME, not full path — most real repos nest marker
+        files inside a project subfolder.
         """
         stack: set[str] = set()
         basename_to_path: dict[str, str] = {}
         for f in files:
             basename = f.path.rsplit("/", 1)[-1]
-            basename_to_path.setdefault(basename, f.path)  # first occurrence wins
+            basename_to_path.setdefault(basename, f.path)
         basenames = set(basename_to_path.keys())
         content_by_path = {f.path: f.content for f in files if f.content}
 
@@ -338,8 +335,8 @@ class IngestRepoUseCase:
         if "pubspec.yaml" in basenames:
             stack.add("dart")
             pubspec_content = content_by_path.get(basename_to_path["pubspec.yaml"])
-        if pubspec_content and re.search(r"(?i)^\s*flutter\s*:", pubspec_content, re.MULTILINE):
-            stack.add("flutter")
+            if pubspec_content and re.search(r"(?i)^\s*flutter\s*:", pubspec_content, re.MULTILINE):
+                stack.add("flutter")
 
         return sorted(stack)
 

@@ -37,25 +37,23 @@ class RepoNotIndexedError(Exception):
 
 class GenerateDiagramUseCase:
     def __init__(
-        self,
-        *,
-        cache: RepoCache,
-        llm_client: LLMClient | None = None,
-        max_nodes: int = 40,
-        max_edges: int = 80,
-        use_llm_labels: bool = False,
-    ) -> None:
+     self,
+     *,
+     cache: RepoCache,
+     llm_client: LLMClient | None = None,
+     max_nodes: int = 40,
+     max_edges: int = 80,
+     use_llm_labels: bool = False,
+     group_by_folder: bool = True,
+     ) -> None:
         self._cache = cache
         self._llm = llm_client
         self._max_nodes = max_nodes
         self._max_edges = max_edges
-        # LLM labeling is opt-in and OFF by default — the diagram is
-        # fully correct and useful with zero LLM calls. Only turn this
-        # on if you're comfortable spending one extra generate() call
-        # per diagram request.
         self._use_llm_labels = use_llm_labels and llm_client is not None
+        self._group_by_folder = group_by_folder
 
-    async def execute(self, *, repo_full_name: str, commit_sha: str) -> DiagramSpec:
+    async def execute(self, *, repo_full_name: str, commit_sha: str, orientation: str = "TD", group_by_folder: bool | None = None) -> DiagramSpec:
         parsed_index = await self._cache.get_parsed_index(repo_full_name, commit_sha)
         if parsed_index is None:
             raise RepoNotIndexedError(
@@ -83,7 +81,10 @@ class GenerateDiagramUseCase:
                 logger.warning("Diagram label suggestion failed, using raw paths: %s", e)
                 labels = node_ids
 
-        mermaid_syntax = self._build_mermaid(edges=edges, node_ids=node_ids, labels=labels)
+        use_grouping = self._group_by_folder if group_by_folder is None else group_by_folder
+        mermaid_syntax = self._build_mermaid(
+           edges=edges, node_ids=node_ids, labels=labels, orientation=orientation, group_by_folder=use_grouping
+        )
 
         modules = sorted(node_ids.keys())
 
@@ -149,22 +150,39 @@ class GenerateDiagramUseCase:
     # Internal: Mermaid rendering
     # ------------------------------------------------------------------
 
-    def _build_mermaid(
-        self,
-        *,
-        edges: list[tuple[str, str]],
-        node_ids: dict[str, str],
-        labels: dict[str, str],
+    def _build_mermaid(self,*,edges: list[tuple[str, str]],node_ids: dict[str, str],labels: dict[str, str],orientation: str = "TD",group_by_folder: bool = True,
     ) -> str:
-        lines = ["flowchart TD"]
+        lines = [f"flowchart {orientation}"]
 
-        # Declare every node explicitly first, with its label — avoids
-        # relying on Mermaid's implicit-declaration-via-edge behavior,
-        # which gets fragile with special characters in file paths.
-        for path, node_id in node_ids.items():
-            label_text = labels.get(path, path)
-            safe_label = self._escape_mermaid_label(label_text)
-            lines.append(f'    {node_id}["{safe_label}"]')
+        if group_by_folder:
+            groups = self._group_nodes_by_folder(node_ids)
+            rendered_nodes: set[str] = set()
+
+            for folder, paths in groups.items():
+                if len(paths) > 1:
+                # Real cluster — wrap in a subgraph so Mermaid visually
+                # boxes these together, cutting down crossing edges
+                # between files that are already conceptually related.
+                    safe_folder_id = "cluster_" + re.sub(r"[^A-Za-z0-9]", "_", folder)
+                    lines.append(f'    subgraph {safe_folder_id}["{self._escape_mermaid_label(folder)}"]')
+                    for path in paths:
+                        node_id = node_ids[path]
+                        label_text = self._escape_mermaid_label(labels.get(path, path.rsplit("/", 1)[-1]))
+                        lines.append(f'        {node_id}["{label_text}"]')
+                        rendered_nodes.add(path)
+                    lines.append("    end")
+            # Single-file "folders" render ungrouped below, no subgraph
+            # overhead for a cluster of one.
+
+            for path, node_id in node_ids.items():
+                if path not in rendered_nodes:
+                    label_text = self._escape_mermaid_label(labels.get(path, path))
+                    lines.append(f'    {node_id}["{label_text}"]')
+        else:
+            for path, node_id in node_ids.items():
+                label_text = labels.get(path, path)
+                safe_label = self._escape_mermaid_label(label_text)
+                lines.append(f'    {node_id}["{safe_label}"]')
 
         for from_mod, to_mod in edges:
             from_id = node_ids[from_mod]
@@ -172,6 +190,22 @@ class GenerateDiagramUseCase:
             lines.append(f"    {from_id} --> {to_id}")
 
         return "\n".join(lines)
+
+    @staticmethod
+    def _group_nodes_by_folder(node_ids: dict[str, str]) -> dict[str, list[str]]:
+        """
+        Groups file paths by their immediate parent folder. Root-level
+        files (no folder) get grouped under "root". This is a simple,
+        one-level grouping — deeply nested repos (e.g. src/features/x/y/)
+        only group by the immediate parent, not the whole path chain,
+        which keeps the grouping logic predictable rather than building
+        an arbitrarily deep tree.
+        """
+        groups: dict[str, list[str]] = {}
+        for path in node_ids:
+            folder = path.rsplit("/", 1)[0] if "/" in path else "root"
+            groups.setdefault(folder, []).append(path)
+        return groups
 
     @staticmethod
     def _escape_mermaid_label(label: str) -> str:

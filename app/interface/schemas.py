@@ -37,6 +37,8 @@ class AskResponse(BaseModel):
 class DiagramRequest(BaseModel):
     repo_full_name: str = Field(..., max_length=200)
     commit_sha: str = Field(..., max_length=100)
+    orientation: str = Field(default="TD", pattern="^(TD|LR)$")
+    group_by_folder: bool = True
 
 
 class DiagramResponse(BaseModel):

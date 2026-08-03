@@ -22,6 +22,8 @@ async def generate_diagram(payload: DiagramRequest, request: Request) -> Diagram
         spec = await container.diagram_use_case.execute(
             repo_full_name=payload.repo_full_name,
             commit_sha=payload.commit_sha,
+            orientation=payload.orientation,
+            group_by_folder=payload.group_by_folder,
         )
     except RepoNotIndexedError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
