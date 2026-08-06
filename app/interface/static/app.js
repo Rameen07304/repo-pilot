@@ -8,6 +8,88 @@ const ingestStatus = document.getElementById("ingest-status");
 const repoInfo = document.getElementById("repo-info");
 const tabsSection = document.getElementById("tabs");
 
+// --- Recent repos (localStorage) ---
+const RECENT_REPOS_KEY = "repoPilot.recentRepos";
+const MAX_RECENT_REPOS = 8;
+
+const recentReposSection = document.getElementById("recent-repos-section");
+const recentReposList = document.getElementById("recent-repos-list");
+
+function getRecentRepos() {
+    try {
+        const raw = localStorage.getItem(RECENT_REPOS_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (err) {
+        console.warn("Failed to read recent repos from localStorage:", err);
+        return [];
+    }
+}
+
+function saveRecentRepo(entry) {
+    try {
+        let list = getRecentRepos();
+        // Remove any existing entry for the same repo before re-adding,
+        // so re-ingesting an already-recent repo just moves it to the
+        // top instead of creating a duplicate.
+        list = list.filter((r) => r.repoUrl !== entry.repoUrl);
+        list.unshift(entry);
+        list = list.slice(0, MAX_RECENT_REPOS);
+        localStorage.setItem(RECENT_REPOS_KEY, JSON.stringify(list));
+        renderRecentRepos();
+    } catch (err) {
+        console.warn("Failed to save recent repo to localStorage:", err);
+    }
+}
+
+function removeRecentRepo(repoUrl) {
+    const list = getRecentRepos().filter((r) => r.repoUrl !== repoUrl);
+    localStorage.setItem(RECENT_REPOS_KEY, JSON.stringify(list));
+    renderRecentRepos();
+}
+
+function renderRecentRepos() {
+    const list = getRecentRepos();
+
+    if (list.length === 0) {
+        recentReposSection.classList.add("hidden");
+        return;
+    }
+
+    recentReposSection.classList.remove("hidden");
+    recentReposList.innerHTML = "";
+
+    list.forEach((entry) => {
+        const li = document.createElement("li");
+        li.className = "recent-repo-item";
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "recent-repo-name";
+        nameSpan.textContent = entry.repoFullName;
+        nameSpan.title = entry.repoUrl;
+
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "recent-repo-remove";
+        removeBtn.textContent = "×";
+        removeBtn.title = "Remove from recent";
+        removeBtn.addEventListener("click", (e) => {
+            e.stopPropagation(); // don't trigger the li's click (re-ingest) when removing
+            removeRecentRepo(entry.repoUrl);
+        });
+
+        li.addEventListener("click", () => {
+            document.getElementById("repo-url").value = entry.repoUrl;
+            ingestForm.requestSubmit(); // re-ingest; hits cache instantly if nothing changed
+        });
+
+        li.appendChild(nameSpan);
+        li.appendChild(removeBtn);
+        recentReposList.appendChild(li);
+    });
+}
+
+// Render on page load, in case there's already saved history.
+renderRecentRepos();
+
 ingestForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const repoUrl = document.getElementById("repo-url").value.trim();
@@ -44,6 +126,14 @@ ingestForm.addEventListener("submit", async (e) => {
 
         repoInfo.classList.remove("hidden");
         tabsSection.classList.remove("hidden");
+
+        saveRecentRepo({
+            repoUrl: repoUrl,
+            repoFullName: data.repo_full_name,
+            commitSha: data.commit_sha,
+            summary: data.summary,
+            timestamp: Date.now(),
+        });
     } catch (err) {
         setStatus(ingestStatus, "Network error: " + err.message, "error");
     } finally {
@@ -134,6 +224,12 @@ askForm.addEventListener("submit", async (e) => {
 const diagramBtn = document.getElementById("diagram-btn");
 const diagramStatus = document.getElementById("diagram-status");
 const mermaidContainer = document.getElementById("mermaid-container");
+const folderToggleCheckbox = document.getElementById("folder-toggle-checkbox");
+const resetViewBtn = document.getElementById("reset-view-btn");
+const downloadPngBtn = document.getElementById("download-png-btn");
+const downloadSvgBtn = document.getElementById("download-svg-btn");
+
+let panZoomInstance = null; // holds the active svg-pan-zoom controller
 
 mermaid.initialize({
     startOnLoad: false,
@@ -141,7 +237,7 @@ mermaid.initialize({
     flowchart: { useMaxWidth: false },
 });
 
-diagramBtn.addEventListener("click", async () => {
+async function generateDiagram() {
     if (!currentRepo) {
         setStatus(diagramStatus, "Ingest a repo first.", "error");
         return;
@@ -150,13 +246,24 @@ diagramBtn.addEventListener("click", async () => {
     setStatus(diagramStatus, "Generating diagram...", "loading");
     diagramBtn.disabled = true;
 
+    // Destroy any previous pan/zoom instance before replacing the SVG —
+    // leaving a stale instance attached to a removed node leaks memory
+    // and its event listeners keep firing on nothing.
+    if (panZoomInstance) {
+        panZoomInstance.destroy();
+        panZoomInstance = null;
+    }
+
     try {
+        const orientationCheckbox = document.getElementById("orientation-checkbox");
         const res = await fetch("/api/diagram", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 repo_full_name: currentRepo.repoFullName,
                 commit_sha: currentRepo.commitSha,
+                orientation: orientationCheckbox && orientationCheckbox.checked ? "LR" : "TD",
+                group_by_folder: folderToggleCheckbox.checked,
             }),
         });
 
@@ -173,13 +280,147 @@ diagramBtn.addEventListener("click", async () => {
         diagramEl.removeAttribute("data-processed");
         diagramEl.textContent = data.mermaid_syntax;
         mermaidContainer.classList.remove("hidden");
+        mermaidContainer.classList.add("pan-zoom-active");
 
         await mermaid.run({ nodes: [diagramEl] });
+
+        const svgEl = diagramEl.querySelector("svg");
+        if (svgEl) {
+            // controlIconsEnabled is OFF deliberately: svg-pan-zoom's
+            // built-in +/- buttons get injected as real elements inside
+            // this same SVG, which taints canvas-based PNG export later.
+            // Scroll-wheel zoom, drag-to-pan, and our own Reset View
+            // button already cover the same functionality without that
+            // side effect.
+            panZoomInstance = svgPanZoom(svgEl, {
+                zoomEnabled: true,
+                panEnabled: true,
+                controlIconsEnabled: false,
+                fit: true,
+                center: true,
+                minZoom: 0.2,
+                maxZoom: 10,
+            });
+        }
+
+        resetViewBtn.classList.remove("hidden");
+        downloadPngBtn.classList.remove("hidden");
+        downloadSvgBtn.classList.remove("hidden");
     } catch (err) {
         setStatus(diagramStatus, "Network error: " + err.message, "error");
     } finally {
         diagramBtn.disabled = false;
     }
+}
+
+diagramBtn.addEventListener("click", generateDiagram);
+
+// Re-generate immediately when the folder-grouping or orientation
+// toggles change, so it feels like a live view option rather than a
+// "click twice" step.
+folderToggleCheckbox.addEventListener("change", () => {
+    if (currentRepo && !mermaidContainer.classList.contains("hidden")) {
+        generateDiagram();
+    }
+});
+document.getElementById("orientation-checkbox").addEventListener("change", () => {
+    if (currentRepo && !mermaidContainer.classList.contains("hidden")) {
+        generateDiagram();
+    }
+});
+
+resetViewBtn.addEventListener("click", () => {
+    if (panZoomInstance) {
+        panZoomInstance.resetZoom();
+        panZoomInstance.center();
+    }
+});
+
+downloadSvgBtn.addEventListener("click", () => {
+    const svgEl = document.querySelector("#mermaid-diagram svg");
+    if (!svgEl) return;
+
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(svgEl);
+    const blob = new Blob([svgString], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(currentRepo?.repoFullName || "diagram").replace("/", "_")}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+});
+
+downloadPngBtn.addEventListener("click", () => {
+    const svgEl = document.querySelector("#mermaid-diagram svg");
+    if (!svgEl) return;
+
+    const clone = svgEl.cloneNode(true);
+
+    // Force every text element to a safe, non-external font before
+    // rasterizing. Mermaid's SVG inherits "Space Grotesk"/"Inter" from
+    // the page's Google Fonts <link>, and canvas rasterization taints
+    // itself trying to resolve that external font reference. Overriding
+    // to a generic system font sidesteps the taint entirely.
+    const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
+    styleEl.textContent = "* { font-family: Arial, sans-serif !important; }";
+    clone.insertBefore(styleEl, clone.firstChild);
+
+    // Strip anything else that could reference an external resource —
+    // these also taint the canvas even without an explicit external
+    // <link> tag inside the SVG itself.
+    clone.querySelectorAll("foreignObject, image, link").forEach((el) => el.remove());
+
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(clone);
+    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(svgBlob);
+
+    const img = new Image();
+
+    img.onerror = (err) => {
+        console.error("PNG export failed: image failed to load from SVG blob", err);
+        setStatus(diagramStatus, "PNG export failed — try Download SVG instead.", "error");
+        URL.revokeObjectURL(url);
+    };
+
+    img.onload = () => {
+        try {
+            const canvas = document.createElement("canvas");
+            const width = svgEl.viewBox.baseVal.width || svgEl.clientWidth || 1200;
+            const height = svgEl.viewBox.baseVal.height || svgEl.clientHeight || 800;
+            const scale = 2; // sharper export than on-screen resolution
+            canvas.width = width * scale;
+            canvas.height = height * scale;
+
+            const ctx = canvas.getContext("2d");
+            ctx.scale(scale, scale);
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+            URL.revokeObjectURL(url);
+
+            canvas.toBlob((blob) => {
+                if (!blob) {
+                    console.error("PNG export failed: canvas.toBlob returned null (likely a tainted canvas)");
+                    setStatus(diagramStatus, "PNG export failed — try Download SVG instead.", "error");
+                    return;
+                }
+                const pngUrl = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = pngUrl;
+                a.download = `${(currentRepo?.repoFullName || "diagram").replace("/", "_")}.png`;
+                a.click();
+                URL.revokeObjectURL(pngUrl);
+            });
+        } catch (err) {
+            console.error("PNG export failed:", err);
+            setStatus(diagramStatus, "PNG export failed — try Download SVG instead.", "error");
+        }
+    };
+
+    img.src = url;
 });
 
 // --- Helper ---

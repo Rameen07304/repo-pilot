@@ -30,6 +30,11 @@
                     <span id="repo-stack"></span>
                 </div>
             </div>
+
+            <div id="recent-repos-section" class="hidden sidebar-recent">
+                <h3>Recent</h3>
+                <ul id="recent-repos-list"></ul>
+            </div>
         </aside>
 
         <main class="app-main">
@@ -68,7 +73,13 @@
                             <input type="checkbox" id="orientation-checkbox" />
                             Wide layout
                         </label>
-                        <button id="download-btn" class="secondary-btn hidden">Download PNG</button>
+                        <label class="orientation-toggle">
+                            <input type="checkbox" id="folder-toggle-checkbox" checked />
+                            Organize by folder
+                        </label>
+                        <button id="reset-view-btn" class="secondary-btn hidden">Reset View</button>
+                        <button id="download-png-btn" class="secondary-btn hidden">Download PNG</button>
+                        <button id="download-svg-btn" class="secondary-btn hidden">Download SVG</button>
                     </div>
                     <div id="diagram-status"></div>
                     <div id="mermaid-container" class="hidden">
@@ -79,6 +90,7 @@
         </main>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/svg-pan-zoom/3.6.1/svg-pan-zoom.min.js"></script>
     <script src="/static/app.js"></script>
 </body>
 </html>
