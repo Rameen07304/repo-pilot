@@ -4,35 +4,75 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Repo Pilot (Codebase Onboarding Agent)</title>
+    <meta name="description" content="Point Repo Pilot at any public GitHub repo. Get an overview, ask how a feature works, and see the architecture traced from the real code.">
+    <meta name="theme-color" content="#0B0E0C">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230B0E0C'/%3E%3Ctext x='4' y='23' font-family='monospace' font-size='18' font-weight='700' fill='%236EE7A8'%3E%3E_%3C/text%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <header class="hero">
-        <div class="hero-inner">
-            <span class="eyebrow">Codebase Onboarding Agent</span>
-            <h1>Repo Pilot</h1>
-            <p class="hero-sub">Point it at any public GitHub repo. Get an instant overview, ask how any feature works, and see the architecture, traced through the real code, not guessed.</p>
-
-            <a href="/app" class="cta-btn">Try Repo Pilot →</a>
-
-            <div class="hero-features">
-                <div class="feature-chip">
-                    <span class="feature-label">Explorer</span>
-                    <span class="feature-desc">Reads structure, README, key files</span>
-                </div>
-                <div class="feature-chip">
-                    <span class="feature-label">Explainer</span>
-                    <span class="feature-desc">Traces real code to answer "how"</span>
-                </div>
-                <div class="feature-chip">
-                    <span class="feature-label">Diagram</span>
-                    <span class="feature-desc">Draws the architecture from imports</span>
-                </div>
+    <main class="hero">
+        <header class="term-bar">
+            <div class="term-dots">
+                <span class="dot dot-red"></span>
+                <span class="dot dot-yellow"></span>
+                <span class="dot dot-green"></span>
             </div>
-        </div>
-    </header>
+            <span class="term-title">repo-pilot &mdash; zsh &mdash; 120&times;32</span>
+        </header>
+
+        <section class="hero-inner">
+            <div class="hero-meta">repo-pilot &mdash; codebase onboarding agent &mdash; v0.1</div>
+
+            <div class="hero-transcript">
+                <span class="dim">$ repo-pilot ingest github.com/owner/repo</span><br>
+                <span class="accent-line">&gt; parsed 428 files &middot; stack detected: python, fastapi</span>
+            </div>
+
+            <h1>Repo Pilot<span class="cursor">_</span></h1>
+
+            <p class="hero-sub">Point it at any public GitHub repo. Ask how any feature works. Get the architecture, traced through the real code, not guessed.</p>
+
+            <a href="/app" class="cta-btn">try repo-pilot &rarr;</a>
+        </section>
+
+        <section class="hero-features" aria-label="What Repo Pilot does">
+            <article class="feature-chip">
+                <span class="feature-label">01 EXPLORE</span>
+                <div class="feature-transcript">
+                    $ repo-pilot explore<br>
+                    <span class="accent-line">&gt; reading structure...</span><br>
+                    <span class="accent-line">&gt; reading README...</span><br>
+                    <span class="accent-line">&gt; 428 files indexed</span><br>
+                    <span class="accent-line">&gt; stack detected: python, fastapi</span><br>
+                    <span class="accent-line">&gt; summary ready</span>
+                </div>
+            </article>
+            <article class="feature-chip">
+                <span class="feature-label">02 EXPLAIN</span>
+                <div class="feature-transcript">
+                    $ repo-pilot ask "how does auth work?"<br>
+                    <span class="accent-line">&gt; citing infrastructure/security/*.py</span><br>
+                    <span class="accent-line">&gt; confidence: 92%</span>
+                </div>
+            </article>
+            <article class="feature-chip">
+                <span class="feature-label">03 DIAGRAM</span>
+                <div class="feature-transcript">
+                    $ repo-pilot diagram --group-by folder<br>
+                    <span class="accent-line">&gt; rendering graph...</span><br>
+                    <span class="accent-line">&gt; done.</span>
+                </div>
+            </article>
+        </section>
+
+        <footer class="landing-footer">
+            <span>GITHUB</span>
+            <span>GEMINI</span>
+            <span>GROQ</span>
+        </footer>
+    </main>
 </body>
 </html>

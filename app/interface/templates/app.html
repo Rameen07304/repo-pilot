@@ -4,26 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Repo Pilot (Action page)</title>
+    <meta name="description" content="Ingest a public GitHub repo, ask how its features work, and generate an architecture diagram from the real code.">
+    <meta name="theme-color" content="#0B0E0C">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230B0E0C'/%3E%3Ctext x='4' y='23' font-family='monospace' font-size='18' font-weight='700' fill='%236EE7A8'%3E%3E_%3C/text%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.0/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"
+            integrity="sha384-6F4Ibv/ylL12O35KFWTeGTHuBKDz5L6yjKsgv3QHQ8s4NTqlDXq7kMlYXGs7MHFc"
+            crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"
+            integrity="sha384-NNQgBjjuhtXzPmmy4gurS5X7P4uTt1DThyevz4Ua0IVK5+kazYQI1W27JHjbbxQz"
+            crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.0/purify.min.js"
+            integrity="sha384-0Olea29UkyQZfNulDPUf5MshXT3rXNrDqk+TXn1sY6UoVDiqIfEERRKn8oMgO9eF"
+            crossorigin="anonymous"></script>
 </head>
 <body class="app-body">
+    <a href="#main" class="skip-link">skip to content</a>
     <div class="app-shell">
         <aside class="sidebar">
-            <a href="/" class="sidebar-logo">Repo Pilot</a>
+            <a href="/" class="sidebar-logo">repo-pilot<span class="cursor">_</span></a>
 
-            <div class="sidebar-nav">
-                <button class="tab-btn active" data-tab="ask-tab">Ask a Question</button>
-                <button class="tab-btn" data-tab="diagram-tab">Architecture Diagram</button>
-            </div>
+            <nav class="sidebar-nav" aria-label="Sections">
+                <button class="tab-btn active" data-tab="ask-tab">ask a question</button>
+                <button class="tab-btn" data-tab="diagram-tab">architecture diagram</button>
+            </nav>
 
             <div id="repo-info" class="hidden sidebar-repo-info">
-                <h3>Current Repo</h3>
+                <h3>$ cat repo.info</h3>
                 <p id="repo-summary"></p>
                 <div class="meta-row">
                     <span id="repo-files"></span>
@@ -32,16 +42,19 @@
             </div>
 
             <div id="recent-repos-section" class="hidden sidebar-recent">
-                <h3>Recent</h3>
+                <h3>$ ls recent/</h3>
                 <ul id="recent-repos-list"></ul>
             </div>
         </aside>
 
-        <main class="app-main">
+        <main class="app-main" id="main">
             <section class="ingest-bar">
                 <form id="ingest-form">
-                    <input type="text" id="repo-url" placeholder="https://github.com/owner/repo" required />
-                    <button type="submit" id="ingest-btn">Ingest Repo</button>
+                    <div class="cmd-line">
+                        <span class="cmd-prompt">$</span>
+                        <input type="url" id="repo-url" placeholder="https://github.com/owner/repo" pattern="https://github\.com/.+/.+" title="A public GitHub repository URL" required />
+                    </div>
+                    <button type="submit" id="ingest-btn" class="cmd-btn cmd-btn-primary">ingest repo</button>
                 </form>
                 <div id="ingest-status"></div>
             </section>
@@ -49,37 +62,40 @@
             <section id="tabs" class="hidden">
                 <div id="ask-tab" class="tab-content active">
                     <form id="ask-form">
-                        <input type="text" id="question-input" placeholder="How does authentication work?" required />
+                        <div class="cmd-line">
+                            <span class="cmd-prompt">$</span>
+                            <input type="text" id="question-input" placeholder="how does authentication work?" required />
+                        </div>
                         <label class="deep-mode-toggle">
                             <input type="checkbox" id="deep-mode-checkbox" />
-                            Deep investigation mode
+                            deep investigation mode
                         </label>
-                        <button type="submit" id="ask-btn">Ask</button>
+                        <button type="submit" id="ask-btn" class="cmd-btn cmd-btn-primary">ask</button>
                     </form>
                     <div id="ask-status"></div>
                     <div id="answer-box" class="hidden">
-                        <h3>Answer</h3>
+                        <h3>answer</h3>
                         <div id="answer-text"></div>
                         <div id="answer-meta"></div>
-                        <h4>Citations</h4>
+                        <h4>citations</h4>
                         <ul id="citations-list"></ul>
                     </div>
                 </div>
 
                 <div id="diagram-tab" class="tab-content">
                     <div class="diagram-controls">
-                        <button id="diagram-btn">Generate Diagram</button>
+                        <button id="diagram-btn" class="cmd-btn cmd-btn-primary">generate diagram</button>
                         <label class="orientation-toggle">
                             <input type="checkbox" id="orientation-checkbox" />
-                            Wide layout
+                            wide layout
                         </label>
                         <label class="orientation-toggle">
                             <input type="checkbox" id="folder-toggle-checkbox" checked />
-                            Organize by folder
+                            organize by folder
                         </label>
-                        <button id="reset-view-btn" class="secondary-btn hidden">Reset View</button>
-                        <button id="download-png-btn" class="secondary-btn hidden">Download PNG</button>
-                        <button id="download-svg-btn" class="secondary-btn hidden">Download SVG</button>
+                        <button id="reset-view-btn" class="cmd-btn secondary-btn hidden">reset view</button>
+                        <button id="download-png-btn" class="cmd-btn secondary-btn hidden">download png</button>
+                        <button id="download-svg-btn" class="cmd-btn secondary-btn hidden">download svg</button>
                     </div>
                     <div id="diagram-status"></div>
                     <div id="mermaid-container" class="hidden">
@@ -87,10 +103,20 @@
                     </div>
                 </div>
             </section>
+
+            <section class="empty-state" aria-label="No repository loaded">
+                <div class="dim">$ repo-pilot status</div>
+                <div>&gt; no repo loaded</div>
+                <div class="dim">&gt; paste a public GitHub URL above and run [ ingest repo ]</div>
+                <div class="dim">&gt; then ask a question, or generate the architecture diagram</div>
+            </section>
         </main>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/svg-pan-zoom/3.6.1/svg-pan-zoom.min.js"></script>
+    <!-- svg-pan-zoom is not published on cdnjs (that URL 404s); jsdelivr mirrors the npm package -->
+    <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"
+            integrity="sha384-yc/c2Lk1s2V2ir1rxvjo8YyVD9PlOlYTqpNr3Wm1WIuAA30GlDYNx6U5104OiavY"
+            crossorigin="anonymous"></script>
     <script src="/static/app.js"></script>
 </body>
 </html>

@@ -116,7 +116,7 @@ ingestForm.addEventListener("submit", async (e) => {
 
         setStatus(
             ingestStatus,
-            `✅ Ingested ${data.repo_full_name} (${data.was_cached ? "from cache" : "fresh"})`,
+            `ingested ${data.repo_full_name} (${data.was_cached ? "from cache" : "fresh"})`,
             "success"
         );
 
@@ -233,7 +233,23 @@ let panZoomInstance = null; // holds the active svg-pan-zoom controller
 
 mermaid.initialize({
     startOnLoad: false,
-    theme: "default",
+    theme: "base",
+    themeVariables: {
+        background: "#121613",
+        mainBkg: "#121613",
+        primaryColor: "#121613",
+        primaryTextColor: "#F2F6F3",
+        primaryBorderColor: "#6EE7A8",
+        secondaryColor: "#0F1310",
+        tertiaryColor: "#0F1310",
+        lineColor: "#6EE7A8",
+        textColor: "#C7D3CC",
+        nodeBorder: "#6EE7A8",
+        clusterBkg: "#0F1310",
+        clusterBorder: "#23302A",
+        edgeLabelBackground: "#121613",
+        fontFamily: "JetBrains Mono, monospace",
+    },
     flowchart: { useMaxWidth: false },
 });
 
@@ -396,7 +412,7 @@ downloadPngBtn.addEventListener("click", () => {
 
             const ctx = canvas.getContext("2d");
             ctx.scale(scale, scale);
-            ctx.fillStyle = "#FFFFFF";
+            ctx.fillStyle = "#121613"; // matches --surface, so the exported PNG isn't a jarring white square against the dark diagram panel
             ctx.fillRect(0, 0, width, height);
             ctx.drawImage(img, 0, 0, width, height);
             URL.revokeObjectURL(url);
