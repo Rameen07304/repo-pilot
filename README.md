@@ -53,6 +53,8 @@ If any file could not be fetched, the result is returned with a warning and is *
 
 **Answering** embeds the question, searches only this repo+commit's chunks, maps the top hit to its enclosing symbol, traces calls from there (name-based, bounded hops), and makes one LLM call with the retrieved snippets. Confidence is the top similarity score.
 
+**Deep investigation mode** runs up to `DEEP_INVESTIGATION_MAX_STEPS` (default 5) search rounds before answering. After each round the LLM is asked whether the evidence is sufficient and, if not, for one short search phrase to try next; that phrase is embedded and searched exactly like a question. It is the only thing the model steers — it never names files, and citations still come solely from retrieval and tree-sitter traces. The loop stops early when the planner is satisfied, repeats a search, or a search adds nothing new, and the UI shows the trail it followed. Cost: at most `max_steps` small planner calls plus one synthesis call, and it has its own tighter per-IP rate limit.
+
 **Diagrams** are built from the cached module edges. Import graphs are extracted for Python, JavaScript/TypeScript (including `.vue`/`.svelte`), Dart, Go, Rust, Ruby, Java, and PHP, plus Python-to-template and template-to-static-asset links.
 
 The Mermaid output is laid out as a nested folder tree: real nesting (`frontend` ⊃ `src` ⊃ `pages`), single-child folder chains merged into one box, and a lone file hoisted into its parent with a relative label. When most files in a folder share a dependency, one arrow is drawn from the folder instead of one per file (labelled `3/4` when it is most-but-not-all), which is what keeps hub modules like an API client from receiving a line from every page. Repos too large to draw at file level are aggregated to folder-level nodes with edges weighted by how many imports they collapse; the UI says when this has happened.
@@ -74,7 +76,7 @@ Built by Rameen Fatima and Dania Imran.
 
 - Public repositories only, and only via `https://github.com/owner/repo` URLs (this is also the SSRF guard).
 - Call tracing is name-based, not scope-aware. Same-file matches are preferred, then imported files, then anywhere — see the note at the top of `tree_sitter_parser.py`.
-- The "deep investigation" mode in the UI is not implemented yet; every question runs in quick mode.
+- Free-tier LLM providers meter tokens per minute (Groq: 8k/min on `gpt-oss-120b`). Prompts are budgeted to fit one deep investigation inside that, but asking several deep questions back to back can still return "the AI service may be at capacity" — wait a minute or use quick mode.
 
 ## License
 

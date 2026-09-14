@@ -55,6 +55,7 @@ class AnswerQuestionUseCase:
         top_k: int = 8,
         max_trace_hops: int = 3,
         max_context_chunks_for_llm: int = 5,
+        max_context_chars: int = 12_000,
         max_answer_tokens: int = 600,
     ) -> None:
         self._llm = llm_client
@@ -64,6 +65,10 @@ class AnswerQuestionUseCase:
         self._top_k = top_k
         self._max_trace_hops = max_trace_hops
         self._max_context_chunks = max_context_chunks_for_llm
+        # Hard cap on prompt size (~4 chars per token). Free-tier providers
+        # meter tokens per minute, so an oversized prompt is a hard 413,
+        # not a slow answer.
+        self._max_context_chars = max_context_chars
         self._max_answer_tokens = max_answer_tokens
 
     async def execute(
@@ -213,16 +218,28 @@ class AnswerQuestionUseCase:
         results: list[VectorQueryResult],
         trace_steps: list[TraceStep],
     ) -> str:
+        per_block_cap = max(1_500, self._max_context_chars // 4)
+        budget = self._max_context_chars
         context_blocks: list[str] = []
 
+        def take(block: str) -> bool:
+            nonlocal budget
+            block = block[:per_block_cap]
+            if len(block) > budget:
+                return False
+            context_blocks.append(block)
+            budget -= len(block)
+            return True
+
         for r in results[: self._max_context_chunks]:
-            context_blocks.append(
+            if not take(
                 f"--- File: {r.chunk.file_path} (lines {r.chunk.start_line}-{r.chunk.end_line}) ---\n"
                 f"{r.chunk.content}"
-            )
+            ):
+                break
 
         if trace_steps:
-            trace_lines = ["--- Call trace (entry point to related code) ---"]
+            take("--- Call trace (entry point to related code) ---")
             for step in trace_steps:
                 real_code = self._extract_source_snippet(
                     manifest,
@@ -230,13 +247,9 @@ class AnswerQuestionUseCase:
                     start_line=step.start_line,
                     end_line=step.end_line,
                 )
-                trace_lines.append(
-                    f"\n{step.file_path}:{step.start_line}-{step.end_line} "
-                    f"({step.symbol_name}):"
-                )
-                if real_code:
-                    trace_lines.append(real_code)
-            context_blocks.append("\n".join(trace_lines))
+                header = f"{step.file_path}:{step.start_line}-{step.end_line} ({step.symbol_name}):"
+                if not take(f"{header}\n{real_code}" if real_code else header):
+                    break
 
         context_text = "\n\n".join(context_blocks)
 

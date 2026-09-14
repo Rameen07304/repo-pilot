@@ -175,7 +175,7 @@ askForm.addEventListener("submit", async (e) => {
     const deepMode = document.getElementById("deep-mode-checkbox").checked;
     const btn = document.getElementById("ask-btn");
 
-    setStatus(askStatus, "Thinking...", "loading");
+    setStatus(askStatus, deepMode ? "investigating... running several search rounds" : "thinking...", "loading");
     answerBox.classList.add("hidden");
     btn.disabled = true;
 
@@ -210,7 +210,19 @@ askForm.addEventListener("submit", async (e) => {
         document.getElementById("answer-text").innerHTML = safeHtml;
 
         document.getElementById("answer-meta").textContent =
-            `Mode: ${data.mode_used} · Confidence: ${(data.confidence * 100).toFixed(0)}% · Steps: ${data.steps_taken}`;
+            `mode: ${data.mode_used} · confidence: ${(data.confidence * 100).toFixed(0)}% · steps: ${data.steps_taken}`;
+
+        // Deep mode returns one line per search round; textContent keeps
+        // it inert even though the planner's phrases passed through an LLM.
+        const logBox = document.getElementById("investigation-log");
+        const stepsList = document.getElementById("investigation-steps");
+        stepsList.innerHTML = "";
+        (data.investigation_log || []).forEach((line) => {
+            const li = document.createElement("li");
+            li.textContent = line;
+            stepsList.appendChild(li);
+        });
+        logBox.classList.toggle("hidden", stepsList.children.length === 0);
 
         const list = document.getElementById("citations-list");
         list.innerHTML = "";

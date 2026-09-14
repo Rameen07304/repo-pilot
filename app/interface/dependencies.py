@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from app.application.use_cases.answer_question import AnswerQuestionUseCase
 from app.application.use_cases.generate_diagram import GenerateDiagramUseCase
 from app.application.use_cases.ingest_repo import IngestRepoUseCase
+from app.application.use_cases.investigate_question import DeepInvestigationUseCase
 from app.infrastructure.cache.sqlite_cache import SqliteRepoCache
 from app.infrastructure.github.github_api_client import GitHubApiClient
 from app.infrastructure.llm.composite_llm_client import CompositeLLMClient
@@ -34,6 +35,7 @@ class AppContainer:
     """Holds every constructed singleton + ready-to-use case instances."""
     ingest_use_case: IngestRepoUseCase
     ask_use_case: AnswerQuestionUseCase
+    deep_ask_use_case: DeepInvestigationUseCase
     diagram_use_case: GenerateDiagramUseCase
 
     quota_guard: DailyQuotaGuard
@@ -66,6 +68,7 @@ def build_container() -> AppContainer:
 
     questions_per_hour = int(os.getenv("RATE_LIMIT_QUESTIONS_PER_HOUR_PER_IP", "10"))
     deep_per_hour = int(os.getenv("RATE_LIMIT_DEEP_INVESTIGATIONS_PER_HOUR_PER_IP", "3"))
+    deep_max_steps = int(os.getenv("DEEP_INVESTIGATION_MAX_STEPS", "5"))
     trust_proxy_headers = os.getenv("TRUST_PROXY_HEADERS", "false").strip().lower() in ("1", "true", "yes")
 
     # --- Infrastructure singletons ---
@@ -139,6 +142,14 @@ def build_container() -> AppContainer:
         cache=cache,
     )
 
+    deep_ask_use_case = DeepInvestigationUseCase(
+        llm_client=llm_client,
+        vector_store=vector_store,
+        code_parser=code_parser,
+        cache=cache,
+        max_steps=deep_max_steps,
+    )
+
     diagram_use_case = GenerateDiagramUseCase(
         cache=cache,
         llm_client=llm_client,
@@ -148,6 +159,7 @@ def build_container() -> AppContainer:
     return AppContainer(
         ingest_use_case=ingest_use_case,
         ask_use_case=ask_use_case,
+        deep_ask_use_case=deep_ask_use_case,
         diagram_use_case=diagram_use_case,
         quota_guard=quota_guard,
         question_limiter=question_limiter,

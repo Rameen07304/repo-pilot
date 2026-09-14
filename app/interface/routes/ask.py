@@ -64,11 +64,9 @@ async def ask_question(payload: AskRequest, request: Request) -> AskResponse:
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
+    use_case = container.deep_ask_use_case if mode == QuestionMode.DEEP else container.ask_use_case
     try:
-        # NOTE: deep mode isn't implemented yet (Step 5, upcoming) —
-        # for now both modes route through quick-mode logic. Once
-        # investigation_graph.py exists, this branches to it instead.
-        answer = await container.ask_use_case.execute(
+        answer = await use_case.execute(
             question=question,
             repo_full_name=payload.repo_full_name,
             commit_sha=payload.commit_sha,
@@ -87,4 +85,5 @@ async def ask_question(payload: AskRequest, request: Request) -> AskResponse:
         confidence=answer.confidence.value,
         mode_used=answer.mode_used.value,
         steps_taken=answer.steps_taken,
+        investigation_log=answer.investigation_log,
     )

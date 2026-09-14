@@ -33,6 +33,7 @@ class AskResponse(BaseModel):
     confidence: float
     mode_used: str
     steps_taken: int
+    investigation_log: list[str] = []
 
 
 class DiagramRequest(BaseModel):

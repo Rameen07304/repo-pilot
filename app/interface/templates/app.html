@@ -66,9 +66,9 @@
                             <span class="cmd-prompt">$</span>
                             <input type="text" id="question-input" placeholder="how does authentication work?" required />
                         </div>
-                        <label class="deep-mode-toggle" title="Multi-step investigation is not implemented yet; questions currently run in quick mode.">
-                            <input type="checkbox" id="deep-mode-checkbox" disabled />
-                            deep investigation mode <span class="dim">(coming soon)</span>
+                        <label class="deep-mode-toggle" title="Runs several search rounds before answering, following leads the first search missed. Slower, and rate-limited more tightly.">
+                            <input type="checkbox" id="deep-mode-checkbox" />
+                            deep investigation mode
                         </label>
                         <button type="submit" id="ask-btn" class="cmd-btn cmd-btn-primary">ask</button>
                     </form>
@@ -77,6 +77,10 @@
                         <h3>answer</h3>
                         <div id="answer-text"></div>
                         <div id="answer-meta"></div>
+                        <div id="investigation-log" class="hidden">
+                            <h4>investigation</h4>
+                            <ol id="investigation-steps"></ol>
+                        </div>
                         <h4>citations</h4>
                         <ul id="citations-list"></ul>
                     </div>

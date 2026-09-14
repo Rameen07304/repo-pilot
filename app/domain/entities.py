@@ -81,6 +81,7 @@ class Answer:
     confidence: ConfidenceScore = field(default_factory=lambda: ConfidenceScore(0.5))
     mode_used: QuestionMode = QuestionMode.QUICK
     steps_taken: int = 1  # 1 for quick mode, up to DEEP_INVESTIGATION_MAX_STEPS for deep mode
+    investigation_log: list[str] = field(default_factory=list)  # deep mode: one line per search round
 
 @dataclass
 class DiagramSpec:
