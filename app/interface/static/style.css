@@ -10,7 +10,7 @@
     --ink-body: #C7D3CC;
     --ink-muted: #9AAAA1;
     --ink-dim: #7C8B82;
-    --ink-faint: #5B6B62;
+    --ink-faint: #72827A; /* ~4.7:1 on --base: the floor for 12px text, so keep this the darkest gray */
     --success: #6EE7A8;
     --error: #FF6B6B;
 }
@@ -294,6 +294,8 @@ input[type="text"], input[type="url"] {
     font-family: inherit;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+
+input::placeholder { color: var(--ink-faint); opacity: 1; }
 
 input[type="text"]:focus, input[type="url"]:focus {
     outline: none;

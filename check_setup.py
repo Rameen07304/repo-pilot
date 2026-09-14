@@ -3,6 +3,10 @@ One-off smoke test: confirms domain + application layers import and
 behave correctly, with zero external dependencies. Delete this once
 tests/ has real pytest coverage — this is just a sanity checkpoint.
 """
+import sys
+
+# Windows consoles default to cp1252, which can't encode the check marks below.
+sys.stdout.reconfigure(encoding="utf-8")
 
 def check_value_objects():
     from app.domain.value_objects import RepoUrl, Citation, ConfidenceScore, QuestionMode

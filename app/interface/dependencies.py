@@ -40,6 +40,10 @@ class AppContainer:
     question_limiter: FixedWindowRateLimiter
     deep_question_limiter: FixedWindowRateLimiter
 
+    # Only true when a proxy we control sits in front of the app (HF
+    # Spaces, nginx); otherwise X-Forwarded-For is attacker-controlled.
+    trust_proxy_headers: bool = False
+
 
 def build_container() -> AppContainer:
     api_key = os.getenv("GEMINI_API_KEY", "")
@@ -62,6 +66,7 @@ def build_container() -> AppContainer:
 
     questions_per_hour = int(os.getenv("RATE_LIMIT_QUESTIONS_PER_HOUR_PER_IP", "10"))
     deep_per_hour = int(os.getenv("RATE_LIMIT_DEEP_INVESTIGATIONS_PER_HOUR_PER_IP", "3"))
+    trust_proxy_headers = os.getenv("TRUST_PROXY_HEADERS", "false").strip().lower() in ("1", "true", "yes")
 
     # --- Infrastructure singletons ---
     github_client = GitHubApiClient(token=github_token)
@@ -73,7 +78,10 @@ def build_container() -> AppContainer:
     # fallback for generate() only. Embeddings are ALWAYS local (never
     # fallback-routed) to keep the vector space consistent across every
     # ingestion, regardless of which text-gen path is currently live.
-    gemini_client = GeminiClient(api_key=api_key)
+    gemini_client = GeminiClient(
+        api_key=api_key,
+        model_name=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
+    )
 
     groq_api_key = os.getenv("GROQ_API_KEY", "")
     if not groq_api_key or groq_api_key == "your_groq_api_key_here":
@@ -86,11 +94,16 @@ def build_container() -> AppContainer:
         model_name=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
     )
 
+    primary_provider = os.getenv("LLM_PRIMARY_PROVIDER", "gemini").strip().lower()
+    if primary_provider not in ("gemini", "groq"):
+        raise RuntimeError(f"LLM_PRIMARY_PROVIDER must be 'gemini' or 'groq', got {primary_provider!r}.")
+    providers = {"gemini": gemini_client, "groq": groq_client}
+    secondary_provider = "groq" if primary_provider == "gemini" else "gemini"
     generate_client = FallbackLLMClient(
-        primary=gemini_client,
-        secondary=groq_client,
-        primary_name="gemini",
-        secondary_name="groq",
+        primary=providers[primary_provider],
+        secondary=providers[secondary_provider],
+        primary_name=primary_provider,
+        secondary_name=secondary_provider,
     )
     embed_client = LocalEmbeddingClient()
     raw_llm_client = CompositeLLMClient(generate_client=generate_client, embed_client=embed_client)
@@ -139,4 +152,5 @@ def build_container() -> AppContainer:
         quota_guard=quota_guard,
         question_limiter=question_limiter,
         deep_question_limiter=deep_question_limiter,
+        trust_proxy_headers=trust_proxy_headers,
     )

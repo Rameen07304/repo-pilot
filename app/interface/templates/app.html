@@ -66,9 +66,9 @@
                             <span class="cmd-prompt">$</span>
                             <input type="text" id="question-input" placeholder="how does authentication work?" required />
                         </div>
-                        <label class="deep-mode-toggle">
-                            <input type="checkbox" id="deep-mode-checkbox" />
-                            deep investigation mode
+                        <label class="deep-mode-toggle" title="Multi-step investigation is not implemented yet; questions currently run in quick mode.">
+                            <input type="checkbox" id="deep-mode-checkbox" disabled />
+                            deep investigation mode <span class="dim">(coming soon)</span>
                         </label>
                         <button type="submit" id="ask-btn" class="cmd-btn cmd-btn-primary">ask</button>
                     </form>

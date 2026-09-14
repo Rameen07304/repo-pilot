@@ -52,6 +52,11 @@ async def app_page(request: Request):
     return templates.TemplateResponse(request, "app.html", {})
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     logger.exception("Unhandled exception on %s", request.url.path)

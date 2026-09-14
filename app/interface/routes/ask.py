@@ -22,23 +22,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _get_client_ip(request: Request) -> str:
-    # Behind a reverse proxy (HF Spaces), the real client IP is often
-    # in X-Forwarded-For. Fall back to the direct connection IP if
-    # that header isn't present. Take the FIRST address only — the
-    # leftmost entry is the original client, later entries can be
-    # appended by intermediate proxies and aren't trustworthy for
-    # identifying the original requester.
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+def _get_client_ip(request: Request, *, trust_proxy_headers: bool) -> str:
+    # X-Forwarded-For is client-supplied unless a proxy we control sits
+    # in front of the app, so it is only honoured when explicitly enabled
+    # (TRUST_PROXY_HEADERS). Even then, only the RIGHTMOST entry is
+    # trustworthy — that is the one our proxy appended; everything to
+    # its left arrived in the request and can be forged to dodge the
+    # per-IP rate limit.
+    if trust_proxy_headers:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.rsplit(",", 1)[-1].strip()
     return request.client.host if request.client else "unknown"
 
 
 @router.post("/api/ask", response_model=AskResponse)
 async def ask_question(payload: AskRequest, request: Request) -> AskResponse:
     container = request.app.state.container
-    client_ip = _get_client_ip(request)
+    client_ip = _get_client_ip(request, trust_proxy_headers=container.trust_proxy_headers)
 
     mode = QuestionMode.DEEP if payload.deep_mode else QuestionMode.QUICK
 
