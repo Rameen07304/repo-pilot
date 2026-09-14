@@ -95,7 +95,7 @@ ingestForm.addEventListener("submit", async (e) => {
     const repoUrl = document.getElementById("repo-url").value.trim();
     const btn = document.getElementById("ingest-btn");
 
-    setStatus(ingestStatus, "Ingesting repo... this can take a minute or two.", "loading");
+    setStatus(ingestStatus, "ingesting: fetching, indexing and summarizing... usually under a minute", "loading");
     btn.disabled = true;
 
     try {
@@ -233,7 +233,6 @@ const diagramBtn = document.getElementById("diagram-btn");
 const diagramStatus = document.getElementById("diagram-status");
 const mermaidContainer = document.getElementById("mermaid-container");
 const folderToggleCheckbox = document.getElementById("folder-toggle-checkbox");
-const resetViewBtn = document.getElementById("reset-view-btn");
 const downloadPngBtn = document.getElementById("download-png-btn");
 const downloadSvgBtn = document.getElementById("download-svg-btn");
 
@@ -336,7 +335,6 @@ async function generateDiagram() {
             showReadable();
         }
 
-        resetViewBtn.classList.remove("hidden");
         downloadPngBtn.classList.remove("hidden");
         downloadSvgBtn.classList.remove("hidden");
     } catch (err) {
@@ -386,21 +384,51 @@ function showReadable() {
     }
 }
 
-resetViewBtn.addEventListener("click", fitDiagram);
+document.getElementById("reset-view-btn").addEventListener("click", fitDiagram);
 document.getElementById("zoom-in-btn").addEventListener("click", () => panZoomInstance && panZoomInstance.zoomIn());
 document.getElementById("zoom-out-btn").addEventListener("click", () => panZoomInstance && panZoomInstance.zoomOut());
 
+// --- Fullscreen ---
+// The native API is refused in some contexts (embedded webviews, iframes
+// without allowfullscreen), so a CSS overlay is the fallback.
 const fullscreenBtn = document.getElementById("fullscreen-btn");
-fullscreenBtn.addEventListener("click", () => {
+const FALLBACK_FULLSCREEN_CLASS = "diagram-fullscreen";
+
+function isFullscreen() {
+    return !!document.fullscreenElement || mermaidContainer.classList.contains(FALLBACK_FULLSCREEN_CLASS);
+}
+
+function syncFullscreenUi() {
+    fullscreenBtn.textContent = isFullscreen() ? "exit" : "full";
+    showReadable(); // the viewport just changed size; re-derive the starting view for it
+}
+
+function setFallbackFullscreen(on) {
+    mermaidContainer.classList.toggle(FALLBACK_FULLSCREEN_CLASS, on);
+    document.body.classList.toggle("has-fullscreen-diagram", on);
+    syncFullscreenUi();
+}
+
+fullscreenBtn.addEventListener("click", async () => {
     if (document.fullscreenElement) {
-        document.exitFullscreen();
-    } else if (mermaidContainer.requestFullscreen) {
-        mermaidContainer.requestFullscreen();
+        await document.exitFullscreen();
+        return;
+    }
+    if (mermaidContainer.classList.contains(FALLBACK_FULLSCREEN_CLASS)) {
+        setFallbackFullscreen(false);
+        return;
+    }
+    try {
+        await mermaidContainer.requestFullscreen();
+    } catch (err) {
+        setFallbackFullscreen(true);
     }
 });
-document.addEventListener("fullscreenchange", () => {
-    fullscreenBtn.textContent = document.fullscreenElement ? "exit" : "full";
-    showReadable(); // the viewport just changed size; re-derive the starting view for it
+document.addEventListener("fullscreenchange", syncFullscreenUi);
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && mermaidContainer.classList.contains(FALLBACK_FULLSCREEN_CLASS)) {
+        setFallbackFullscreen(false);
+    }
 });
 window.addEventListener("resize", () => {
     if (panZoomInstance) panZoomInstance.resize();

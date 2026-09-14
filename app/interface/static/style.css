@@ -461,12 +461,20 @@ button { font-family: inherit; cursor: pointer; }
 #mermaid-container.pan-zoom-active:active {
     cursor: grabbing;
 }
-#mermaid-container:fullscreen {
+#mermaid-container:fullscreen,
+#mermaid-container.diagram-fullscreen {
     height: 100vh;
     min-height: 0;
     padding: 8px;
     background: var(--base);
 }
+#mermaid-container.diagram-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    border: none;
+}
+body.has-fullscreen-diagram { overflow: hidden; }
 
 .diagram-toolbar {
     position: absolute;

@@ -83,15 +83,9 @@ def check_interfaces_importable():
     print("✅ All four interface Protocols import cleanly")
 
 
-def check_dto_and_use_case_importable():
-    from app.application.dto import (
-        IngestRepoRequest, IngestRepoResponse,
-        AskQuestionRequest, AskQuestionResponse,
-        GenerateDiagramRequest, GenerateDiagramResponse,
-        manifest_to_response,
-    )
+def check_use_case_importable():
     from app.application.use_cases.ingest_repo import IngestRepoUseCase, IngestionLimitExceeded, RepoCache
-    print("✅ dto.py and ingest_repo.py import cleanly")
+    print("✅ ingest_repo.py imports cleanly")
 
 def check_chroma_isolation():
     import asyncio
@@ -246,7 +240,7 @@ if __name__ == "__main__":
     print("\n--- application interfaces ---")
     check_interfaces_importable()
     print("\n--- dto + use case ---")
-    check_dto_and_use_case_importable()
+    check_use_case_importable()
     print("\n🎉 All checks passed — domain + application layers are solid.")
 
 

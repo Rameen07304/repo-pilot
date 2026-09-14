@@ -206,7 +206,7 @@ class GenerateDiagramUseCase:
     def _rank_and_cap(
         self, edges: list[tuple[str, str, int]]
     ) -> list[tuple[str, str, int]]:
-        """Keep the most-connected nodes and heaviest edges when over the caps."""
+        """Keep the most-connected nodes when over the node cap."""
         degree: dict[str, int] = {}
         for from_mod, to_mod, weight in edges:
             degree[from_mod] = degree.get(from_mod, 0) + weight

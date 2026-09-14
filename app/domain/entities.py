@@ -18,10 +18,6 @@ class FileNode:
     content: Optional[str] = None
     is_binary: bool = False
 
-    @property
-    def is_fetched(self) -> bool:
-        return self.content is not None
-
 
 @dataclass
 class RepoManifest:
