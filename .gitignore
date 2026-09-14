@@ -48,3 +48,6 @@ Thumbs.db
 *.log
 # Local tool caches
 .impeccable/
+
+# Editor / assistant tooling
+.claude/

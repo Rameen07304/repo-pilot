@@ -65,7 +65,6 @@ The viewer opens at a readable zoom, and has `+`/`−`, "fit" (whole-diagram ove
 python -m unittest discover -s tests -t .
 ```
 
-`check_setup.py` is an additional dependency-free smoke test of the domain and parsing layers.
 
 ## Authors
 
