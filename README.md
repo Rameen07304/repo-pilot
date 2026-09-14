@@ -67,8 +67,16 @@ python -m unittest discover -s tests -t .
 
 `check_setup.py` is an additional dependency-free smoke test of the domain and parsing layers.
 
+## Authors
+
+Built by Rameen Fatima and Dania Imran.
+
 ## Limits worth knowing
 
 - Public repositories only, and only via `https://github.com/owner/repo` URLs (this is also the SSRF guard).
 - Call tracing is name-based, not scope-aware. Same-file matches are preferred, then imported files, then anywhere — see the note at the top of `tree_sitter_parser.py`.
 - The "deep investigation" mode in the UI is not implemented yet; every question runs in quick mode.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
