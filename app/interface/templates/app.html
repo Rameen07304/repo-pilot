@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"
             integrity="sha384-6F4Ibv/ylL12O35KFWTeGTHuBKDz5L6yjKsgv3QHQ8s4NTqlDXq7kMlYXGs7MHFc"
             crossorigin="anonymous"></script>
@@ -93,13 +93,19 @@
                             <input type="checkbox" id="folder-toggle-checkbox" checked />
                             organize by folder
                         </label>
-                        <button id="reset-view-btn" class="cmd-btn secondary-btn hidden">reset view</button>
                         <button id="download-png-btn" class="cmd-btn secondary-btn hidden">download png</button>
                         <button id="download-svg-btn" class="cmd-btn secondary-btn hidden">download svg</button>
                     </div>
                     <div id="diagram-status"></div>
                     <div id="mermaid-container" class="hidden">
+                        <div class="diagram-toolbar" aria-label="Diagram view controls">
+                            <button type="button" id="zoom-in-btn" class="tool-btn" title="Zoom in">+</button>
+                            <button type="button" id="zoom-out-btn" class="tool-btn" title="Zoom out">&minus;</button>
+                            <button type="button" id="reset-view-btn" class="tool-btn" title="Fit whole diagram">fit</button>
+                            <button type="button" id="fullscreen-btn" class="tool-btn" title="Fullscreen (Esc to exit)">full</button>
+                        </div>
                         <pre class="mermaid" id="mermaid-diagram"></pre>
+                        <div class="diagram-hint">scroll to zoom &middot; drag to pan &middot; double-click to zoom in</div>
                     </div>
                 </div>
             </section>
@@ -117,6 +123,6 @@
     <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"
             integrity="sha384-yc/c2Lk1s2V2ir1rxvjo8YyVD9PlOlYTqpNr3Wm1WIuAA30GlDYNx6U5104OiavY"
             crossorigin="anonymous"></script>
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v={{ static_version }}"></script>
 </body>
 </html>

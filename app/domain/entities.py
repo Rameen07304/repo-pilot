@@ -36,6 +36,7 @@ class RepoManifest:
     entry_points: list[str] = field(default_factory=list)
     readme_content: Optional[str] = None
     summary: Optional[str] = None
+    skipped_file_count: int = 0  # files that could not be fetched; >0 means this manifest is incomplete
     ingested_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property

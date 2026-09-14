@@ -12,6 +12,7 @@
     --ink-dim: #7C8B82;
     --ink-faint: #72827A; /* ~4.7:1 on --base: the floor for 12px text, so keep this the darkest gray */
     --success: #6EE7A8;
+    --warn: #E6C25A;
     --error: #FF6B6B;
 }
 
@@ -261,9 +262,12 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 
 .app-main {
     flex: 1;
+    min-width: 0;
     padding: 40px 48px;
-    max-width: 900px;
 }
+
+/* Reading-width column for text; the diagram tab gets the full width. */
+.ingest-bar, #ask-tab, .empty-state { max-width: 900px; }
 
 .ingest-bar { margin-bottom: 14px; }
 
@@ -354,6 +358,8 @@ button { font-family: inherit; cursor: pointer; }
 .status-loading::after { content: "_"; color: var(--accent); animation: rp-blink 1s steps(1) infinite; }
 .status-error { color: var(--error); }
 .status-error::before { content: "[err] "; }
+.status-warn { color: var(--warn); }
+.status-warn::before { content: "[warn] "; }
 .status-success { color: var(--success); }
 .status-success::before { content: "[ok] "; }
 
@@ -444,14 +450,53 @@ button { font-family: inherit; cursor: pointer; }
 /* ---------- Pan/zoom diagram viewer ---------- */
 
 #mermaid-container.pan-zoom-active {
-    height: 70vh;
-    max-height: 700px;
-    overflow: auto; /* allow scrollbars as a fallback alongside pan/zoom dragging */
+    height: calc(100vh - 260px);
+    min-height: 480px;
+    overflow: hidden;
     cursor: grab;
     position: relative;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
 }
 #mermaid-container.pan-zoom-active:active {
     cursor: grabbing;
+}
+#mermaid-container:fullscreen {
+    height: 100vh;
+    min-height: 0;
+    padding: 8px;
+    background: var(--base);
+}
+
+.diagram-toolbar {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    display: flex;
+    gap: 6px;
+}
+.tool-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: var(--base);
+    border: 1px solid var(--hairline);
+    color: var(--ink-body);
+    font-size: 13px;
+    font-weight: 500;
+    transition: border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.tool-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tool-btn:active { transform: translateY(1px); }
+
+.diagram-hint {
+    position: absolute;
+    left: 12px;
+    bottom: 10px;
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    pointer-events: none;
 }
 
 #mermaid-container.pan-zoom-active #mermaid-diagram {
@@ -459,7 +504,9 @@ button { font-family: inherit; cursor: pointer; }
     width: 100%;
     height: 100%;
     max-height: none;
-    padding: 12px;
+    margin: 0;
+    padding: 0;
+    border: none;
 }
 /* svg-pan-zoom can only fit/center when the SVG fills its viewport; the
    natural-size override above would otherwise leave the user staring at

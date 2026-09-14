@@ -17,6 +17,7 @@ class IngestResponse(BaseModel):
     detected_stack: list[str]
     summary: str
     was_cached: bool
+    skipped_file_count: int = 0
 
 
 class AskRequest(BaseModel):

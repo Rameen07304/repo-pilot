@@ -30,6 +30,7 @@ class IngestRepoResponse:
     detected_stack: list[str]
     summary: str
     was_cached: bool  # True if we served an existing manifest, no re-ingestion
+    skipped_file_count: int
 
 
 # ---------- Ask / Explainer ----------
@@ -80,6 +81,7 @@ def manifest_to_response(manifest: RepoManifest, *, was_cached: bool) -> IngestR
         detected_stack=list(manifest.detected_stack),
         summary=manifest.summary or "",
         was_cached=was_cached,
+        skipped_file_count=manifest.skipped_file_count,
     )
 
 def answer_to_response(answer: Answer) -> AskQuestionResponse:

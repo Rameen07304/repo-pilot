@@ -114,11 +114,19 @@ ingestForm.addEventListener("submit", async (e) => {
 
         currentRepo = { repoFullName: data.repo_full_name, commitSha: data.commit_sha };
 
-        setStatus(
-            ingestStatus,
-            `ingested ${data.repo_full_name} (${data.was_cached ? "from cache" : "fresh"})`,
-            "success"
-        );
+        if (data.skipped_file_count > 0) {
+            setStatus(
+                ingestStatus,
+                `ingested ${data.repo_full_name}, but ${data.skipped_file_count} of ${data.file_count + data.skipped_file_count} files could not be fetched (network) — answers and the diagram may be incomplete. Run ingest again to retry.`,
+                "warn"
+            );
+        } else {
+            setStatus(
+                ingestStatus,
+                `ingested ${data.repo_full_name} (${data.was_cached ? "from cache" : "fresh"})`,
+                "success"
+            );
+        }
 
         document.getElementById("repo-summary").textContent = data.summary;
         document.getElementById("repo-files").textContent = `${data.file_count} files`;
@@ -325,6 +333,7 @@ async function generateDiagram() {
                 minZoom: 0.2,
                 maxZoom: 10,
             });
+            showReadable();
         }
 
         resetViewBtn.classList.remove("hidden");
@@ -353,12 +362,48 @@ document.getElementById("orientation-checkbox").addEventListener("change", () =>
     }
 });
 
-resetViewBtn.addEventListener("click", () => {
+function fitDiagram() {
     if (panZoomInstance) {
         panZoomInstance.resize();
         panZoomInstance.fit();
         panZoomInstance.center();
     }
+}
+
+// Below this real scale, Mermaid's 16px labels drop under ~10px and
+// file names stop being readable. A big diagram therefore opens at
+// this zoom from its top-left corner; "fit" still gives the overview.
+const READABLE_ZOOM = 0.6;
+
+function showReadable() {
+    if (!panZoomInstance) return;
+    fitDiagram();
+    const sizes = panZoomInstance.getSizes();
+    if (sizes.realZoom < READABLE_ZOOM) {
+        // getZoom() is relative to the fitted scale; convert the target real scale
+        panZoomInstance.zoom(READABLE_ZOOM / (sizes.realZoom / panZoomInstance.getZoom()));
+        panZoomInstance.pan({ x: 24, y: 24 });
+    }
+}
+
+resetViewBtn.addEventListener("click", fitDiagram);
+document.getElementById("zoom-in-btn").addEventListener("click", () => panZoomInstance && panZoomInstance.zoomIn());
+document.getElementById("zoom-out-btn").addEventListener("click", () => panZoomInstance && panZoomInstance.zoomOut());
+
+const fullscreenBtn = document.getElementById("fullscreen-btn");
+fullscreenBtn.addEventListener("click", () => {
+    if (document.fullscreenElement) {
+        document.exitFullscreen();
+    } else if (mermaidContainer.requestFullscreen) {
+        mermaidContainer.requestFullscreen();
+    }
+});
+document.addEventListener("fullscreenchange", () => {
+    fullscreenBtn.textContent = document.fullscreenElement ? "exit" : "full";
+    showReadable(); // the viewport just changed size; re-derive the starting view for it
+});
+window.addEventListener("resize", () => {
+    if (panZoomInstance) panZoomInstance.resize();
 });
 
 downloadSvgBtn.addEventListener("click", () => {

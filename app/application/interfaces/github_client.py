@@ -44,6 +44,20 @@ class GitHubClient(Protocol):
         """
         ...
 
+    async def get_file_contents(
+        self, repo: RepoUrl, *, commit_sha: str, files: list[RemoteFileMeta]
+    ) -> dict[str, str]:
+        """
+        Bulk fetch: path -> content for every file in `files` that could
+        be retrieved. Files missing from the result failed; the caller
+        decides what that means. Implementations are expected to do
+        this in as few requests as possible (one archive download, not
+        one call per file) so a large repo neither exhausts the API
+        rate limit nor multiplies the effect of a flaky connection.
+        The same secret redaction as get_file_content applies.
+        """
+        ...
+
 
 class GitHubRateLimitError(Exception):
     """

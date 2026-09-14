@@ -6,6 +6,7 @@ routes, and serves the frontend.
 from __future__ import annotations
 
 import logging
+import time
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -41,15 +42,19 @@ app.include_router(diagram.router)
 templates = Jinja2Templates(directory="app/interface/templates")
 app.mount("/static", StaticFiles(directory="app/interface/static"), name="static")
 
+# Appended to static asset URLs so browsers pick up new CSS/JS after a
+# restart instead of serving a cached copy of the old interface.
+STATIC_VERSION = str(int(time.time()))
+
 
 @app.get("/")
 async def landing(request: Request):
-    return templates.TemplateResponse(request, "landing.html", {})
+    return templates.TemplateResponse(request, "landing.html", {"static_version": STATIC_VERSION})
 
 
 @app.get("/app")
 async def app_page(request: Request):
-    return templates.TemplateResponse(request, "app.html", {})
+    return templates.TemplateResponse(request, "app.html", {"static_version": STATIC_VERSION})
 
 
 @app.get("/health")

@@ -14,21 +14,21 @@ Deterministic pipeline, not an agent loop:
   7. Build the ParsedRepoIndex (symbols + module edges) for Explainer
      and Diagram agents to use later
   8. One LLM call to generate the repo summary
-  9. Build and cache the RepoManifest + ParsedRepoIndex
+  9. Build the RepoManifest + ParsedRepoIndex; cache them ONLY if every
+     file was fetched — a partial index cached under the commit SHA
+     would otherwise be served forever as if it were complete
 
-Every external call is async. The only place we parallelize is step 4
-(file fetching), and it's capped — not asyncio.gather(*everything),
-which would blow through GitHub's rate limit on a big repo.
+Every external call is async. File contents arrive as one archive
+download (see GitHubClient.get_file_contents), not a request per file.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 import json
 import re
 from app.domain.entities import FileNode, ParsedRepoIndex, RepoManifest
 from app.application.interfaces.code_parser import CodeParser
-from app.application.interfaces.github_client import GitHubClient, GitHubRateLimitError
+from app.application.interfaces.github_client import GitHubClient
 from app.application.interfaces.llm_client import LLMClient, LLMProviderError
 from app.application.interfaces.vector_store import VectorStore
 from app.domain.value_objects import RepoUrl
@@ -77,7 +77,6 @@ class IngestRepoUseCase:
         max_files: int = 500,
         max_file_size_bytes: int = 100 * 1024,
         max_total_size_bytes: int = 5 * 1024 * 1024,
-        max_concurrent_fetches: int = 10,
     ) -> None:
         self._github = github_client
         self._llm = llm_client
@@ -87,7 +86,6 @@ class IngestRepoUseCase:
         self._max_files = max_files
         self._max_file_size_bytes = max_file_size_bytes
         self._max_total_size_bytes = max_total_size_bytes
-        self._max_concurrent_fetches = max_concurrent_fetches
 
     async def execute(self, repo_url_raw: str) -> tuple[RepoManifest, bool]:
         """
@@ -137,53 +135,31 @@ class IngestRepoUseCase:
                 f"Repo is {total_size} bytes, cap is {self._max_total_size_bytes}."
             )
 
-        # Step 4: fetch contents with BOUNDED concurrency.
-        # asyncio.gather(*[fetch(f) for f in fetchable]) unbounded would
-        # be fine for 20 files and a rate-limit violation for 500.
-        semaphore = asyncio.Semaphore(self._max_concurrent_fetches)
-
-        async def fetch_one(meta) -> FileNode:
-            async with semaphore:
-                try:
-                    content = await self._github.get_file_content(
-                        repo, path=meta.path, sha=meta.sha
-                    )
-                except GitHubRateLimitError:
-                    # Propagate — one rate-limit hit means we should stop
-                    # the whole ingestion, not silently return partial data.
-                    raise
-                return FileNode(
-                    path=meta.path,
-                    size_bytes=meta.size_bytes,
-                    language=self._parser.detect_language(meta.path),
-                    content=content,
-                    is_binary=False,
-                )
-
-        # return_exceptions=True: a transient network blip on ONE file
-        # (dropped connection, read timeout) should not fail the entire
-        # ingestion when dozens of other files fetched successfully.
-        # A GitHubRateLimitError is the one exception we still treat as
-        # fatal for the whole run — see the loop below.
-        fetch_results = await asyncio.gather(
-            *[fetch_one(m) for m in fetchable], return_exceptions=True
+        # Step 4: fetch contents — the client does this as one archive
+        # download where it can, so a 300-file repo is one request, not
+        # 300. Anything it could not retrieve is simply absent from the
+        # result; a GitHubRateLimitError propagates as fatal.
+        contents = await self._github.get_file_contents(
+            repo, commit_sha=commit_sha, files=fetchable
         )
 
-        file_nodes: list[FileNode] = []
-        failed_count = 0
-        for result in fetch_results:
-            if isinstance(result, GitHubRateLimitError):
-                raise result
-            if isinstance(result, Exception):
-                failed_count += 1
-                logger.warning("Skipping one file due to fetch error: %s", result)
-                continue
-            file_nodes.append(result)
+        file_nodes: list[FileNode] = [
+            FileNode(
+                path=meta.path,
+                size_bytes=meta.size_bytes,
+                language=self._parser.detect_language(meta.path),
+                content=contents[meta.path],
+                is_binary=False,
+            )
+            for meta in fetchable
+            if meta.path in contents
+        ]
+        skipped_count = len(fetchable) - len(file_nodes)
 
-        if failed_count:
-            logger.info(
-                "Ingestion completed with %d file(s) skipped due to fetch errors out of %d total",
-                failed_count, len(fetchable),
+        if skipped_count:
+            logger.warning(
+                "Ingestion is INCOMPLETE: %d of %d file(s) could not be fetched; result will not be cached",
+                skipped_count, len(fetchable),
             )
 
         # Step 5: secret scanning happens in infrastructure BEFORE this
@@ -235,7 +211,8 @@ class IngestRepoUseCase:
             symbols=symbols,
             module_edges=module_edges,
         )
-        await self._cache.set_parsed_index(parsed_index)
+        if not skipped_count:
+            await self._cache.set_parsed_index(parsed_index)
 
         # Step 7: one LLM call for the summary — bounded, single call,
         # not a loop. README + entry points only, not the whole repo,
@@ -260,10 +237,14 @@ class IngestRepoUseCase:
             entry_points=entry_points,
             readme_content=readme,
             summary=summary,
+            skipped_file_count=skipped_count,
         )
 
-        # Step 8: cache it
-        await self._cache.set(manifest)
+        # Step 8: cache it — unless files are missing, in which case the
+        # next ingest of this commit should retry rather than get this
+        # partial result back instantly.
+        if not skipped_count:
+            await self._cache.set(manifest)
 
         return manifest, False
 

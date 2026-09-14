@@ -57,8 +57,8 @@ class GenerateDiagramUseCase:
      *,
      cache: RepoCache,
      llm_client: LLMClient | None = None,
-     max_nodes: int = 40,
-     max_edges: int = 80,
+     max_nodes: int = 80,
+     max_edges: int = 120,
      use_llm_labels: bool = False,
      group_by_folder: bool = True,
      ) -> None:

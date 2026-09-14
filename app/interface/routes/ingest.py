@@ -46,4 +46,5 @@ async def ingest_repo(payload: IngestRequest, request: Request) -> IngestRespons
         detected_stack=manifest.detected_stack,
         summary=manifest.summary or "",
         was_cached=was_cached,
+        skipped_file_count=manifest.skipped_file_count,
     )
