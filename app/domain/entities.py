@@ -90,6 +90,8 @@ class DiagramSpec:
     """The Diagram Agent's output: ready-to-render Mermaid syntax."""
     mermaid_syntax: str
     modules: list[str] = field(default_factory=list)
+    granularity: str = "file"  # "file" or "folder" — folder when a big repo was aggregated for readability
+    total_files: int = 0  # files in the full import graph before any capping/aggregation
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 @dataclass

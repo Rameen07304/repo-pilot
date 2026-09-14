@@ -31,4 +31,9 @@ async def generate_diagram(payload: DiagramRequest, request: Request) -> Diagram
         logger.exception("Unexpected error generating diagram")
         raise HTTPException(status_code=500, detail="Failed to generate diagram.") from e
 
-    return DiagramResponse(mermaid_syntax=spec.mermaid_syntax, modules=spec.modules)
+    return DiagramResponse(
+        mermaid_syntax=spec.mermaid_syntax,
+        modules=spec.modules,
+        granularity=spec.granularity,
+        total_files=spec.total_files,
+    )

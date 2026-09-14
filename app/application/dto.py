@@ -63,6 +63,8 @@ class GenerateDiagramRequest:
 class GenerateDiagramResponse:
     mermaid_syntax: str
     modules: list[str]
+    granularity: str
+    total_files: int
 
 
 # ---------- Mappers: entity -> response DTO ----------
@@ -94,4 +96,6 @@ def diagram_to_response(spec: DiagramSpec) -> GenerateDiagramResponse:
     return GenerateDiagramResponse(
         mermaid_syntax=spec.mermaid_syntax,
         modules=list(spec.modules),
+        granularity=spec.granularity,
+        total_files=spec.total_files,
     )

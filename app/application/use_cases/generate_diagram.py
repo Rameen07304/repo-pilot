@@ -11,9 +11,11 @@ single edge.
 
 Pipeline:
   1. Load the cached ParsedRepoIndex (never triggers ingestion itself)
-  2. Deduplicate edges, cap total node/edge count to keep the diagram
-     and the Mermaid renderer usable (huge repos would produce an
-     unreadable diagram anyway)
+  2. Deduplicate edges. If the repo is too big to draw at file level,
+     AGGREGATE to folder level (deepest folder depth that fits) — the
+     diagram then shows folder -> folder edges weighted by how many
+     file imports they collapse. If it is still over the cap, keep the
+     most-connected nodes rather than an arbitrary alphabetical slice.
   3. Build valid Mermaid flowchart syntax directly from those edges
   4. Optional: one bounded LLM call to suggest short group labels for
      top-level directories, purely cosmetic — every module in the
@@ -60,9 +62,9 @@ class GenerateDiagramUseCase:
                 f"No parsed code index for {repo_full_name}@{commit_sha}. Ingest the repo first."
             )
 
-        edges = self._dedupe_and_cap(parsed_index.module_edges)
+        file_edges = self._dedupe(parsed_index.module_edges)
 
-        if not edges:
+        if not file_edges:
             return DiagramSpec(
                 mermaid_syntax=(
                     "flowchart TD\n"
@@ -71,30 +73,40 @@ class GenerateDiagramUseCase:
                 modules=[],
             )
 
+        total_files = len(self._distinct_nodes(file_edges))
+        edges, granularity = self._fit_to_caps(file_edges)
         node_ids = self._build_node_id_map(edges)
 
-        labels = {path: path for path in node_ids}  # default: use the file path itself as the label
+        labels: dict[str, str] = {}  # LLM overrides only; default labels derive from the path
         if self._use_llm_labels:
             try:
                 labels = await self._suggest_labels(node_ids)
             except LLMProviderError as e:
                 logger.warning("Diagram label suggestion failed, using raw paths: %s", e)
-                labels = node_ids
 
         use_grouping = self._group_by_folder if group_by_folder is None else group_by_folder
         mermaid_syntax = self._build_mermaid(
-           edges=edges, node_ids=node_ids, labels=labels, orientation=orientation, group_by_folder=use_grouping
+            edges=edges,
+            node_ids=node_ids,
+            labels=labels,
+            orientation=orientation,
+            group_by_folder=use_grouping,
+            folder_nodes=(granularity == "folder"),
         )
 
-        modules = sorted(node_ids.keys())
-
-        return DiagramSpec(mermaid_syntax=mermaid_syntax, modules=modules)
+        return DiagramSpec(
+            mermaid_syntax=mermaid_syntax,
+            modules=sorted(node_ids.keys()),
+            granularity=granularity,
+            total_files=total_files,
+        )
 
     # ------------------------------------------------------------------
     # Internal: edge preparation
     # ------------------------------------------------------------------
 
-    def _dedupe_and_cap(self, edges: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    @staticmethod
+    def _dedupe(edges: list[tuple[str, str]]) -> list[tuple[str, str]]:
         seen: set[tuple[str, str]] = set()
         deduped: list[tuple[str, str]] = []
         for from_mod, to_mod in edges:
@@ -105,54 +117,135 @@ class GenerateDiagramUseCase:
                 continue
             seen.add(key)
             deduped.append(key)
-
-        if len(deduped) > self._max_edges:
-            logger.info(
-                "Capping diagram at %d edges (had %d) for readability",
-                self._max_edges, len(deduped),
-            )
-            deduped = deduped[: self._max_edges]
-
-        # Also cap distinct nodes, in case a small number of edges still
-        # touches too many distinct files to render legibly.
-        distinct_nodes: list[str] = []
-        for from_mod, to_mod in deduped:
-            for node in (from_mod, to_mod):
-                if node not in distinct_nodes:
-                    distinct_nodes.append(node)
-
-        if len(distinct_nodes) > self._max_nodes:
-            allowed = set(distinct_nodes[: self._max_nodes])
-            deduped = [
-                (f, t) for (f, t) in deduped if f in allowed and t in allowed
-            ]
-            logger.info("Capped diagram to %d nodes for readability", self._max_nodes)
-
         return deduped
 
     @staticmethod
-    def _build_node_id_map(edges: list[tuple[str, str]]) -> dict[str, str]:
+    def _distinct_nodes(edges: list[tuple]) -> list[str]:
+        distinct: list[str] = []
+        seen: set[str] = set()
+        for edge in edges:
+            for node in edge[:2]:
+                if node not in seen:
+                    seen.add(node)
+                    distinct.append(node)
+        return distinct
+
+    def _fit_to_caps(
+        self, file_edges: list[tuple[str, str]]
+    ) -> tuple[list[tuple[str, str, int]], str]:
+        """
+        Returns weighted edges (from, to, weight) that fit within the
+        node/edge caps, plus the granularity they represent.
+
+        Small repo: file-level edges, weight 1 each.
+        Big repo: collapse files into folders at the deepest depth whose
+        node count fits, so 'app/interface/routes/ask.py' becomes
+        'app/interface/routes' and parallel imports between two folders
+        merge into one weighted edge. If even top-level folders exceed
+        the cap, keep the most-connected ones.
+        """
+        files = self._distinct_nodes(file_edges)
+        max_depth = max(path.count("/") for path in files)
+
+        if len(files) <= self._max_nodes or max_depth == 0:
+            weighted = [(f, t, 1) for f, t in file_edges]
+            granularity = "file"
+        else:
+            granularity = "folder"
+            weighted = self._collapse_to_depth(file_edges, 1)
+            for depth in range(max_depth, 0, -1):
+                candidate = self._collapse_to_depth(file_edges, depth)
+                if len(self._distinct_nodes(candidate)) <= self._max_nodes:
+                    weighted = candidate
+                    break
+            if not weighted:
+                # Everything collapsed into one folder (all imports were
+                # intra-folder) — an empty diagram helps nobody, so show
+                # the most-connected files instead.
+                weighted = [(f, t, 1) for f, t in file_edges]
+                granularity = "file"
+            else:
+                logger.info(
+                    "Aggregated diagram to folder level: %d files -> %d nodes",
+                    len(files), len(self._distinct_nodes(weighted)),
+                )
+
+        return self._rank_and_cap(weighted), granularity
+
+    @staticmethod
+    def _collapse_to_depth(
+        file_edges: list[tuple[str, str]], depth: int
+    ) -> list[tuple[str, str, int]]:
+        """Map each file to its ancestor folder at `depth` segments; files shallower than that stay as-is."""
+        def folder_of(path: str) -> str:
+            parts = path.split("/")
+            return "/".join(parts[:depth]) if len(parts) > depth else path
+
+        weights: dict[tuple[str, str], int] = {}
+        for from_mod, to_mod in file_edges:
+            key = (folder_of(from_mod), folder_of(to_mod))
+            if key[0] == key[1]:
+                continue  # import within the same folder — invisible at this level
+            weights[key] = weights.get(key, 0) + 1
+        return [(f, t, w) for (f, t), w in weights.items()]
+
+    def _rank_and_cap(
+        self, edges: list[tuple[str, str, int]]
+    ) -> list[tuple[str, str, int]]:
+        """Keep the most-connected nodes and heaviest edges when over the caps."""
+        degree: dict[str, int] = {}
+        for from_mod, to_mod, weight in edges:
+            degree[from_mod] = degree.get(from_mod, 0) + weight
+            degree[to_mod] = degree.get(to_mod, 0) + weight
+
+        nodes = self._distinct_nodes(edges)
+        if len(nodes) > self._max_nodes:
+            ranked = sorted(nodes, key=lambda n: (-degree[n], n))
+            kept = set(ranked[: self._max_nodes])
+            edges = [e for e in edges if e[0] in kept and e[1] in kept]
+            logger.info("Capped diagram to %d most-connected nodes (had %d)", self._max_nodes, len(nodes))
+
+        if len(edges) > self._max_edges:
+            ranked_edges = sorted(
+                edges, key=lambda e: (-e[2], -(degree[e[0]] + degree[e[1]]), e[0], e[1])
+            )
+            keep = set(ranked_edges[: self._max_edges])
+            edges = [e for e in edges if e in keep]
+            logger.info("Capped diagram at %d edges for readability", self._max_edges)
+
+        return edges
+
+    def _build_node_id_map(self, edges: list[tuple[str, str, int]]) -> dict[str, str]:
         """
         Maps each real file path to a short, Mermaid-safe node ID
         (e.g. 'app/domain/entities.py' -> 'N0'). Mermaid node IDs can't
         contain slashes/dots safely, so we never use the raw path as
         the ID — only as the human-readable label text.
         """
-        distinct: list[str] = []
-        for from_mod, to_mod in edges:
-            for node in (from_mod, to_mod):
-                if node not in distinct:
-                    distinct.append(node)
-
-        return {path: f"N{i}" for i, path in enumerate(distinct)}
+        return {path: f"N{i}" for i, path in enumerate(self._distinct_nodes(edges))}
 
     # ------------------------------------------------------------------
     # Internal: Mermaid rendering
     # ------------------------------------------------------------------
 
-    def _build_mermaid(self,*,edges: list[tuple[str, str]],node_ids: dict[str, str],labels: dict[str, str],orientation: str = "TD",group_by_folder: bool = True,
+    def _build_mermaid(
+        self,
+        *,
+        edges: list[tuple[str, str, int]],
+        node_ids: dict[str, str],
+        labels: dict[str, str],
+        orientation: str = "TD",
+        group_by_folder: bool = True,
+        folder_nodes: bool = False,
     ) -> str:
         lines = [f"flowchart {orientation}"]
+        suffix = "/" if folder_nodes else ""  # a trailing slash marks a node as a directory
+
+        def label_for(path: str, *, short: bool) -> str:
+            if path in labels:
+                return self._escape_mermaid_label(labels[path])
+            text = path.rsplit("/", 1)[-1] if short else path
+            return self._escape_mermaid_label(text + suffix)
 
         if group_by_folder:
             groups = self._group_nodes_by_folder(node_ids)
@@ -160,15 +253,13 @@ class GenerateDiagramUseCase:
 
             for folder, paths in groups.items():
                 if len(paths) > 1:
-                # Real cluster — wrap in a subgraph so Mermaid visually
-                # boxes these together, cutting down crossing edges
-                # between files that are already conceptually related.
+                    # Real cluster — wrap in a subgraph so Mermaid visually
+                    # boxes these together, cutting down crossing edges
+                    # between files that are already conceptually related.
                     safe_folder_id = "cluster_" + re.sub(r"[^A-Za-z0-9]", "_", folder)
                     lines.append(f'    subgraph {safe_folder_id}["{self._escape_mermaid_label(folder)}"]')
                     for path in paths:
-                        node_id = node_ids[path]
-                        label_text = self._escape_mermaid_label(labels.get(path, path.rsplit("/", 1)[-1]))
-                        lines.append(f'        {node_id}["{label_text}"]')
+                        lines.append(f'        {node_ids[path]}["{label_for(path, short=True)}"]')
                         rendered_nodes.add(path)
                     lines.append("    end")
             # Single-file "folders" render ungrouped below, no subgraph
@@ -176,18 +267,19 @@ class GenerateDiagramUseCase:
 
             for path, node_id in node_ids.items():
                 if path not in rendered_nodes:
-                    label_text = self._escape_mermaid_label(labels.get(path, path))
-                    lines.append(f'    {node_id}["{label_text}"]')
+                    lines.append(f'    {node_id}["{label_for(path, short=False)}"]')
         else:
             for path, node_id in node_ids.items():
-                label_text = labels.get(path, path)
-                safe_label = self._escape_mermaid_label(label_text)
-                lines.append(f'    {node_id}["{safe_label}"]')
+                lines.append(f'    {node_id}["{label_for(path, short=False)}"]')
 
-        for from_mod, to_mod in edges:
+        for from_mod, to_mod, weight in edges:
             from_id = node_ids[from_mod]
             to_id = node_ids[to_mod]
-            lines.append(f"    {from_id} --> {to_id}")
+            if folder_nodes:
+                # Weight = how many file-level imports this folder edge collapses
+                lines.append(f'    {from_id} -->|"{weight}"| {to_id}')
+            else:
+                lines.append(f"    {from_id} --> {to_id}")
 
         return "\n".join(lines)
 
@@ -259,13 +351,15 @@ class GenerateDiagramUseCase:
                 raise ValueError("Expected a JSON object")
         except (ValueError, TypeError) as e:
             logger.warning("Could not parse LLM label suggestions, falling back to paths: %s", e)
-            return {p: p for p in paths}
+            return {}
 
         # Only accept labels for paths we actually asked about — never
         # let the LLM introduce a label for a path that doesn't exist
-        # in our real parsed data.
+        # in our real parsed data. Paths without a usable suggestion are
+        # simply absent, so the renderer derives their label from the path.
         result: dict[str, str] = {}
         for path in paths:
             suggested = parsed.get(path)
-            result[path] = suggested if isinstance(suggested, str) and suggested.strip() else path
+            if isinstance(suggested, str) and suggested.strip():
+                result[path] = suggested.strip()
         return result

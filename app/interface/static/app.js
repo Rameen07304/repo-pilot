@@ -290,7 +290,15 @@ async function generateDiagram() {
             return;
         }
 
-        setStatus(diagramStatus, "", "success");
+        if (data.granularity === "folder") {
+            setStatus(
+                diagramStatus,
+                `grouped to folder level for readability (${data.total_files} files with internal imports) · edge labels = number of imports`,
+                "success"
+            );
+        } else {
+            setStatus(diagramStatus, "", "success");
+        }
 
         const diagramEl = document.getElementById("mermaid-diagram");
         diagramEl.removeAttribute("data-processed");

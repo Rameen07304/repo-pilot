@@ -44,6 +44,8 @@ class DiagramRequest(BaseModel):
 class DiagramResponse(BaseModel):
     mermaid_syntax: str
     modules: list[str]
+    granularity: str = "file"
+    total_files: int = 0
 
 
 class ErrorResponse(BaseModel):

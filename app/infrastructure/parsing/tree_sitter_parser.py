@@ -51,6 +51,24 @@ _EXTENSION_TO_LANGUAGE = {
     ".dart": "dart",
 }
 
+# Languages we can build an import graph for WITHOUT a tree-sitter
+# grammar — import extraction is regex-based for every language here,
+# so these get module edges (and therefore show up in the diagram) but
+# fall back to window chunking for search. Vue/Svelte single-file
+# components carry plain ES imports in their <script> block, so the
+# JS import regex works on them as-is.
+_IMPORT_ONLY_EXTENSION_TO_LANGUAGE = {
+    ".mjs": "javascript",
+    ".cjs": "javascript",
+    ".vue": "javascript",
+    ".svelte": "javascript",
+    ".go": "go",
+    ".rs": "rust",
+    ".rb": "ruby",
+    ".java": "java",
+    ".php": "php",
+}
+
 # Tree-sitter node types that count as a "symbol" worth extracting,
 # per language — different grammars name these differently.
 _DEFINITION_NODE_TYPES = {
@@ -85,6 +103,11 @@ _CALL_NODE_TYPE = {
 }
 
 _NAME_FIELD = "name"  # consistent across these grammars for def/class nodes
+
+_JS_RESOLVE_SUFFIXES = (
+    "", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".vue", ".svelte",
+    "/index.js", "/index.ts", "/index.jsx", "/index.tsx",
+)
 
 # Matches render("x.html", ...) or render_template("x.html", ...) —
 # covers both Flask's render_template and Django's render(request, "x.html", ...)
@@ -132,6 +155,35 @@ class TreeSitterCodeParser:
                 # here routes the file through fallback chunking instead
                 # of crashing later when self._parsers[lang] doesn't exist.
                 return lang if lang in self._parsers else None
+        return None
+
+    def _detect_import_language(self, file_path: str) -> str | None:
+        """
+        Broader than detect_language: also covers languages whose import
+        graph we build by regex alone (see _IMPORT_ONLY_EXTENSION_TO_LANGUAGE).
+        Dart is deliberately included even when its grammar failed to load —
+        its imports are regex-extracted, so the diagram still works.
+        """
+        lower = file_path.lower()
+        for ext, lang in _EXTENSION_TO_LANGUAGE.items():
+            if lower.endswith(ext):
+                return lang
+        for ext, lang in _IMPORT_ONLY_EXTENSION_TO_LANGUAGE.items():
+            if lower.endswith(ext):
+                return lang
+        return None
+
+    @staticmethod
+    def _read_go_module_path(all_files: dict[str, str]) -> str | None:
+        """Module path from the shallowest go.mod, e.g. 'github.com/acme/svc'."""
+        go_mods = sorted(
+            (p for p in all_files if p == "go.mod" or p.endswith("/go.mod")),
+            key=lambda p: p.count("/"),
+        )
+        for path in go_mods:
+            match = re.search(r"^module\s+(\S+)", all_files[path], re.MULTILINE)
+            if match:
+                return match.group(1)
         return None
 
     def extract_symbols(
@@ -200,14 +252,19 @@ class TreeSitterCodeParser:
 
     def build_module_graph(self, all_files: dict[str, str]) -> list[ModuleEdge]:
         edges: list[ModuleEdge] = []
+        go_module = self._read_go_module_path(all_files)
         for path, content in all_files.items():
-            language = self.detect_language(path)
+            language = self._detect_import_language(path)
 
             if language is not None:
                 imports = self._extract_imports(content=content, language=language)
                 for imported in imports:
                     resolved = self._resolve_import_to_path(
-                        importing_file=path, import_name=imported, all_files=all_files
+                        importing_file=path,
+                        import_name=imported,
+                        all_files=all_files,
+                        language=language,
+                        go_module=go_module,
                     )
                     if resolved:
                         edges.append(ModuleEdge(from_module=path, to_module=resolved))
@@ -286,61 +343,162 @@ class TreeSitterCodeParser:
         if language == "python":
             for line in content.splitlines():
                 stripped = line.strip()
-                match = re.match(r"^from\s+([\w.]+)\s+import", stripped) or re.match(
-                r"^import\s+([\w.]+)", stripped
-                )
-                if match:
-                  imports.append(match.group(1))
+                from_match = re.match(r"^from\s+([\w.]+)\s+import\s+\(?([\w.,\s]+)", stripped)
+                if from_match:
+                    base = from_match.group(1)
+                    imports.append(base)
+                    # `from pkg import a, b` — a/b are often submodules, so
+                    # also try pkg.a / pkg.b; resolution simply finds no
+                    # file when they turn out to be plain symbols.
+                    for name in from_match.group(2).split(","):
+                        name = name.strip().split(" as ")[0].strip()
+                        if name and name != "*":
+                            imports.append(f"{base}.{name}" if not base.endswith(".") else f"{base}{name}")
+                    continue
+                import_match = re.match(r"^import\s+([\w.]+)", stripped)
+                if import_match:
+                    imports.append(import_match.group(1))
         elif language == "dart":
-        # Covers both: import 'package:craftore/core/x.dart';
-        # and relative: import '../domain/entities/x.dart';
-           for match in re.finditer(r"""import\s+['"]([^'"]+)['"]""", content):
+            # Covers both: import 'package:craftore/core/x.dart';
+            # and relative: import '../domain/entities/x.dart';
+            for match in re.finditer(r"""import\s+['"]([^'"]+)['"]""", content):
                 imports.append(match.group(1))
-        else:  # javascript / typescript
+        elif language == "go":
+            # Single `import "x"` and grouped `import ( "x"\n alias "y" )`
+            for block in re.finditer(r"import\s*\(([^)]*)\)", content):
+                imports.extend(re.findall(r'"([^"]+)"', block.group(1)))
+            for match in re.finditer(r'^\s*import\s+(?:\w+\s+)?"([^"]+)"', content, re.MULTILINE):
+                imports.append(match.group(1))
+        elif language == "rust":
+            # `mod x;` declares a child module file; `use crate::a::b` /
+            # `use super::x` reference other modules in this crate. Tagged
+            # so resolution knows which rule to apply.
+            for match in re.finditer(r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*;", content, re.MULTILINE):
+                imports.append(f"mod:{match.group(1)}")
+            for match in re.finditer(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+((?:crate|super|self)(?:::[\w]+)*)", content, re.MULTILINE):
+                imports.append(f"use:{match.group(1)}")
+        elif language == "ruby":
+            for match in re.finditer(r"""^\s*require_relative\s+['"]([^'"]+)['"]""", content, re.MULTILINE):
+                imports.append(f"rel:{match.group(1)}")
+            for match in re.finditer(r"""^\s*require\s+['"]([^'"]+)['"]""", content, re.MULTILINE):
+                imports.append(f"abs:{match.group(1)}")
+        elif language == "java":
+            for match in re.finditer(r"^\s*import\s+(?!static\s)([\w.]+)\s*;", content, re.MULTILINE):
+                name = match.group(1)
+                if not name.startswith(("java.", "javax.")) and not name.endswith(".*"):
+                    imports.append(name)
+        elif language == "php":
+            for match in re.finditer(
+                r"""(?:require|include)(?:_once)?\s*\(?\s*(?:__DIR__\s*\.\s*)?['"]([^'"]+\.php)['"]""", content
+            ):
+                imports.append(f"file:{match.group(1)}")
+            for match in re.finditer(r"^\s*use\s+([\w\\]+)\s*;", content, re.MULTILINE):
+                imports.append(f"ns:{match.group(1)}")
+        else:  # javascript / typescript (also .vue / .svelte / .mjs / .cjs)
             for line in content.splitlines():
                 match = re.search(r"""(?:from|require\()\s*['"]([^'"]+)['"]""", line)
                 if match:
-                   imports.append(match.group(1))
+                    imports.append(match.group(1))
         return imports
-     
-    def _resolve_import_to_path( self, *, importing_file: str, import_name: str, all_files: dict[str, str]) -> str | None:
+
+    @staticmethod
+    def _find_by_suffix(candidate: str, all_files: dict[str, str]) -> str | None:
+        for path in all_files:
+            if path == candidate or path.endswith("/" + candidate):
+                return path
+        return None
+
+    @staticmethod
+    def _join_relative(importing_file: str, relative: str) -> str:
+        importing_dir = importing_file.rsplit("/", 1)[0] if "/" in importing_file else ""
+        parts = importing_dir.split("/") if importing_dir else []
+        for segment in relative.split("/"):
+            if segment == "..":
+                if parts:
+                    parts.pop()
+            elif segment not in (".", ""):
+                parts.append(segment)
+        return "/".join(parts)
+
+    def _resolve_import_to_path(
+        self,
+        *,
+        importing_file: str,
+        import_name: str,
+        all_files: dict[str, str],
+        language: str | None = None,
+        go_module: str | None = None,
+    ) -> str | None:
+        if language == "python" and import_name.startswith("."):
+            # Relative import: one leading dot = the importing file's own
+            # package, each extra dot = one package up.
+            dots = len(import_name) - len(import_name.lstrip("."))
+            remainder = import_name[dots:]
+            importing_dir = importing_file.rsplit("/", 1)[0] if "/" in importing_file else ""
+            parts = importing_dir.split("/") if importing_dir else []
+            for _ in range(dots - 1):
+                if parts:
+                    parts.pop()
+            if remainder:
+                parts.extend(remainder.split("."))
+            base = "/".join(parts)
+            for candidate in (f"{base}.py", f"{base}/__init__.py"):
+                if candidate in all_files and candidate != importing_file:
+                    return candidate
+            return None
+        if language == "go":
+            return self._resolve_go_import(import_name, all_files, go_module)
+        if language == "rust":
+            return self._resolve_rust_import(importing_file, import_name, all_files)
+        if language == "ruby":
+            kind, _, name = import_name.partition(":")
+            if kind == "rel":
+                base = self._join_relative(importing_file, name)
+                for candidate in (base + ".rb", base):
+                    if candidate in all_files:
+                        return candidate
+                return None
+            return self._find_by_suffix(f"lib/{name}.rb", all_files) or self._find_by_suffix(f"{name}.rb", all_files)
+        if language == "java":
+            return self._find_by_suffix(import_name.replace(".", "/") + ".java", all_files)
+        if language == "php":
+            kind, _, name = import_name.partition(":")
+            if kind == "file":
+                candidate = self._join_relative(importing_file, name.lstrip("/"))
+                return candidate if candidate in all_files else self._find_by_suffix(name.lstrip("/"), all_files)
+            # PSR-4: the vendor/root namespace maps to an arbitrary source dir
+            # (App\ -> src/, app/, ...), so match on progressively shorter
+            # tails of the namespace path.
+            segments = name.split("\\")
+            for start in range(len(segments)):
+                found = self._find_by_suffix("/".join(segments[start:]) + ".php", all_files)
+                if found:
+                    return found
+            return None
+
         # Dart package imports: fixed convention, package:name/x.dart -> lib/x.dart
         if import_name.startswith("package:"):
             if "/" not in import_name:
                 return None
             remainder = import_name.split("/", 1)[1]
-            candidate = f"lib/{remainder}"
-            for path in all_files:
-                if path == candidate or path.endswith("/" + candidate):
-                    return path
-            return None
+            return self._find_by_suffix(f"lib/{remainder}", all_files)
 
         # Common Vite/webpack alias convention: "@/x" -> "src/x". Pragmatic
         # best-effort assumption, not a guarantee — real alias mappings
         # live in vite.config.js/tsconfig.json and could point elsewhere.
         if import_name.startswith("@/"):
             remainder = import_name[2:]
-            for suffix in ("", ".js", ".jsx", ".ts", ".tsx", "/index.js", "/index.ts"):
+            for suffix in _JS_RESOLVE_SUFFIXES:
                 candidate = f"src/{remainder}{suffix}"
                 if candidate in all_files:
                     return candidate
             return None
 
         # Relative imports — Dart, JS, TS all use "./x" / "../y/z" — resolve
-        # against the importing file's OWN directory. Applies regardless of
-        # which of these three languages the file is, not just Dart.
+        # against the importing file's OWN directory.
         if import_name.startswith("."):
-            importing_dir = importing_file.rsplit("/", 1)[0] if "/" in importing_file else ""
-            parts = importing_dir.split("/") if importing_dir else []
-            for segment in import_name.split("/"):
-                if segment == "..":
-                    if parts:
-                       parts.pop()
-                elif segment not in (".", ""):
-                    parts.append(segment)
-            base_candidate = "/".join(parts)
-
-            for suffix in ("", ".js", ".jsx", ".ts", ".tsx", ".dart", "/index.js", "/index.ts"):
+            base_candidate = self._join_relative(importing_file, import_name)
+            for suffix in _JS_RESOLVE_SUFFIXES + (".dart",):
                 candidate = base_candidate + suffix
                 if candidate in all_files:
                     return candidate
@@ -349,16 +507,106 @@ class TreeSitterCodeParser:
         # Absolute-style: Python dotted modules, or bare specifiers that
         # happen to match an internal path.
         candidate_suffixes = [
-          import_name.replace(".", "/") + ".py",
-          import_name.replace(".", "/") + "/__init__.py",
-          import_name + ".js",
-          import_name + ".ts",
-          import_name + "/index.js",]
+            import_name.replace(".", "/") + ".py",
+            import_name.replace(".", "/") + "/__init__.py",
+            import_name + ".js",
+            import_name + ".ts",
+            import_name + "/index.js",
+        ]
         for path in all_files:
             for suffix in candidate_suffixes:
                 if path == suffix or path.endswith("/" + suffix):
                     return path
         return None
+
+    def _resolve_go_import(
+        self, import_name: str, all_files: dict[str, str], go_module: str | None
+    ) -> str | None:
+        """
+        Go imports name a PACKAGE (a directory). Nodes in our graph are
+        files, so the edge lands on the package's most representative
+        file: <dir>/<pkg>.go by convention, else doc.go, else the first
+        non-test .go file. Folder-level aggregation in the diagram
+        collapses this back to the directory anyway.
+        """
+        if not go_module:
+            return None
+        if import_name == go_module:
+            pkg_dir = ""
+        elif import_name.startswith(go_module + "/"):
+            pkg_dir = import_name[len(go_module) + 1:]
+        else:
+            return None
+
+        prefix = pkg_dir + "/" if pkg_dir else ""
+        members = sorted(
+            p for p in all_files
+            if p.startswith(prefix) and p.endswith(".go") and "/" not in p[len(prefix):]
+            and not p.endswith("_test.go")
+        )
+        if not members:
+            return None
+        pkg_name = pkg_dir.rsplit("/", 1)[-1]
+        for preferred in (f"{prefix}{pkg_name}.go", f"{prefix}doc.go"):
+            if preferred in all_files and not preferred.endswith("_test.go"):
+                return preferred
+        return members[0]
+
+    def _resolve_rust_import(
+        self, importing_file: str, import_name: str, all_files: dict[str, str]
+    ) -> str | None:
+        kind, _, name = import_name.partition(":")
+        importing_dir = importing_file.rsplit("/", 1)[0] if "/" in importing_file else ""
+        stem = importing_file.rsplit("/", 1)[-1].removesuffix(".rs")
+
+        # A file's MODULE directory is where its children live: for
+        # main.rs/lib.rs/mod.rs that is the file's own directory; for
+        # foo.rs it is foo/ (2018-edition layout). `super` is the parent
+        # module's directory, which for foo.rs is simply foo's own dir.
+        if stem in ("main", "lib", "mod"):
+            self_dir = importing_dir
+            super_dir = importing_dir.rsplit("/", 1)[0] if "/" in importing_dir else ""
+        else:
+            self_dir = f"{importing_dir}/{stem}".strip("/")
+            super_dir = importing_dir
+
+        if kind == "mod":
+            prefix = self_dir + "/" if self_dir else ""
+            for candidate in (f"{prefix}{name}.rs", f"{prefix}{name}/mod.rs"):
+                if candidate in all_files:
+                    return candidate
+            return None
+
+        # `use crate::a::b::c` — resolve progressively shorter prefixes so
+        # `crate::db::Pool` lands on src/db.rs even though Pool is an item.
+        segments = name.split("::")
+        root = segments[0]
+        rest = segments[1:]
+        if root == "crate":
+            src_root = self._rust_src_root(importing_file, all_files)
+            base_parts: list[str] = [src_root] if src_root else []
+        elif root == "super":
+            base_parts = [super_dir] if super_dir else []
+        else:  # self
+            base_parts = [self_dir] if self_dir else []
+
+        for end in range(len(rest), 0, -1):
+            base = "/".join(base_parts + rest[:end])
+            for candidate in (f"{base}.rs", f"{base}/mod.rs"):
+                if candidate in all_files and candidate != importing_file:
+                    return candidate
+        return None
+
+    @staticmethod
+    def _rust_src_root(importing_file: str, all_files: dict[str, str]) -> str:
+        """Nearest ancestor 'src' directory holding main.rs or lib.rs, else ''."""
+        parts = importing_file.split("/")
+        for i in range(len(parts) - 1, -1, -1):
+            if parts[i] == "src":
+                root = "/".join(parts[: i + 1])
+                if f"{root}/main.rs" in all_files or f"{root}/lib.rs" in all_files:
+                    return root
+        return "src" if ("src/main.rs" in all_files or "src/lib.rs" in all_files) else ""
 
     # ------------------------------------------------------------------
     # Internal: UI-file relation extraction (templates, static assets)
