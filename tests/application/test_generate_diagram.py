@@ -44,12 +44,45 @@ class SmallRepoStaysFileLevelTest(unittest.TestCase):
         self.assertEqual(spec.mermaid_syntax.count("-->"), 2)
         self.assertNotIn("|", spec.mermaid_syntax)  # no weights at file level
 
-    def test_grouped_nodes_show_basename_inside_subgraph(self):
+    def test_folders_nest_and_labels_are_relative(self):
         edges = [("app/routes/ask.py", "app/routes/diagram.py"), ("app/routes/ask.py", "app/main.py")]
-        spec = run(GenerateDiagramUseCase(cache=StubCache(edges)), group_by_folder=True)
-        self.assertIn('subgraph cluster_app_routes["app/routes"]', spec.mermaid_syntax)
-        self.assertIn('"ask.py"', spec.mermaid_syntax)
-        self.assertIn('"app/main.py"', spec.mermaid_syntax)  # ungrouped single file keeps its full path
+        m = run(GenerateDiagramUseCase(cache=StubCache(edges)), group_by_folder=True).mermaid_syntax
+        self.assertIn('subgraph cluster_app["app"]', m)
+        self.assertIn('subgraph cluster_app_routes["routes"]', m)  # nested, titled relative to parent
+        self.assertLess(m.index('cluster_app["app"]'), m.index('cluster_app_routes["routes"]'))
+        self.assertIn('"ask.py"', m)
+        self.assertIn('"main.py"', m)  # inside the app box, so no "app/" prefix
+
+    def test_single_file_folder_is_hoisted_and_chains_merge(self):
+        edges = [
+            ("src/pages/Home.jsx", "src/services/api.js"),
+            ("src/pages/About.jsx", "src/services/api.js"),
+            ("src/pages/Home.jsx", "backend/accounts/management/commands/seed.py"),
+            ("src/pages/About.jsx", "backend/accounts/management/commands/smoke.py"),
+        ]
+        m = run(GenerateDiagramUseCase(cache=StubCache(edges)), group_by_folder=True).mermaid_syntax
+        self.assertNotIn('subgraph cluster_src_services', m)  # one file: no box of its own
+        self.assertIn('"services/api.js"', m)  # hoisted into src with a relative label
+        # backend -> accounts -> management -> commands is a single chain: one box, merged title
+        self.assertIn('subgraph cluster_backend_accounts_management_commands["backend/accounts/management/commands"]', m)
+        self.assertNotIn('subgraph cluster_backend["backend"]', m)
+
+    def test_shared_dependency_collapses_to_one_cluster_edge(self):
+        pages = [f"src/pages/P{i}.jsx" for i in range(4)]
+        edges = [(p, "src/services/api.js") for p in pages]  # all 4 pages import api
+        edges += [(p, "src/hooks/useTitle.js") for p in pages[:3]]  # 3 of 4 import the hook
+        edges += [("src/main.jsx", p) for p in pages]  # main imports every page
+        edges += [(pages[0], "src/hooks/useOther.js")]  # a one-off stays a file edge
+        m = run(GenerateDiagramUseCase(cache=StubCache(edges)), group_by_folder=True).mermaid_syntax
+        api_id = re.search(r'(N\d+)\["services/api.js"\]', m).group(1)
+        title_id = re.search(r'(N\d+)\["useTitle.js"\]', m).group(1)
+        main_id = re.search(r'(N\d+)\["main.jsx"\]', m).group(1)
+        self.assertIn(f"cluster_src_pages --> {api_id}", m)
+        self.assertIn(f'cluster_src_pages -->|"3/4"| {title_id}', m)
+        self.assertIn(f"{main_id} --> cluster_src_pages", m)
+        # no page draws its own line to api.js any more
+        self.assertNotRegex(m, rf'N\d+ --> {api_id}\b')
+        self.assertEqual(m.count("-->"), 4)  # api, hook, main->pages, and the one-off
 
 
 class BigRepoAggregationTest(unittest.TestCase):

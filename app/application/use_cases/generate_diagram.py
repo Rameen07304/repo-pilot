@@ -25,12 +25,26 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 
 from app.application.interfaces.llm_client import LLMClient, LLMProviderError
 from app.application.use_cases.ingest_repo import RepoCache
 from app.domain.entities import DiagramSpec
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _Cluster:
+    """One box in the rendered folder tree."""
+    path: str  # full folder path; "" for the undrawn root
+    title: str  # label relative to the parent box, e.g. "pages/admin"
+    files: list[str]  # node paths drawn directly inside this box
+    children: list["_Cluster"]
+
+    @property
+    def key(self) -> str:
+        return "cluster_" + re.sub(r"[^A-Za-z0-9]", "_", self.path)
 
 
 class RepoNotIndexedError(Exception):
@@ -205,14 +219,9 @@ class GenerateDiagramUseCase:
             edges = [e for e in edges if e[0] in kept and e[1] in kept]
             logger.info("Capped diagram to %d most-connected nodes (had %d)", self._max_nodes, len(nodes))
 
-        if len(edges) > self._max_edges:
-            ranked_edges = sorted(
-                edges, key=lambda e: (-e[2], -(degree[e[0]] + degree[e[1]]), e[0], e[1])
-            )
-            keep = set(ranked_edges[: self._max_edges])
-            edges = [e for e in edges if e in keep]
-            logger.info("Capped diagram at %d edges for readability", self._max_edges)
-
+        # The edge cap is applied at render time, AFTER folder-level
+        # collapsing — many file edges become one cluster edge, so
+        # capping here would throw away edges that would have drawn cheaply.
         return edges
 
     def _build_node_id_map(self, edges: list[tuple[str, str, int]]) -> dict[str, str]:
@@ -238,66 +247,170 @@ class GenerateDiagramUseCase:
         group_by_folder: bool = True,
         folder_nodes: bool = False,
     ) -> str:
+        """
+        Renders nodes as a nested folder tree (Mermaid subgraphs inside
+        subgraphs) and collapses edges to the folder level wherever most
+        files in a folder share the same dependency — one arrow from the
+        cluster instead of one per file. That is what keeps a 40-file
+        diagram readable: hub modules (an api client, a UI kit) would
+        otherwise receive a line from every page in the repo.
+        """
         lines = [f"flowchart {orientation}"]
         suffix = "/" if folder_nodes else ""  # a trailing slash marks a node as a directory
 
-        def label_for(path: str, *, short: bool) -> str:
+        def label_for(path: str, base: str) -> str:
             if path in labels:
                 return self._escape_mermaid_label(labels[path])
-            text = path.rsplit("/", 1)[-1] if short else path
-            return self._escape_mermaid_label(text + suffix)
+            relative = path[len(base) + 1:] if base and path.startswith(base + "/") else path
+            return self._escape_mermaid_label(relative + suffix)
+
+        # (endpoint key -> mermaid id) for both nodes and clusters; the
+        # cluster a node is rendered in, for edge collapsing.
+        endpoint_ids: dict[str, str] = dict(node_ids)
+        placement: dict[str, tuple[str, int]] = {}  # node -> (cluster key, files in that cluster)
 
         if group_by_folder:
-            groups = self._group_nodes_by_folder(node_ids)
-            rendered_nodes: set[str] = set()
+            root = self._build_cluster_tree(list(node_ids))
 
-            for folder, paths in groups.items():
-                if len(paths) > 1:
-                    # Real cluster — wrap in a subgraph so Mermaid visually
-                    # boxes these together, cutting down crossing edges
-                    # between files that are already conceptually related.
-                    safe_folder_id = "cluster_" + re.sub(r"[^A-Za-z0-9]", "_", folder)
-                    lines.append(f'    subgraph {safe_folder_id}["{self._escape_mermaid_label(folder)}"]')
-                    for path in paths:
-                        lines.append(f'        {node_ids[path]}["{label_for(path, short=True)}"]')
-                        rendered_nodes.add(path)
-                    lines.append("    end")
-            # Single-file "folders" render ungrouped below, no subgraph
-            # overhead for a cluster of one.
+            def render(cluster: _Cluster, indent: int) -> None:
+                pad = "    " * indent
+                for path in cluster.files:
+                    lines.append(f'{pad}{node_ids[path]}["{label_for(path, cluster.path)}"]')
+                    if cluster.path:  # root-level files have no box to collapse into
+                        placement[path] = (cluster.key, len(cluster.files))
+                for child in cluster.children:
+                    endpoint_ids[child.key] = child.key
+                    lines.append(f'{pad}subgraph {child.key}["{self._escape_mermaid_label(child.title)}"]')
+                    render(child, indent + 1)
+                    lines.append(f"{pad}end")
 
-            for path, node_id in node_ids.items():
-                if path not in rendered_nodes:
-                    lines.append(f'    {node_id}["{label_for(path, short=False)}"]')
+            render(root, 1)
         else:
             for path, node_id in node_ids.items():
-                lines.append(f'    {node_id}["{label_for(path, short=False)}"]')
+                lines.append(f'    {node_id}["{label_for(path, "")}"]')
 
-        for from_mod, to_mod, weight in edges:
-            from_id = node_ids[from_mod]
-            to_id = node_ids[to_mod]
+        rendered = self._collapse_cluster_edges(edges, placement)
+        rendered = self._cap_rendered_edges(rendered)
+
+        for src, dst, weight, partial in rendered:
+            label_parts = []
             if folder_nodes:
-                # Weight = how many file-level imports this folder edge collapses
-                lines.append(f'    {from_id} -->|"{weight}"| {to_id}')
-            else:
-                lines.append(f"    {from_id} --> {to_id}")
+                label_parts.append(str(weight))  # file imports this folder edge collapses
+            if partial:
+                label_parts.append(partial)
+            arrow = f'-->|"{" · ".join(label_parts)}"|' if label_parts else "-->"
+            lines.append(f"    {endpoint_ids[src]} {arrow} {endpoint_ids[dst]}")
 
         return "\n".join(lines)
 
     @staticmethod
-    def _group_nodes_by_folder(node_ids: dict[str, str]) -> dict[str, list[str]]:
+    def _build_cluster_tree(paths: list[str]) -> "_Cluster":
         """
-        Groups file paths by their immediate parent folder. Root-level
-        files (no folder) get grouped under "root". This is a simple,
-        one-level grouping — deeply nested repos (e.g. src/features/x/y/)
-        only group by the immediate parent, not the whole path chain,
-        which keeps the grouping logic predictable rather than building
-        an arbitrarily deep tree.
+        Folder trie over the node paths, compacted for display: a folder
+        becomes a subgraph only when it holds at least two nodes; a
+        folder with a single node hoists it into the parent (labelled
+        'services/api.js'); a folder whose only content is one subfolder
+        merges into it ('management/commands').
         """
-        groups: dict[str, list[str]] = {}
-        for path in node_ids:
-            folder = path.rsplit("/", 1)[0] if "/" in path else "root"
-            groups.setdefault(folder, []).append(path)
-        return groups
+        trie: dict = {"files": [], "dirs": {}}
+        for path in sorted(paths):
+            parts = path.split("/")
+            node = trie
+            for segment in parts[:-1]:
+                node = node["dirs"].setdefault(segment, {"files": [], "dirs": {}})
+            node["files"].append(path)
+
+        def count(node: dict) -> int:
+            return len(node["files"]) + sum(count(d) for d in node["dirs"].values())
+
+        def convert(node: dict, path: str, title: str) -> "_Cluster":
+            # Merge single-subfolder chains so titles read "pages/admin"
+            # instead of one empty box nested in another.
+            while not node["files"] and len(node["dirs"]) == 1:
+                (name, child), = node["dirs"].items()
+                path = f"{path}/{name}" if path else name
+                title = f"{title}/{name}" if title else name
+                node = child
+
+            cluster = _Cluster(path=path, title=title, files=list(node["files"]), children=[])
+            for name in sorted(node["dirs"]):
+                child_node = node["dirs"][name]
+                child_path = f"{path}/{name}" if path else name
+                if count(child_node) < 2:
+                    cluster.files.extend(sorted(all_files(child_node)))
+                else:
+                    cluster.children.append(convert(child_node, child_path, name))
+            cluster.files.sort()
+            return cluster
+
+        def all_files(node: dict) -> list[str]:
+            out = list(node["files"])
+            for d in node["dirs"].values():
+                out.extend(all_files(d))
+            return out
+
+        root_node = trie
+        # The root is never drawn as a box, so don't chain-merge it away.
+        root = _Cluster(path="", title="", files=list(root_node["files"]), children=[])
+        for name in sorted(root_node["dirs"]):
+            child_node = root_node["dirs"][name]
+            if count(child_node) < 2:
+                root.files.extend(sorted(all_files(child_node)))
+            else:
+                root.children.append(convert(child_node, name, name))
+        root.files.sort()
+        return root
+
+    @staticmethod
+    def _collapse_cluster_edges(
+        edges: list[tuple[str, str, int]],
+        placement: dict[str, tuple[str, int]],
+    ) -> list[tuple[str, str, int, str]]:
+        """
+        Returns (src, dst, weight, partial_label). When at least half
+        (and at least two) of a cluster's files point at the same target,
+        those edges become one edge from the cluster; the same is done
+        for a source that points at most files of a cluster. The label
+        says '3/4' when the collapse is partial, nothing when complete.
+        """
+        def collapse(items: list[tuple[str, str, int]], *, by_source: bool):
+            groups: dict[tuple[str, int, str], list[tuple[str, str, int]]] = {}
+            passthrough: list[tuple[str, str, int]] = []
+            for src, dst, weight in items:
+                member, other = (src, dst) if by_source else (dst, src)
+                info = placement.get(member)
+                same_cluster = info is not None and placement.get(other, ("", 0))[0] == info[0]
+                if info is None or info[1] < 2 or same_cluster:
+                    passthrough.append((src, dst, weight))
+                    continue
+                groups.setdefault((info[0], info[1], other), []).append((src, dst, weight))
+
+            collapsed: list[tuple[str, str, int, str]] = []
+            for (cluster_key, n, other), members in groups.items():
+                k = len(members)  # edges are deduped, so one per distinct member file
+                if k >= 2 and k * 2 >= n:
+                    total = sum(w for _, _, w in members)
+                    partial = f"{k}/{n}" if k < n else ""
+                    collapsed.append(
+                        (cluster_key, other, total, partial) if by_source else (other, cluster_key, total, partial)
+                    )
+                else:
+                    passthrough.extend(members)
+            return collapsed, passthrough
+
+        from_clusters, rest = collapse(edges, by_source=True)
+        into_clusters, rest = collapse(rest, by_source=False)
+        return from_clusters + into_clusters + [(s, d, w, "") for s, d, w in rest]
+
+    def _cap_rendered_edges(
+        self, edges: list[tuple[str, str, int, str]]
+    ) -> list[tuple[str, str, int, str]]:
+        if len(edges) <= self._max_edges:
+            return edges
+        ranked = sorted(edges, key=lambda e: (-e[2], e[0], e[1]))
+        keep = set(ranked[: self._max_edges])
+        logger.info("Capped diagram at %d rendered edges for readability", self._max_edges)
+        return [e for e in edges if e in keep]
 
     @staticmethod
     def _escape_mermaid_label(label: str) -> str:

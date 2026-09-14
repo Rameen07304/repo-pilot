@@ -455,8 +455,18 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 #mermaid-container.pan-zoom-active #mermaid-diagram {
-    max-height: none; /* let svg-pan-zoom's own viewBox control visible area, not our max-height */
+    display: block;
+    width: 100%;
     height: 100%;
+    max-height: none;
+    padding: 12px;
+}
+/* svg-pan-zoom can only fit/center when the SVG fills its viewport; the
+   natural-size override above would otherwise leave the user staring at
+   one corner of a 4000px diagram. */
+#mermaid-container.pan-zoom-active #mermaid-diagram svg {
+    width: 100% !important;
+    height: 100% !important;
 }
 /* ---------- Recent repos list ---------- */
 

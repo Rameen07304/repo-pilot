@@ -355,7 +355,8 @@ document.getElementById("orientation-checkbox").addEventListener("change", () =>
 
 resetViewBtn.addEventListener("click", () => {
     if (panZoomInstance) {
-        panZoomInstance.resetZoom();
+        panZoomInstance.resize();
+        panZoomInstance.fit();
         panZoomInstance.center();
     }
 });
