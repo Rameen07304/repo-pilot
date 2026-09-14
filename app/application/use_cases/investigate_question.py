@@ -38,6 +38,11 @@ _PLANNER_CHUNKS = 5
 _PLANNER_CHUNK_PREVIEW_CHARS = 500
 
 
+def _normalize(phrase: str) -> str:
+    """Repeat detection: planners re-quote or re-case a phrase they already tried."""
+    return phrase.strip().strip("\"'`").strip().lower()
+
+
 class DeepInvestigationUseCase(AnswerQuestionUseCase):
     def __init__(
         self,
@@ -102,7 +107,7 @@ class DeepInvestigationUseCase(AnswerQuestionUseCase):
         steps = 0
         while steps < self._max_steps:
             steps += 1
-            searches.append(phrase.lower())
+            searches.append(_normalize(phrase))
             new_hits = await search(phrase)
             files = sorted({h.chunk.file_path for h in new_hits})
             log.append(
@@ -127,7 +132,7 @@ class DeepInvestigationUseCase(AnswerQuestionUseCase):
             if decision["sufficient"] or not decision["next_search"]:
                 log.append("stopped: evidence judged sufficient")
                 break
-            if decision["next_search"].lower() in searches:
+            if _normalize(decision["next_search"]) in searches:
                 log.append("stopped: planner repeated an earlier search")
                 break
             if decision["missing"]:
