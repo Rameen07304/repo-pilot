@@ -388,46 +388,26 @@ document.getElementById("reset-view-btn").addEventListener("click", fitDiagram);
 document.getElementById("zoom-in-btn").addEventListener("click", () => panZoomInstance && panZoomInstance.zoomIn());
 document.getElementById("zoom-out-btn").addEventListener("click", () => panZoomInstance && panZoomInstance.zoomOut());
 
-// --- Fullscreen ---
-// The native API is refused in some contexts (embedded webviews, iframes
-// without allowfullscreen), so a CSS overlay is the fallback.
+// --- Expand to the whole window ---
+// Deliberately NOT the browser Fullscreen API: embedded webviews and
+// iframes either refuse it or "grant" it with no visible effect. A fixed
+// overlay behaves the same everywhere.
 const fullscreenBtn = document.getElementById("fullscreen-btn");
-const FALLBACK_FULLSCREEN_CLASS = "diagram-fullscreen";
+const EXPANDED_CLASS = "diagram-fullscreen";
 
-function isFullscreen() {
-    return !!document.fullscreenElement || mermaidContainer.classList.contains(FALLBACK_FULLSCREEN_CLASS);
-}
-
-function syncFullscreenUi() {
-    fullscreenBtn.textContent = isFullscreen() ? "exit" : "full";
+function setExpanded(on) {
+    mermaidContainer.classList.toggle(EXPANDED_CLASS, on);
+    document.body.classList.toggle("has-fullscreen-diagram", on);
+    fullscreenBtn.textContent = on ? "exit" : "full";
     showReadable(); // the viewport just changed size; re-derive the starting view for it
 }
 
-function setFallbackFullscreen(on) {
-    mermaidContainer.classList.toggle(FALLBACK_FULLSCREEN_CLASS, on);
-    document.body.classList.toggle("has-fullscreen-diagram", on);
-    syncFullscreenUi();
-}
-
-fullscreenBtn.addEventListener("click", async () => {
-    if (document.fullscreenElement) {
-        await document.exitFullscreen();
-        return;
-    }
-    if (mermaidContainer.classList.contains(FALLBACK_FULLSCREEN_CLASS)) {
-        setFallbackFullscreen(false);
-        return;
-    }
-    try {
-        await mermaidContainer.requestFullscreen();
-    } catch (err) {
-        setFallbackFullscreen(true);
-    }
+fullscreenBtn.addEventListener("click", () => {
+    setExpanded(!mermaidContainer.classList.contains(EXPANDED_CLASS));
 });
-document.addEventListener("fullscreenchange", syncFullscreenUi);
 document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && mermaidContainer.classList.contains(FALLBACK_FULLSCREEN_CLASS)) {
-        setFallbackFullscreen(false);
+    if (e.key === "Escape" && mermaidContainer.classList.contains(EXPANDED_CLASS)) {
+        setExpanded(false);
     }
 });
 window.addEventListener("resize", () => {
