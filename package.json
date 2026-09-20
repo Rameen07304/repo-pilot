@@ -1,0 +1,12 @@
+{
+  "name": "repo-pilot-frontend-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Test-only Node package. The app itself has no build step and no runtime JS dependencies — app.js and features.js are plain scripts the FastAPI app serves directly. This exists solely so the frontend tests can load that same markup and those same scripts in jsdom.",
+  "scripts": {
+    "test": "node --test tests/frontend/test_features.js tests/frontend/test_streaming.js"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
+}

@@ -3,6 +3,22 @@
 
 let currentRepo = null; // { repoFullName, commitSha }
 
+// The seam features.js talks to. app.js owns ingest/ask/diagram state;
+// features.js owns onboarding, streaming, the file drawer and impact,
+// and the two only ever meet through this object.
+window.RepoPilot = {
+    getCurrentRepo: () => currentRepo,
+    setStatus: (el, message, type) => setStatus(el, message, type),
+    askQuestion: (text) => askQuestion(text),
+    setAskContext: (path) => setAskContext(path),
+    clearAskContext: () => setAskContext(null),
+    setImpactHighlight: (highlight) => setImpactHighlight(highlight),
+    // Filled in by features.js once it loads.
+    openFile: () => {},
+    streamInvestigation: null,
+    hideInvestigationTimeline: () => {},
+};
+
 const ingestForm = document.getElementById("ingest-form");
 const ingestStatus = document.getElementById("ingest-status");
 const repoInfo = document.getElementById("repo-info");
@@ -164,6 +180,80 @@ const askForm = document.getElementById("ask-form");
 const askStatus = document.getElementById("ask-status");
 const answerBox = document.getElementById("answer-box");
 
+// A file chosen from the diagram or the onboarding guide. When set,
+// the question is prefixed with the path so retrieval is grounded in
+// that file — the backend still does its own searching, so this steers
+// the question rather than bypassing the repo-wide index.
+let askContextPath = null;
+
+const askContextBox = document.getElementById("ask-context");
+
+function setAskContext(path) {
+    askContextPath = path;
+    askContextBox.classList.toggle("hidden", !path);
+    if (path) {
+        document.getElementById("ask-context-path").textContent = path;
+    }
+}
+
+document.getElementById("ask-context-clear").addEventListener("click", () => setAskContext(null));
+
+function applyAskContext(question) {
+    return askContextPath ? `In the file ${askContextPath}: ${question}` : question;
+}
+
+/** Fills the ask box, switches to the tab, and submits. */
+function askQuestion(text) {
+    document.getElementById("question-input").value = text;
+    document.querySelector('.tab-btn[data-tab="ask-tab"]').click();
+    askForm.requestSubmit();
+}
+
+function renderAnswer(data) {
+    // Render the LLM's Markdown output as real HTML, then sanitize
+    // it before insertion. This is NOT optional: the answer text
+    // ultimately traces back to repo content the LLM was shown, so
+    // we never trust it enough to skip DOMPurify, even though it's
+    // "our own" model's output.
+    const rawHtml = marked.parse(data.answer_text);
+    const safeHtml = DOMPurify.sanitize(rawHtml);
+    document.getElementById("answer-text").innerHTML = safeHtml;
+
+    document.getElementById("answer-meta").textContent =
+        `mode: ${data.mode_used} · confidence: ${(data.confidence * 100).toFixed(0)}% · steps: ${data.steps_taken}`;
+
+    // Deep mode returns one line per search round; textContent keeps
+    // it inert even though the planner's phrases passed through an LLM.
+    const logBox = document.getElementById("investigation-log");
+    const stepsList = document.getElementById("investigation-steps");
+    stepsList.innerHTML = "";
+    (data.investigation_log || []).forEach((line) => {
+        const li = document.createElement("li");
+        li.textContent = line;
+        stepsList.appendChild(li);
+    });
+    logBox.classList.toggle("hidden", stepsList.children.length === 0);
+
+    const list = document.getElementById("citations-list");
+    list.innerHTML = "";
+    data.citations.forEach((c) => {
+        const li = document.createElement("li");
+        // A citation reads "path:start-end"; the path before the last
+        // colon is what opens in the file drawer.
+        const path = c.slice(0, c.lastIndexOf(":"));
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "citation-link";
+        btn.textContent = c;
+        btn.title = "Open " + path;
+        btn.addEventListener("click", () => window.RepoPilot.openFile(path));
+        li.appendChild(btn);
+        list.appendChild(li);
+    });
+
+    answerBox.classList.remove("hidden");
+}
+
 askForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!currentRepo) {
@@ -171,15 +261,30 @@ askForm.addEventListener("submit", async (e) => {
         return;
     }
 
-    const question = document.getElementById("question-input").value.trim();
+    const question = applyAskContext(document.getElementById("question-input").value.trim());
     const deepMode = document.getElementById("deep-mode-checkbox").checked;
     const btn = document.getElementById("ask-btn");
 
-    setStatus(askStatus, deepMode ? "investigating... running several search rounds" : "thinking...", "loading");
     answerBox.classList.add("hidden");
     btn.disabled = true;
 
     try {
+        // Deep mode streams, so the user watches the investigation
+        // instead of a spinner. Quick mode is a single round trip and
+        // has nothing worth streaming.
+        if (deepMode && window.RepoPilot.streamInvestigation) {
+            setStatus(askStatus, "", "success");
+            const data = await window.RepoPilot.streamInvestigation(question, {
+                repo_full_name: currentRepo.repoFullName,
+                commit_sha: currentRepo.commitSha,
+            });
+            renderAnswer(data);
+            return;
+        }
+
+        window.RepoPilot.hideInvestigationTimeline();
+        setStatus(askStatus, "thinking...", "loading");
+
         const res = await fetch("/api/ask", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -199,42 +304,9 @@ askForm.addEventListener("submit", async (e) => {
         }
 
         setStatus(askStatus, "", "success");
-
-        // Render the LLM's Markdown output as real HTML, then sanitize
-        // it before insertion. This is NOT optional: the answer text
-        // ultimately traces back to repo content the LLM was shown, so
-        // we never trust it enough to skip DOMPurify, even though it's
-        // "our own" model's output.
-        const rawHtml = marked.parse(data.answer_text);
-        const safeHtml = DOMPurify.sanitize(rawHtml);
-        document.getElementById("answer-text").innerHTML = safeHtml;
-
-        document.getElementById("answer-meta").textContent =
-            `mode: ${data.mode_used} · confidence: ${(data.confidence * 100).toFixed(0)}% · steps: ${data.steps_taken}`;
-
-        // Deep mode returns one line per search round; textContent keeps
-        // it inert even though the planner's phrases passed through an LLM.
-        const logBox = document.getElementById("investigation-log");
-        const stepsList = document.getElementById("investigation-steps");
-        stepsList.innerHTML = "";
-        (data.investigation_log || []).forEach((line) => {
-            const li = document.createElement("li");
-            li.textContent = line;
-            stepsList.appendChild(li);
-        });
-        logBox.classList.toggle("hidden", stepsList.children.length === 0);
-
-        const list = document.getElementById("citations-list");
-        list.innerHTML = "";
-        data.citations.forEach((c) => {
-            const li = document.createElement("li");
-            li.textContent = c;
-            list.appendChild(li);
-        });
-
-        answerBox.classList.remove("hidden");
+        renderAnswer(data);
     } catch (err) {
-        setStatus(askStatus, "Network error: " + err.message, "error");
+        setStatus(askStatus, err.message || "Something went wrong.", "error");
     } finally {
         btn.disabled = false;
     }
@@ -249,6 +321,8 @@ const downloadPngBtn = document.getElementById("download-png-btn");
 const downloadSvgBtn = document.getElementById("download-svg-btn");
 
 let panZoomInstance = null; // holds the active svg-pan-zoom controller
+let diagramNodePaths = {};  // mermaid node id -> real repo path, from the API
+let impactHighlight = null; // { target, direct[], indirect[] } while impact analysis is shown
 
 mermaid.initialize({
     startOnLoad: false,
@@ -319,6 +393,8 @@ async function generateDiagram() {
             setStatus(diagramStatus, "", "success");
         }
 
+        diagramNodePaths = data.node_paths || {};
+
         const diagramEl = document.getElementById("mermaid-diagram");
         diagramEl.removeAttribute("data-processed");
         diagramEl.textContent = data.mermaid_syntax;
@@ -345,6 +421,8 @@ async function generateDiagram() {
                 maxZoom: 10,
             });
             showReadable();
+            makeNodesInteractive(svgEl);
+            applyImpactHighlight();
         }
 
         downloadPngBtn.classList.remove("hidden");
@@ -354,6 +432,104 @@ async function generateDiagram() {
     } finally {
         diagramBtn.disabled = false;
     }
+}
+
+/**
+ * Makes each rendered file node clickable. Mermaid emits one <g> per
+ * node whose id embeds the node id we generated server-side ("N3"),
+ * which node_paths maps back to a real path. Pan/zoom is untouched:
+ * these listeners sit on the node groups, and a drag is filtered out
+ * by comparing pointer positions so panning across a node does not
+ * count as a click.
+ */
+function makeNodesInteractive(svgEl) {
+    svgEl.querySelectorAll("g.node").forEach((group) => {
+        const nodeId = nodeIdOf(group);
+        const path = nodeId && diagramNodePaths[nodeId];
+        if (!path) return;
+
+        group.classList.add("clickable-node");
+        group.setAttribute("tabindex", "0");
+        group.setAttribute("role", "button");
+        group.setAttribute("aria-label", "Open " + path);
+
+        const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+        title.textContent = path;
+        group.appendChild(title);
+
+        let downAt = null;
+        group.addEventListener("pointerdown", (e) => {
+            downAt = { x: e.clientX, y: e.clientY };
+        });
+        group.addEventListener("pointerup", (e) => {
+            if (!downAt) return;
+            const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y);
+            downAt = null;
+            if (moved > 4) return; // that was a pan, not a click
+            selectNode(group, path);
+        });
+        group.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                selectNode(group, path);
+            }
+        });
+    });
+}
+
+/**
+ * Mermaid's node element ids look like "flowchart-N3-7": our id sits
+ * between the prefix and a trailing counter, so match it explicitly
+ * rather than by position, which differs between Mermaid versions.
+ */
+function nodeIdOf(group) {
+    const match = /(?:^|-)(N\d+)(?:-|$)/.exec(group.id || "");
+    return match ? match[1] : null;
+}
+
+function selectNode(group, path) {
+    document.querySelectorAll("g.node.selected-node").forEach((n) => n.classList.remove("selected-node"));
+    group.classList.add("selected-node");
+    window.RepoPilot.openFile(path);
+}
+
+/**
+ * Paints the blast radius onto the diagram. Purely additive CSS
+ * classes on existing nodes — no edge or node is added or removed, so
+ * what is highlighted is exactly what the graph traversal returned.
+ */
+function setImpactHighlight(highlight) {
+    impactHighlight = highlight;
+    applyImpactHighlight();
+}
+
+function applyImpactHighlight() {
+    const svgEl = document.querySelector("#mermaid-diagram svg");
+    if (!svgEl) return;
+
+    svgEl.querySelectorAll("g.node").forEach((g) => {
+        g.classList.remove("impact-target", "impact-direct-node", "impact-indirect-node", "impact-dimmed");
+    });
+    mermaidContainer.classList.toggle("impact-active", Boolean(impactHighlight));
+    if (!impactHighlight) return;
+
+    const direct = new Set(impactHighlight.direct || []);
+    const indirect = new Set(impactHighlight.indirect || []);
+
+    svgEl.querySelectorAll("g.node").forEach((group) => {
+        const nodeId = nodeIdOf(group);
+        const path = nodeId && diagramNodePaths[nodeId];
+        if (!path) return;
+        if (path === impactHighlight.target) {
+            group.classList.add("impact-target");
+        } else if (direct.has(path)) {
+            group.classList.add("impact-direct-node");
+        } else if (indirect.has(path)) {
+            group.classList.add("impact-indirect-node");
+        } else {
+            group.classList.add("impact-dimmed");
+        }
+    });
 }
 
 diagramBtn.addEventListener("click", generateDiagram);

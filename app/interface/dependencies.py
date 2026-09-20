@@ -13,8 +13,11 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from app.application.use_cases.analyze_impact import AnalyzeImpactUseCase
 from app.application.use_cases.answer_question import AnswerQuestionUseCase
 from app.application.use_cases.generate_diagram import GenerateDiagramUseCase
+from app.application.use_cases.generate_onboarding import GenerateOnboardingUseCase
+from app.application.use_cases.get_file_source import GetFileSourceUseCase
 from app.application.use_cases.ingest_repo import IngestRepoUseCase
 from app.application.use_cases.investigate_question import DeepInvestigationUseCase
 from app.infrastructure.cache.sqlite_cache import SqliteRepoCache
@@ -37,6 +40,9 @@ class AppContainer:
     ask_use_case: AnswerQuestionUseCase
     deep_ask_use_case: DeepInvestigationUseCase
     diagram_use_case: GenerateDiagramUseCase
+    onboarding_use_case: GenerateOnboardingUseCase
+    file_source_use_case: GetFileSourceUseCase
+    impact_use_case: AnalyzeImpactUseCase
 
     quota_guard: DailyQuotaGuard
     question_limiter: FixedWindowRateLimiter
@@ -156,11 +162,35 @@ def build_container() -> AppContainer:
         use_llm_labels=False,  # keep diagram generation zero-LLM-cost by default
     )
 
+    # Both of these are deterministic first and LLM-narrated second:
+    # the ranking and the graph traversal are computed here, and the
+    # model only phrases the result. Each degrades to computed text if
+    # the call fails, so neither feature depends on a live provider.
+    onboarding_use_case = GenerateOnboardingUseCase(
+        cache=cache,
+        llm_client=llm_client,
+        min_files=int(os.getenv("ONBOARDING_MIN_FILES", "5")),
+        max_files=int(os.getenv("ONBOARDING_MAX_FILES", "8")),
+    )
+
+    impact_use_case = AnalyzeImpactUseCase(
+        cache=cache,
+        llm_client=llm_client,
+        max_depth=int(os.getenv("IMPACT_MAX_DEPTH", "4")),
+        max_nodes=int(os.getenv("IMPACT_MAX_NODES", "200")),
+    )
+
+    # Reads the cached manifest only — no LLM, no network.
+    file_source_use_case = GetFileSourceUseCase(cache=cache)
+
     return AppContainer(
         ingest_use_case=ingest_use_case,
         ask_use_case=ask_use_case,
         deep_ask_use_case=deep_ask_use_case,
         diagram_use_case=diagram_use_case,
+        onboarding_use_case=onboarding_use_case,
+        file_source_use_case=file_source_use_case,
+        impact_use_case=impact_use_case,
         quota_guard=quota_guard,
         question_limiter=question_limiter,
         deep_question_limiter=deep_question_limiter,

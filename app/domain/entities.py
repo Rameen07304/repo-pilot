@@ -90,6 +90,10 @@ class DiagramSpec:
     modules: list[str] = field(default_factory=list)
     granularity: str = "file"  # "file" or "folder" — folder when a big repo was aggregated for readability
     total_files: int = 0  # files in the full import graph before any capping/aggregation
+    # Mermaid node id -> the real repo path it was drawn from. The
+    # rendered SVG only carries the short id, so this is what lets the
+    # UI resolve a clicked node back to a file.
+    node_paths: dict[str, str] = field(default_factory=dict)
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 @dataclass
@@ -128,3 +132,70 @@ class ParsedRepoIndex:
     def find_by_name(self, name: str) -> list[ParsedSymbol]:
         """May return multiple matches across files — disambiguation happens in trace_calls."""
         return [s for s in self.symbols if s.name == name]
+
+@dataclass
+class ReadingStep:
+    """One stop on the onboarding reading order."""
+    file_path: str
+    why_it_matters: str
+    what_to_understand: str
+    depends_on: list[str] = field(default_factory=list)   # modules this file imports
+    depended_on_by: list[str] = field(default_factory=list)  # modules that import this file
+    key_symbols: list[str] = field(default_factory=list)
+    is_entry_point: bool = False
+
+
+@dataclass
+class OnboardingGuide:
+    """
+    The Onboarding Agent's output: where to start reading an unfamiliar
+    repo and why. The ranking is deterministic (import-graph centrality
+    + entry points); the LLM only turns those already-computed facts
+    into prose, exactly like the Diagram Agent's optional labels.
+    """
+    repo_full_name: str
+    commit_sha: str
+    overview: str = ""
+    entry_points: list[str] = field(default_factory=list)
+    reading_order: list[ReadingStep] = field(default_factory=list)
+    suggested_questions: list[str] = field(default_factory=list)
+    graph_available: bool = True  # False when the repo has no internal import edges to rank on
+
+
+@dataclass
+class ImpactNode:
+    """One node in a blast radius, with the distance it sits from the changed target."""
+    path: str
+    depth: int  # 1 = direct dependent, 2+ = indirect
+    symbols: list[str] = field(default_factory=list)  # symbols in this file implicated at this depth
+    via: list[str] = field(default_factory=list)  # paths this was reached through (one hop closer)
+
+    @property
+    def is_direct(self) -> bool:
+        return self.depth == 1
+
+
+@dataclass
+class ImpactReport:
+    """
+    "What breaks if I change X?" — computed purely from the parsed
+    import graph and call graph. No LLM decides what depends on what;
+    an LLM may only summarize the finished numbers.
+    """
+    target_path: str
+    target_symbol: Optional[str] = None
+    direct: list[ImpactNode] = field(default_factory=list)
+    indirect: list[ImpactNode] = field(default_factory=list)
+    callers: list[ImpactNode] = field(default_factory=list)  # reverse call graph, symbol targets only
+    entry_points_reached: list[str] = field(default_factory=list)
+    max_depth: int = 0
+    summary: str = ""
+    truncated: bool = False  # traversal hit the node cap
+
+    @property
+    def affected_files(self) -> list[str]:
+        seen: list[str] = []
+        for node in self.direct + self.indirect:
+            if node.path not in seen:
+                seen.append(node.path)
+        return seen

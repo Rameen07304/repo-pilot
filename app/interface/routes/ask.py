@@ -16,30 +16,17 @@ from app.application.use_cases.answer_question import RepoNotIngestedError
 from app.domain.entities import Question
 from app.domain.value_objects import QuestionMode
 from app.infrastructure.llm.quota_aware_llm_client import DailyQuotaExceededError
+from app.interface.client_ip import get_client_ip
 from app.interface.schemas import AskRequest, AskResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _get_client_ip(request: Request, *, trust_proxy_headers: bool) -> str:
-    # X-Forwarded-For is client-supplied unless a proxy we control sits
-    # in front of the app, so it is only honoured when explicitly enabled
-    # (TRUST_PROXY_HEADERS). Even then, only the RIGHTMOST entry is
-    # trustworthy — that is the one our proxy appended; everything to
-    # its left arrived in the request and can be forged to dodge the
-    # per-IP rate limit.
-    if trust_proxy_headers:
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.rsplit(",", 1)[-1].strip()
-    return request.client.host if request.client else "unknown"
-
-
 @router.post("/api/ask", response_model=AskResponse)
 async def ask_question(payload: AskRequest, request: Request) -> AskResponse:
     container = request.app.state.container
-    client_ip = _get_client_ip(request, trust_proxy_headers=container.trust_proxy_headers)
+    client_ip = get_client_ip(request, trust_proxy_headers=container.trust_proxy_headers)
 
     mode = QuestionMode.DEEP if payload.deep_mode else QuestionMode.QUICK
 

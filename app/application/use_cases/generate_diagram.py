@@ -85,6 +85,7 @@ class GenerateDiagramUseCase:
                     "    A[No internal module dependencies detected]"
                 ),
                 modules=[],
+                node_paths={},
             )
 
         total_files = len(self._distinct_nodes(file_edges))
@@ -113,6 +114,7 @@ class GenerateDiagramUseCase:
             modules=sorted(node_ids.keys()),
             granularity=granularity,
             total_files=total_files,
+            node_paths={node_id: path for path, node_id in node_ids.items()},
         )
 
     # ------------------------------------------------------------------

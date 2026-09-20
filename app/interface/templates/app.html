@@ -28,7 +28,8 @@
             <a href="/" class="sidebar-logo">repo-pilot<span class="cursor">_</span></a>
 
             <nav class="sidebar-nav" aria-label="Sections">
-                <button class="tab-btn active" data-tab="ask-tab">ask a question</button>
+                <button class="tab-btn active" data-tab="onboarding-tab">learn this codebase</button>
+                <button class="tab-btn" data-tab="ask-tab">ask a question</button>
                 <button class="tab-btn" data-tab="diagram-tab">architecture diagram</button>
             </nav>
 
@@ -60,7 +61,43 @@
             </section>
 
             <section id="tabs" class="hidden">
-                <div id="ask-tab" class="tab-content active">
+                <div id="onboarding-tab" class="tab-content active">
+                    <div class="onboarding-intro">
+                        <p class="dim">new to this repo? this reads the parsed import graph and lays out where to start.</p>
+                        <button id="onboarding-btn" class="cmd-btn cmd-btn-primary">start onboarding</button>
+                    </div>
+                    <div id="onboarding-status"></div>
+
+                    <div id="onboarding-guide" class="hidden">
+                        <section class="guide-block">
+                            <h3>$ cat overview</h3>
+                            <p id="onboarding-overview"></p>
+                        </section>
+
+                        <section class="guide-block" id="entry-points-block">
+                            <h3>$ entry points</h3>
+                            <ul id="entry-points-list" class="chip-list"></ul>
+                        </section>
+
+                        <section class="guide-block">
+                            <h3>$ reading order</h3>
+                            <p class="dim guide-hint">click a file to open its source, then ask about it or run impact analysis.</p>
+                            <ol id="reading-order-list" class="reading-order"></ol>
+                        </section>
+
+                        <section class="guide-block">
+                            <h3>$ questions to ask next</h3>
+                            <ul id="suggested-questions" class="chip-list"></ul>
+                        </section>
+                    </div>
+                </div>
+
+                <div id="ask-tab" class="tab-content">
+                    <div id="ask-context" class="hidden ask-context">
+                        <span class="ask-context-label">context</span>
+                        <code id="ask-context-path"></code>
+                        <button type="button" id="ask-context-clear" class="link-btn" title="Ask about the whole repo instead">clear</button>
+                    </div>
                     <form id="ask-form">
                         <div class="cmd-line">
                             <span class="cmd-prompt">$</span>
@@ -73,6 +110,15 @@
                         <button type="submit" id="ask-btn" class="cmd-btn cmd-btn-primary">ask</button>
                     </form>
                     <div id="ask-status"></div>
+
+                    <section id="live-investigation" class="hidden live-investigation" aria-live="polite">
+                        <header class="live-header">
+                            <h4>investigation</h4>
+                            <span id="live-state" class="live-state">running</span>
+                        </header>
+                        <ol id="live-timeline" class="live-timeline"></ol>
+                    </section>
+
                     <div id="answer-box" class="hidden">
                         <h3>answer</h3>
                         <div id="answer-text"></div>
@@ -109,10 +155,67 @@
                             <button type="button" id="fullscreen-btn" class="tool-btn" title="Expand to the whole window (Esc to exit)">full</button>
                         </div>
                         <pre class="mermaid" id="mermaid-diagram"></pre>
-                        <div class="diagram-hint">scroll to zoom &middot; drag to pan &middot; double-click to zoom in</div>
+                        <div class="diagram-hint">scroll to zoom &middot; drag to pan &middot; click a node to open its source</div>
                     </div>
                 </div>
             </section>
+
+            <!-- File detail drawer: opened by clicking a diagram node or a
+                 reading-order file. Connects source -> ask -> impact. -->
+            <aside id="file-panel" class="file-panel hidden" aria-label="File detail" hidden>
+                <header class="file-panel-header">
+                    <div class="file-panel-title">
+                        <h3 id="file-panel-path"></h3>
+                        <span id="file-panel-meta" class="dim"></span>
+                    </div>
+                    <button type="button" id="file-panel-close" class="tool-btn" title="Close (Esc)">&times;</button>
+                </header>
+
+                <div class="file-panel-actions">
+                    <button type="button" id="ask-about-file-btn" class="cmd-btn cmd-btn-primary">ask about this file</button>
+                    <button type="button" id="impact-btn" class="cmd-btn secondary-btn">impact analysis</button>
+                    <select id="symbol-select" class="symbol-select" aria-label="Limit impact analysis to one symbol">
+                        <option value="">whole file</option>
+                    </select>
+                </div>
+
+                <div id="file-panel-status"></div>
+
+                <nav class="file-panel-tabs" aria-label="File detail sections">
+                    <button class="panel-tab-btn active" data-panel="panel-source">source</button>
+                    <button class="panel-tab-btn" data-panel="panel-relations">relationships</button>
+                    <button class="panel-tab-btn" data-panel="panel-impact">impact</button>
+                </nav>
+
+                <div id="panel-source" class="panel-content active">
+                    <pre class="file-source"><code id="file-source-code"></code></pre>
+                </div>
+
+                <div id="panel-relations" class="panel-content">
+                    <h4>defines</h4>
+                    <ul id="file-symbols" class="chip-list"></ul>
+                    <h4>imports</h4>
+                    <ul id="file-imports" class="chip-list"></ul>
+                    <h4>imported by</h4>
+                    <ul id="file-imported-by" class="chip-list"></ul>
+                </div>
+
+                <div id="panel-impact" class="panel-content">
+                    <div id="impact-empty" class="panel-empty dim">
+                        run <strong>impact analysis</strong> to see what breaks if this changes.
+                    </div>
+                    <div id="impact-result" class="hidden">
+                        <p id="impact-summary" class="impact-summary"></p>
+                        <div class="impact-stats" id="impact-stats"></div>
+                        <h4>direct dependents <span class="dim">(import it themselves)</span></h4>
+                        <ul id="impact-direct" class="impact-list"></ul>
+                        <h4>indirect dependents <span class="dim">(reached through another file)</span></h4>
+                        <ul id="impact-indirect" class="impact-list"></ul>
+                        <h4 id="impact-callers-heading">callers <span class="dim">(name-based call graph)</span></h4>
+                        <ul id="impact-callers" class="impact-list"></ul>
+                    </div>
+                </div>
+            </aside>
 
             <section class="empty-state" aria-label="No repository loaded">
                 <div class="dim">$ repo-pilot status</div>
@@ -128,5 +231,7 @@
             integrity="sha384-yc/c2Lk1s2V2ir1rxvjo8YyVD9PlOlYTqpNr3Wm1WIuAA30GlDYNx6U5104OiavY"
             crossorigin="anonymous"></script>
     <script src="/static/app.js?v={{ static_version }}"></script>
+    <!-- Loads after app.js: it fills in the window.RepoPilot hooks app.js declares. -->
+    <script src="/static/features.js?v={{ static_version }}"></script>
 </body>
 </html>

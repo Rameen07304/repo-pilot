@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.interface.dependencies import build_container
-from app.interface.routes import ask, diagram, ingest
+from app.interface.routes import ask, diagram, impact, ingest, investigate_stream, onboarding, source
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -37,7 +37,11 @@ app = FastAPI(title="Repo Pilot", lifespan=lifespan)
 
 app.include_router(ingest.router)
 app.include_router(ask.router)
+app.include_router(investigate_stream.router)
 app.include_router(diagram.router)
+app.include_router(onboarding.router)
+app.include_router(source.router)
+app.include_router(impact.router)
 
 templates = Jinja2Templates(directory="app/interface/templates")
 app.mount("/static", StaticFiles(directory="app/interface/static"), name="static")

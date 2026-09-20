@@ -35,6 +35,10 @@ data/*
 chroma_db/
 .chroma/
 
+# Node (frontend tests only — the app itself has no build step)
+node_modules/
+package-lock.json
+
 # IDE
 .vscode/
 .idea/

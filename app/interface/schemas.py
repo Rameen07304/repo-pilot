@@ -48,6 +48,88 @@ class DiagramResponse(BaseModel):
     modules: list[str]
     granularity: str = "file"
     total_files: int = 0
+    # Mermaid node id -> the real path it was drawn from ("N3":
+    # "app/main.py"). The rendered SVG only carries the short id, so
+    # this is what lets a click on a node resolve back to a file.
+    node_paths: dict[str, str] = {}
+
+
+class OnboardingRequest(BaseModel):
+    repo_full_name: str = Field(..., max_length=200)
+    commit_sha: str = Field(..., max_length=100)
+
+
+class ReadingStepResponse(BaseModel):
+    file_path: str
+    why_it_matters: str
+    what_to_understand: str
+    depends_on: list[str] = []
+    depended_on_by: list[str] = []
+    key_symbols: list[str] = []
+    is_entry_point: bool = False
+
+
+class OnboardingResponse(BaseModel):
+    repo_full_name: str
+    commit_sha: str
+    overview: str
+    entry_points: list[str]
+    reading_order: list[ReadingStepResponse]
+    suggested_questions: list[str]
+    graph_available: bool = True
+
+
+class FileSourceRequest(BaseModel):
+    repo_full_name: str = Field(..., max_length=200)
+    commit_sha: str = Field(..., max_length=100)
+    file_path: str = Field(..., max_length=500)
+
+
+class FileSymbolResponse(BaseModel):
+    name: str
+    kind: str
+    start_line: int
+    end_line: int
+
+
+class FileSourceResponse(BaseModel):
+    path: str
+    content: str
+    language: str | None = None
+    size_bytes: int = 0
+    line_count: int = 0
+    truncated: bool = False
+    symbols: list[FileSymbolResponse] = []
+    imports: list[str] = []
+    imported_by: list[str] = []
+
+
+class ImpactRequest(BaseModel):
+    repo_full_name: str = Field(..., max_length=200)
+    commit_sha: str = Field(..., max_length=100)
+    file_path: str = Field(..., max_length=500)
+    symbol: str | None = Field(default=None, max_length=200)
+
+
+class ImpactNodeResponse(BaseModel):
+    path: str
+    depth: int
+    symbols: list[str] = []
+    via: list[str] = []
+    is_direct: bool = False
+
+
+class ImpactResponse(BaseModel):
+    target_path: str
+    target_symbol: str | None = None
+    direct: list[ImpactNodeResponse] = []
+    indirect: list[ImpactNodeResponse] = []
+    callers: list[ImpactNodeResponse] = []
+    entry_points_reached: list[str] = []
+    affected_files: list[str] = []
+    max_depth: int = 0
+    summary: str = ""
+    truncated: bool = False
 
 
 class ErrorResponse(BaseModel):

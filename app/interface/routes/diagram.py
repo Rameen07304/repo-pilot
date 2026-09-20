@@ -36,4 +36,5 @@ async def generate_diagram(payload: DiagramRequest, request: Request) -> Diagram
         modules=spec.modules,
         granularity=spec.granularity,
         total_files=spec.total_files,
+        node_paths=spec.node_paths,
     )
