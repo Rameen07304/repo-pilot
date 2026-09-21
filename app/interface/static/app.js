@@ -25,6 +25,36 @@ function getPersona() {
     return select ? select.value : "newcomer";
 }
 
+// The ask options are drawn as option cards. The quick/deep pair is a
+// radio-style choice backed by the existing deep-mode checkbox, and the
+// persona radios mirror into the hidden select, so everything that reads
+// #deep-mode-checkbox or #persona-select keeps working unchanged.
+(function wireAskOptions() {
+    const deep = document.getElementById("deep-mode-checkbox");
+    const quick = document.querySelector('input[name="depth"][value="quick"]');
+    const personaSelect = document.getElementById("persona-select");
+    if (!deep || !quick || !personaSelect) return;
+
+    const syncDepth = () => {
+        quick.checked = !deep.checked;
+        deep.closest(".option-card").classList.toggle("selected", deep.checked);
+        quick.closest(".option-card").classList.toggle("selected", !deep.checked);
+    };
+    quick.addEventListener("change", () => { deep.checked = false; syncDepth(); });
+    deep.addEventListener("change", syncDepth);
+    syncDepth();
+
+    const personaRadios = document.querySelectorAll('input[name="persona"]');
+    const syncPersona = () => {
+        personaRadios.forEach((r) => {
+            r.closest(".option-card").classList.toggle("selected", r.checked);
+            if (r.checked) personaSelect.value = r.value;
+        });
+    };
+    personaRadios.forEach((r) => r.addEventListener("change", syncPersona));
+    syncPersona();
+})();
+
 const ingestForm = document.getElementById("ingest-form");
 const ingestStatus = document.getElementById("ingest-status");
 const repoInfo = document.getElementById("repo-info");
