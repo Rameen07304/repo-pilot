@@ -274,7 +274,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     font-size: 13px;
 }
 
-.sidebar-repo-info h3 {
+.sidebar-repo-info h2 {
     font-size: 12px;
     letter-spacing: 0.08em;
     color: var(--ink-faint);
@@ -571,7 +571,7 @@ body.has-fullscreen-diagram { overflow: hidden; }
     font-size: 13px;
 }
 
-.sidebar-recent h3 {
+.sidebar-recent h2 {
     font-size: 12px;
     letter-spacing: 0.08em;
     color: var(--ink-faint);
@@ -807,7 +807,7 @@ button.chip:hover { border-color: var(--accent); color: var(--accent); }
     gap: 12px;
     margin-bottom: 12px;
 }
-.live-header h4 { margin: 0; font-size: 12px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.live-header h3 { margin: 0; font-size: 12px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.08em; }
 .live-state {
     font-size: 11px;
     padding: 2px 8px;
