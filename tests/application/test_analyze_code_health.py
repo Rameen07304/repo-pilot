@@ -73,7 +73,7 @@ class CodeHealthTest(unittest.TestCase):
         cycles = by_check(report, "circular_import")
         self.assertEqual(len(cycles), 1)
         self.assertEqual(cycles[0].files, ["a.py", "b.py", "c.py"])
-        self.assertEqual(cycles[0].severity, "high")  # 3-module cycle
+        self.assertEqual(cycles[0].severity, "medium")  # a cycle is a signal to inspect, never "high"
         self.assertNotIn("d.py", cycles[0].files)
 
     def test_two_module_cycle_is_medium(self):
@@ -165,8 +165,14 @@ class CodeHealthTest(unittest.TestCase):
         symbols = [sym(f"f{i}", "a.py", i * 150 + 1, i * 150 + 130) for i in range(30)]
         report = run(files, symbols=symbols, edges=[("tests/t.py", "a.py")], max_findings_per_check=30)
         self.assertEqual(len(by_check(report, "long_function")), 30)
-        self.assertEqual(report.deductions["long_function"], 16)
+        # 30 * 3 = 90 raw points saturate towards the cap of 16 but never reach it
+        self.assertLessEqual(report.deductions["long_function"], 16)
+        self.assertGreaterEqual(report.deductions["long_function"], 13)
         self.assertEqual(report.score, 100 - sum(report.deductions.values()))
+        # and fewer findings deduct clearly less: the scale is not a cliff
+        few = run(files, symbols=symbols[:3], edges=[("tests/t.py", "a.py")], max_findings_per_check=30)
+        self.assertLess(few.deductions["long_function"], report.deductions["long_function"])
+        self.assertLessEqual(few.deductions["long_function"], 6)
 
     def test_findings_per_check_are_capped(self):
         files = {"a.py": "\n" * 5000, "tests/t.py": ""}
@@ -177,3 +183,60 @@ class CodeHealthTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CalibrationTest(unittest.TestCase):
+    """Patterns that are normal Python packaging must not be reported as problems."""
+
+    def test_package_init_reexport_is_not_a_cycle(self):
+        # __init__ re-exports app and globals; app imports globals from the package -> a cycle only via __init__
+        files = {"pkg/__init__.py": "", "pkg/app.py": "", "pkg/globals.py": "", "tests/t.py": ""}
+        edges = [("pkg/__init__.py", "pkg/app.py"), ("pkg/__init__.py", "pkg/globals.py"),
+                 ("pkg/app.py", "pkg/globals.py"), ("pkg/app.py", "pkg/__init__.py"), ("tests/t.py", "pkg/__init__.py")]
+        report = run(files, edges=edges)
+        self.assertEqual(by_check(report, "circular_import"), [])
+
+    def test_real_module_cycle_still_reported(self):
+        files = {"pkg/__init__.py": "", "pkg/a.py": "", "pkg/b.py": "", "tests/t.py": ""}
+        edges = [("pkg/a.py", "pkg/b.py"), ("pkg/b.py", "pkg/a.py"), ("tests/t.py", "pkg/__init__.py")]
+        report = run(files, edges=edges)
+        self.assertEqual([f.files for f in by_check(report, "circular_import")], [["pkg/a.py", "pkg/b.py"]])
+
+    def test_importing_the_package_covers_its_modules(self):
+        files = {"src/flask/__init__.py": "", "src/flask/app.py": "", "src/flask/ctx.py": "", "src/other/thing.py": "", "tests/test_x.py": ""}
+        edges = [("tests/test_x.py", "src/flask/__init__.py"), ("src/flask/__init__.py", "src/flask/app.py"),
+                 ("src/flask/app.py", "src/flask/ctx.py"), ("src/flask/app.py", "src/other/thing.py")]
+        report = run(files, edges=edges)
+        untested = {f.files[0] for f in by_check(report, "untested_module")}
+        self.assertNotIn("src/flask/app.py", untested)
+        self.assertNotIn("src/flask/ctx.py", untested)
+        self.assertIn("src/other/thing.py", untested)  # a different package, still uncovered
+
+    def test_examples_and_test_files_do_not_drive_findings(self):
+        files = {
+            "src/pkg/__init__.py": "", "src/pkg/core.py": "x\n" * 50,
+            "examples/demo/app.py": "x\n" * 2000,  # huge, but an example
+            "tests/test_core.py": "x\n" * 3000,  # huge, but a test
+        }
+        edges = [("tests/test_core.py", "src/pkg/__init__.py"), ("src/pkg/__init__.py", "src/pkg/core.py"), ("examples/demo/app.py", "src/pkg/core.py")]
+        report = run(files, edges=edges)
+        self.assertEqual(by_check(report, "large_file"), [])
+        self.assertEqual(by_check(report, "untested_module"), [])
+        self.assertEqual(report.source_file_count, 3)  # examples/ excluded
+
+    def test_package_init_is_never_a_hub(self):
+        files = {f"src/pkg/m{i}.py": "" for i in range(8)} | {"src/pkg/__init__.py": "", "tests/t.py": ""}
+        edges = [(f"src/pkg/m{i}.py", "src/pkg/__init__.py") for i in range(8)] + [("tests/t.py", "src/pkg/__init__.py")]
+        report = run(files, edges=edges)
+        self.assertEqual(by_check(report, "hub_module"), [])
+
+    def test_package_coverage_cascades_to_subpackages(self):
+        files = {"src/flask/__init__.py": "", "src/flask/sansio/app.py": "", "src/flask/app.py": "", "tests/t.py": ""}
+        edges = [("tests/t.py", "src/flask/__init__.py"), ("src/flask/app.py", "src/flask/sansio/app.py")]
+        report = run(files, edges=edges)
+        self.assertEqual(by_check(report, "untested_module"), [])
+
+    def test_no_source_files_means_no_untested_finding(self):
+        report = run({"README.md": "# docs only", "templates/x.gitignore": "*.pyc"})
+        self.assertEqual(by_check(report, "untested_module"), [])
+        self.assertEqual(report.score, 100)

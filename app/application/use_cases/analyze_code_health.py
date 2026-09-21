@@ -39,6 +39,7 @@ _SOURCE_SUFFIXES = (
 _TEST_DIR_SEGMENTS = {"test", "tests", "__tests__", "spec", "specs", "e2e"}
 _TEST_FILE_MARKERS = ("test_", "_test.", ".test.", ".spec.", "_spec.", "spec_")
 _GENERATED_MARKERS = (".g.dart", ".freezed.dart", ".min.js", "migrations/")
+_SUPPORTING_DIRS = {"examples", "example", "docs", "doc", "benchmarks", "samples", "demo", "demos", "scripts"}
 _FRAMEWORK_HOOK_NAMES = {
     # Called by a framework or runtime, never by repo code — not dead.
     "main", "setup", "teardown", "handle", "ready", "run", "init", "__init__",
@@ -91,7 +92,9 @@ class AnalyzeCodeHealthUseCase:
 
         source_files = [
             f.path for f in manifest.files
-            if f.path.lower().endswith(_SOURCE_SUFFIXES) and not self._is_generated(f.path)
+            if f.path.lower().endswith(_SOURCE_SUFFIXES)
+            and not self._is_generated(f.path)
+            and not self._is_supporting(f.path)
         ]
         source_set = set(source_files)
         contents = {f.path: f.content for f in manifest.files if f.content and f.path in source_set}
@@ -131,6 +134,15 @@ class AnalyzeCodeHealthUseCase:
         return any(marker in lowered for marker in _GENERATED_MARKERS)
 
     @staticmethod
+    def _is_supporting(path: str) -> bool:
+        """Examples, docs, benchmarks: real code, but not the product being graded."""
+        return any(seg in _SUPPORTING_DIRS for seg in path.lower().split("/")[:-1])
+
+    @staticmethod
+    def _is_package_init(path: str) -> bool:
+        return path.rsplit("/", 1)[-1] == "__init__.py"
+
+    @staticmethod
     def _is_test_file(path: str) -> bool:
         lowered = path.lower()
         segments = lowered.split("/")
@@ -162,6 +174,19 @@ class AnalyzeCodeHealthUseCase:
         components: list[list[str]] = []
         counter = 0
 
+        # A package __init__ that re-exports from its submodules while
+        # they import the package's globals is the standard Python
+        # layout, not a smell — but it registers as a cycle through
+        # __init__. Drop those aggregator nodes so only module-to-module
+        # cycles are reported.
+        def is_aggregator(path: str) -> bool:
+            return path.rsplit("/", 1)[-1] == "__init__.py"
+
+        out_edges = {
+            src: {dst for dst in dsts if not is_aggregator(dst)}
+            for src, dsts in out_edges.items()
+            if not is_aggregator(src)
+        }
         nodes = sorted(set(out_edges) | {t for targets in out_edges.values() for t in targets})
 
         def strongconnect(v: str) -> None:
@@ -195,7 +220,7 @@ class AnalyzeCodeHealthUseCase:
         for component in sorted(components, key=lambda c: (-len(c), c))[: self._max_per_check]:
             findings.append(CodeHealthFinding(
                 check="circular_import",
-                severity="high" if len(component) > 2 else "medium",
+                severity="medium",
                 title=f"{len(component)} modules import each other in a cycle",
                 detail="Cycles make modules impossible to test or reuse in isolation and cause import-order bugs. Break the cycle by moving the shared piece into a module both can import.",
                 files=component,
@@ -205,7 +230,8 @@ class AnalyzeCodeHealthUseCase:
     def _hub_modules(self, in_edges: dict[str, set[str]], source_files: list[str]) -> list[CodeHealthFinding]:
         source = set(source_files)
         ranked = sorted(
-            ((path, len(importers)) for path, importers in in_edges.items() if path in source),
+            ((path, len(importers)) for path, importers in in_edges.items()
+             if path in source and not self._is_package_init(path)),
             key=lambda item: (-item[1], item[0]),
         )
         findings = []
@@ -224,6 +250,8 @@ class AnalyzeCodeHealthUseCase:
 
     def _untested_modules(self, in_edges: dict[str, set[str]], source_files: list[str]) -> list[CodeHealthFinding]:
         tests = {p for p in source_files if self._is_test_file(p)}
+        if not source_files:
+            return []  # nothing to test
         if not tests:
             return [CodeHealthFinding(
                 check="untested_module",
@@ -236,9 +264,19 @@ class AnalyzeCodeHealthUseCase:
         covered = {
             target for target, importers in in_edges.items() if any(imp in tests for imp in importers)
         }
+        # `import flask` resolves to src/flask/__init__.py. A test that
+        # imports a package is exercising what the package exports, so
+        # treat the package's own modules (one level down) as covered.
+        for target in list(covered):
+            if self._is_package_init(target):
+                package_dir = target.rsplit("/", 1)[0] if "/" in target else ""
+                prefix = package_dir + "/" if package_dir else ""
+                for path in source_files:
+                    if path.startswith(prefix):
+                        covered.add(path)
         candidates = []
         for path in source_files:
-            if path in tests or path in covered:
+            if path in tests or path in covered or self._is_package_init(path):
                 continue
             dependents = len(in_edges.get(path, ()))
             if dependents == 0:
@@ -282,7 +320,10 @@ class AnalyzeCodeHealthUseCase:
         return findings
 
     def _large_files(self, line_counts: dict[str, int]) -> list[CodeHealthFinding]:
-        ranked = sorted(line_counts.items(), key=lambda item: (-item[1], item[0]))
+        ranked = sorted(
+            ((p, n) for p, n in line_counts.items() if not self._is_test_file(p)),
+            key=lambda item: (-item[1], item[0]),
+        )
         findings = []
         for path, lines in ranked[: self._max_per_check]:
             if lines < self._large_file:
@@ -357,10 +398,21 @@ class AnalyzeCodeHealthUseCase:
 
     @staticmethod
     def _score(findings: list[CodeHealthFinding]) -> tuple[int, dict[str, int]]:
+        """
+        Per check, deduct the severity-weighted total but saturate
+        smoothly towards the check's cap rather than hitting it on the
+        third finding: cap * (1 - 1 / (1 + points / cap)). Ten low
+        findings cost about half the cap; it takes far more to reach it.
+        That keeps a mature project with a handful of long functions
+        from scoring the same as one with fifty.
+        """
         raw: dict[str, int] = {}
         for f in findings:
             raw[f.check] = raw.get(f.check, 0) + _SEVERITY_WEIGHT[f.severity]
-        deductions = {check: min(points, _CHECK_CAP[check]) for check, points in raw.items()}
+        deductions = {}
+        for check, points in raw.items():
+            cap = _CHECK_CAP[check]
+            deductions[check] = round(cap * (1 - 1 / (1 + points / cap)))
         return max(0, 100 - sum(deductions.values())), deductions
 
     @staticmethod
