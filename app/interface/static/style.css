@@ -678,7 +678,7 @@ button.chip:hover { border-color: var(--accent); color: var(--accent); }
 .link-btn:hover { color: var(--accent); }
 
 .badge {
-    font-size: 10px;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     padding: 2px 6px;
@@ -761,7 +761,7 @@ button.chip:hover { border-color: var(--accent); color: var(--accent); }
 .ask-context-label {
     color: var(--ink-faint);
     text-transform: uppercase;
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: 0.08em;
 }
 .ask-context code { color: var(--accent); overflow-wrap: anywhere; }
@@ -1006,7 +1006,7 @@ g.node.selected-node circle {
     text-align: center;
 }
 .impact-stat strong { display: block; font-size: 18px; color: var(--accent); }
-.impact-stat span { font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
+.impact-stat span { font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
 
 .impact-list { list-style: none; margin: 0; padding: 0; }
 .impact-row {
