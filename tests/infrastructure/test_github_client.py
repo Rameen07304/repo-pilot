@@ -95,3 +95,34 @@ class TarballFetchTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NotFoundTest(unittest.TestCase):
+    def test_404_on_commit_lookup_is_a_typed_not_found(self):
+        import httpx
+        from app.application.interfaces.github_client import GitHubRepoNotFoundError
+
+        client = GitHubApiClient(token=None)
+
+        async def fake_get(url, **kwargs):
+            request = httpx.Request("GET", url)
+            raise httpx.HTTPStatusError("404", request=request, response=httpx.Response(404, request=request))
+
+        client._get_json_with_retry = fake_get
+        with self.assertRaises(GitHubRepoNotFoundError) as ctx:
+            asyncio.run(client.get_latest_commit_sha(REPO))
+        self.assertIn("acme/widgets", str(ctx.exception))
+        self.assertIn("private", str(ctx.exception))
+
+    def test_other_http_errors_still_propagate(self):
+        import httpx
+
+        client = GitHubApiClient(token=None)
+
+        async def fake_get(url, **kwargs):
+            request = httpx.Request("GET", url)
+            raise httpx.HTTPStatusError("500", request=request, response=httpx.Response(500, request=request))
+
+        client._get_json_with_retry = fake_get
+        with self.assertRaises(httpx.HTTPStatusError):
+            asyncio.run(client.get_latest_commit_sha(REPO))

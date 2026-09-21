@@ -67,6 +67,7 @@ def build_container() -> AppContainer:
     max_files = int(os.getenv("MAX_FILES_PER_REPO", "500"))
     max_file_size = int(os.getenv("MAX_FILE_SIZE_BYTES", str(100 * 1024)))
     max_total_size = int(os.getenv("MAX_TOTAL_REPO_SIZE_BYTES", str(5 * 1024 * 1024)))
+    max_chunks = int(os.getenv("MAX_CHUNKS_PER_REPO", "2000"))
 
     chroma_dir = os.getenv("CHROMA_PERSIST_DIR", "./data/chroma")
     sqlite_path = os.getenv("SQLITE_DB_PATH", "./data/app.db")
@@ -141,6 +142,7 @@ def build_container() -> AppContainer:
         max_files=max_files,
         max_file_size_bytes=max_file_size,
         max_total_size_bytes=max_total_size,
+        max_chunks=max_chunks,
     )
 
     ask_use_case = AnswerQuestionUseCase(

@@ -30,6 +30,7 @@ import httpx
 from app.application.interfaces.github_client import (
     GitHubClient,
     GitHubRateLimitError,
+    GitHubRepoNotFoundError,
     RemoteFileMeta,
 )
 from app.domain.value_objects import RepoUrl
@@ -91,7 +92,12 @@ class GitHubApiClient(GitHubClient):
 
     async def get_latest_commit_sha(self, repo: RepoUrl) -> str:
         url = f"{_GITHUB_API_BASE}/repos/{repo.owner}/{repo.repo}/commits"
-        data = await self._get_json_with_retry(url, params={"per_page": 1})
+        try:
+            data = await self._get_json_with_retry(url, params={"per_page": 1})
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise GitHubRepoNotFoundError(repo.full_name) from e
+            raise
         if not data:
             raise ValueError(f"Repo {repo.owner}/{repo.repo} has no commits")
         return data[0]["sha"]

@@ -69,3 +69,14 @@ class GitHubRateLimitError(Exception):
     def __init__(self, retry_after_seconds: int | None = None):
         self.retry_after_seconds = retry_after_seconds
         super().__init__("GitHub API rate limit exceeded")
+
+
+class GitHubRepoNotFoundError(Exception):
+    """
+    GitHub answered 404 for the repo: it does not exist, or it is
+    private and we have no access. GitHub deliberately does not
+    distinguish the two for unauthenticated callers.
+    """
+    def __init__(self, repo_full_name: str):
+        self.repo_full_name = repo_full_name
+        super().__init__(f"Repository {repo_full_name} was not found, or is private.")

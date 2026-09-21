@@ -112,3 +112,66 @@ class PartialIngestTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ChunkCapTest(unittest.TestCase):
+    """The repo-wide chunk cap keeps every file's leading chunks rather than dropping whole files."""
+
+    def _run(self, contents, max_chunks):
+        from app.domain.entities import CodeChunk
+
+        class ChunkyParser(StubParser):
+            def chunk_file(self, *, file_path, content):
+                # one chunk per line, so chunk counts are easy to reason about
+                return [CodeChunk(id=f"{file_path}:{i}", file_path=file_path, content=line, start_line=i + 1, end_line=i + 1)
+                        for i, line in enumerate(content.splitlines())]
+
+        class RecordingLLM(FakeLLM):
+            def __init__(self):
+                self.embedded = []
+
+            async def embed(self, texts):
+                self.embedded.extend(texts)
+                return [[0.0] for _ in texts]
+
+        llm = RecordingLLM()
+        uc = IngestRepoUseCase(
+            github_client=FakeGitHub(contents), llm_client=llm, vector_store=FakeVectors(),
+            code_parser=ChunkyParser(), cache=RecordingCache(), max_chunks=max_chunks,
+        )
+        asyncio.run(uc.execute("https://github.com/acme/widgets"))
+        return llm.embedded
+
+    def test_under_cap_keeps_everything(self):
+        embedded = self._run({"app/main.py": "a\nb\nc", "app/util.py": "d\ne", "requirements.txt": "f"}, max_chunks=100)
+        self.assertEqual(sorted(embedded), ["a", "b", "c", "d", "e", "f"])
+
+    def test_over_cap_is_round_robin_across_files(self):
+        embedded = self._run({"app/main.py": "a1\na2\na3\na4", "app/util.py": "b1\nb2\nb3", "requirements.txt": "c1"}, max_chunks=5)
+        # first chunk of every file, then second of every file, until 5
+        self.assertEqual(embedded, ["a1", "b1", "c1", "a2", "b2"])
+
+    def test_embedded_text_is_length_capped(self):
+        long_line = "x" * 5000
+        from app.domain.entities import CodeChunk
+
+        class OneChunkParser(StubParser):
+            def chunk_file(self, *, file_path, content):
+                return [CodeChunk(id=file_path, file_path=file_path, content=content, start_line=1, end_line=1)]
+
+        class RecordingLLM(FakeLLM):
+            def __init__(self):
+                self.embedded = []
+
+            async def embed(self, texts):
+                self.embedded.extend(texts)
+                return [[0.0] for _ in texts]
+
+        llm = RecordingLLM()
+        uc = IngestRepoUseCase(
+            github_client=FakeGitHub({"app/main.py": long_line, "app/util.py": "y", "requirements.txt": "z"}),
+            llm_client=llm, vector_store=FakeVectors(), code_parser=OneChunkParser(), cache=RecordingCache(),
+            max_embed_chars=1500,
+        )
+        asyncio.run(uc.execute("https://github.com/acme/widgets"))
+        self.assertEqual(max(len(t) for t in llm.embedded), 1500)

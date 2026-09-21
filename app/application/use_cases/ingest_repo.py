@@ -77,6 +77,8 @@ class IngestRepoUseCase:
         max_files: int = 500,
         max_file_size_bytes: int = 100 * 1024,
         max_total_size_bytes: int = 5 * 1024 * 1024,
+        max_chunks: int = 2000,
+        max_embed_chars: int = 1500,
     ) -> None:
         self._github = github_client
         self._llm = llm_client
@@ -86,6 +88,8 @@ class IngestRepoUseCase:
         self._max_files = max_files
         self._max_file_size_bytes = max_file_size_bytes
         self._max_total_size_bytes = max_total_size_bytes
+        self._max_chunks = max_chunks
+        self._max_embed_chars = max_embed_chars
 
     async def execute(self, repo_url_raw: str) -> tuple[RepoManifest, bool]:
         """
@@ -169,15 +173,14 @@ class IngestRepoUseCase:
         # Step 6: detect stack, chunk, embed, store
         detected_stack = self._detect_stack(file_nodes)
 
-        chunks = []
-        for node in file_nodes:
-            if node.content:
-                chunks.extend(
-                    self._parser.chunk_file(file_path=node.path, content=node.content)
-                )
+        chunks = self._collect_chunks(file_nodes)
 
         if chunks:
-            embeddings = await self._llm.embed([c.content for c in chunks])
+            # The embedding model truncates at ~256 tokens, so text past
+            # ~1500 chars changes nothing but the time spent encoding it.
+            embeddings = await self._llm.embed(
+                [c.content[: self._max_embed_chars] for c in chunks]
+            )
             await self._vectors.upsert_chunks(
                 repo_full_name=repo.full_name,
                 commit_sha=commit_sha,
@@ -247,6 +250,44 @@ class IngestRepoUseCase:
             await self._cache.set(manifest)
 
         return manifest, False
+
+    def _collect_chunks(self, file_nodes: list[FileNode]) -> list:
+        """
+        Chunk every file, then apply the repo-wide chunk cap ROUND-ROBIN
+        across files: the first chunk of every file, then the second of
+        every file, and so on. Embedding is the slow step of ingestion
+        (CPU, ~50-70 ms per chunk), and a big repo can produce 5000+
+        chunks. Taking files in order until the cap would drop whole
+        files at the end of the tree; this keeps coverage broad and
+        drops only the tail of the largest files.
+        """
+        per_file = [
+            self._parser.chunk_file(file_path=node.path, content=node.content)
+            for node in file_nodes
+            if node.content
+        ]
+        total = sum(len(c) for c in per_file)
+        if total <= self._max_chunks:
+            return [chunk for chunks in per_file for chunk in chunks]
+
+        kept: list = []
+        depth = 0
+        while len(kept) < self._max_chunks:
+            added = False
+            for chunks in per_file:
+                if depth < len(chunks):
+                    kept.append(chunks[depth])
+                    added = True
+                    if len(kept) >= self._max_chunks:
+                        break
+            if not added:
+                break
+            depth += 1
+        logger.info(
+            "Chunk cap: keeping %d of %d chunks across %d files (round-robin)",
+            len(kept), total, len(per_file),
+        )
+        return kept
 
     def _detect_stack(self, files: list[FileNode]) -> list[str]:
         """
