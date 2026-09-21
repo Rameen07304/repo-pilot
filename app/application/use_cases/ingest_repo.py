@@ -122,8 +122,9 @@ class IngestRepoUseCase:
 
         if len(tree) > self._max_files:
             raise IngestionLimitExceeded(
-                f"Repo has {len(tree)} files, cap is {self._max_files}. "
-                "This tool is designed for small-to-medium repos."
+                f"This repository has {len(tree):,} files; Repo Pilot handles up to "
+                f"{self._max_files:,}. Try a smaller project, or a single sub-project "
+                "if this is a monorepo."
             )
 
         # Drop anything individually oversized or binary before we even
@@ -136,7 +137,8 @@ class IngestRepoUseCase:
         total_size = sum(f.size_bytes for f in fetchable)
         if total_size > self._max_total_size_bytes:
             raise IngestionLimitExceeded(
-                f"Repo is {total_size} bytes, cap is {self._max_total_size_bytes}."
+                f"This repository is {total_size / 1_048_576:.1f} MB of source; Repo Pilot "
+                f"handles up to {self._max_total_size_bytes / 1_048_576:.0f} MB. Try a smaller project."
             )
 
         # Step 4: fetch contents — the client does this as one archive

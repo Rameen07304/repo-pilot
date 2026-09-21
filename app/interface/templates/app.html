@@ -66,7 +66,7 @@
                 <form id="ingest-form">
                     <div class="cmd-line">
                         <span class="cmd-prompt">$</span>
-                        <input type="url" id="repo-url" placeholder="https://github.com/owner/repo" pattern="https://github\.com/.+/.+" title="A public GitHub repository URL" required />
+                        <input type="text" id="repo-url" placeholder="github.com/owner/repo" title="A public GitHub repository, e.g. github.com/owner/repo" autocomplete="off" spellcheck="false" required />
                     </div>
                     <button type="submit" id="ingest-btn" class="cmd-btn cmd-btn-primary">ingest repo</button>
                 </form>

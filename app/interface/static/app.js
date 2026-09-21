@@ -20,6 +20,18 @@ window.RepoPilot = {
     hideInvestigationTimeline: () => {},
 };
 
+// People paste "github.com/owner/repo", "owner/repo", or a URL to a
+// file inside the repo. Reduce all of those to the canonical form the
+// backend validates, so the common pastes just work.
+function normalizeRepoUrl(raw) {
+    let value = raw.trim().replace(/\s+/g, "");
+    value = value.replace(/^(https?:\/\/)?(www\.)?/i, "");
+    if (/^[\w.-]+\/[\w.-]+$/.test(value)) value = "github.com/" + value;  // "owner/repo"
+    const match = value.match(/^github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:[\/#?].*)?$/i);
+    if (!match) return raw.trim();  // let the backend explain what is wrong
+    return "https://github.com/" + match[1] + "/" + match[2];
+}
+
 function getPersona() {
     const select = document.getElementById("persona-select");
     return select ? select.value : "newcomer";
@@ -144,7 +156,8 @@ renderRecentRepos();
 
 ingestForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const repoUrl = document.getElementById("repo-url").value.trim();
+    const repoUrl = normalizeRepoUrl(document.getElementById("repo-url").value);
+    document.getElementById("repo-url").value = repoUrl;
     const btn = document.getElementById("ingest-btn");
 
     setStatus(ingestStatus, "ingesting: fetching, indexing and summarizing... usually under a minute", "loading");
