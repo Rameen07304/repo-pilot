@@ -135,3 +135,28 @@ class ImpactResponse(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
     detail: str
+
+class CodeHealthRequest(BaseModel):
+    repo_full_name: str = Field(..., max_length=200)
+    commit_sha: str = Field(..., max_length=100)
+
+
+class CodeHealthFindingResponse(BaseModel):
+    check: str
+    severity: str
+    title: str
+    detail: str
+    files: list[str] = []
+    symbol: str | None = None
+    line: int | None = None
+    metric: int | None = None
+
+
+class CodeHealthResponse(BaseModel):
+    score: int
+    grade: str
+    source_file_count: int
+    test_file_count: int
+    symbol_count: int
+    findings: list[CodeHealthFindingResponse] = []
+    deductions: dict[str, int] = {}

@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from app.application.use_cases.analyze_code_health import AnalyzeCodeHealthUseCase
 from app.application.use_cases.analyze_impact import AnalyzeImpactUseCase
 from app.application.use_cases.answer_question import AnswerQuestionUseCase
 from app.application.use_cases.generate_diagram import GenerateDiagramUseCase
@@ -43,6 +44,7 @@ class AppContainer:
     onboarding_use_case: GenerateOnboardingUseCase
     file_source_use_case: GetFileSourceUseCase
     impact_use_case: AnalyzeImpactUseCase
+    code_health_use_case: AnalyzeCodeHealthUseCase
 
     quota_guard: DailyQuotaGuard
     question_limiter: FixedWindowRateLimiter
@@ -173,6 +175,8 @@ def build_container() -> AppContainer:
         max_files=int(os.getenv("ONBOARDING_MAX_FILES", "8")),
     )
 
+    code_health_use_case = AnalyzeCodeHealthUseCase(cache=cache)
+
     impact_use_case = AnalyzeImpactUseCase(
         cache=cache,
         llm_client=llm_client,
@@ -191,6 +195,7 @@ def build_container() -> AppContainer:
         onboarding_use_case=onboarding_use_case,
         file_source_use_case=file_source_use_case,
         impact_use_case=impact_use_case,
+        code_health_use_case=code_health_use_case,
         quota_guard=quota_guard,
         question_limiter=question_limiter,
         deep_question_limiter=deep_question_limiter,

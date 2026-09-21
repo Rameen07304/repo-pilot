@@ -199,3 +199,34 @@ class ImpactReport:
             if node.path not in seen:
                 seen.append(node.path)
         return seen
+
+
+@dataclass
+class CodeHealthFinding:
+    """One maintainability observation, computed from the parsed index — never from an LLM."""
+    check: str  # circular_import | hub_module | untested_module | long_function | large_file | unreferenced_symbol
+    severity: str  # high | medium | low
+    title: str
+    detail: str
+    files: list[str] = field(default_factory=list)
+    symbol: Optional[str] = None
+    line: Optional[int] = None
+    metric: Optional[int] = None  # the number the finding is about: lines, dependents, cycle size
+
+
+@dataclass
+class CodeHealthReport:
+    """
+    Maintainability report card. The score is a heuristic for
+    prioritising — deductions per finding, capped per check — not a
+    judgement of the code's correctness.
+    """
+    repo_full_name: str
+    commit_sha: str
+    score: int
+    grade: str
+    source_file_count: int = 0
+    test_file_count: int = 0
+    symbol_count: int = 0
+    findings: list[CodeHealthFinding] = field(default_factory=list)
+    deductions: dict[str, int] = field(default_factory=dict)  # check -> points deducted

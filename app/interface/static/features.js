@@ -612,4 +612,167 @@
     symbolSelect.addEventListener("change", () => {
         if (!impactResult.classList.contains("hidden")) runImpact();
     });
+
+    // ===============================================================
+    // Feature 5 — Code health report card
+    // ===============================================================
+
+    const healthBtn = el("health-btn");
+    const healthStatus = el("health-status");
+    const healthReport = el("health-report");
+
+    const CHECK_LABELS = {
+        circular_import: "circular imports",
+        hub_module: "hub modules",
+        untested_module: "untested modules",
+        long_function: "long functions",
+        large_file: "large files",
+        unreferenced_symbol: "unreferenced symbols",
+    };
+    const SEVERITY_ORDER = { high: 0, medium: 1, low: 2 };
+
+    let healthFindings = [];
+    let healthFilter = "all";
+
+    async function loadHealth() {
+        const keys = repoKeys();
+        if (!keys) {
+            RP.setStatus(healthStatus, "Ingest a repo first.", "error");
+            return;
+        }
+        RP.setStatus(healthStatus, "analysing the parsed index...", "loading");
+        healthBtn.disabled = true;
+        healthReport.classList.add("hidden");
+        try {
+            const data = await postJson("/api/code-health", keys);
+            renderHealth(data);
+            RP.setStatus(healthStatus, "", "success");
+        } catch (err) {
+            RP.setStatus(healthStatus, err.message, "error");
+        } finally {
+            healthBtn.disabled = false;
+        }
+    }
+
+    function renderHealth(data) {
+        const grade = el("health-grade");
+        grade.textContent = data.grade;
+        grade.className = "health-grade grade-" + data.grade.toLowerCase();
+        el("health-score-value").textContent = data.score;
+
+        const stats = el("health-stats");
+        clear(stats);
+        const counts = { high: 0, medium: 0, low: 0 };
+        data.findings.forEach((f) => { counts[f.severity] += 1; });
+        [
+            data.source_file_count + " source files",
+            data.test_file_count + " test files",
+            data.symbol_count + " symbols",
+            counts.high + " high · " + counts.medium + " medium · " + counts.low + " low",
+        ].forEach((text) => {
+            const li = document.createElement("li");
+            li.textContent = text;
+            stats.appendChild(li);
+        });
+
+        const deductions = el("health-deductions");
+        clear(deductions);
+        const entries = Object.entries(data.deductions).sort((a, b) => b[1] - a[1]);
+        if (entries.length === 0) {
+            const li = document.createElement("li");
+            li.className = "dim";
+            li.textContent = "none — no findings";
+            deductions.appendChild(li);
+        }
+        entries.forEach(([check, points]) => {
+            const li = document.createElement("li");
+            const label = document.createElement("span");
+            label.textContent = CHECK_LABELS[check] || check;
+            const bar = document.createElement("span");
+            bar.className = "deduction-bar";
+            bar.style.width = Math.max(4, points * 6) + "px";
+            const value = document.createElement("span");
+            value.className = "dim";
+            value.textContent = "-" + points;
+            li.append(label, bar, value);
+            deductions.appendChild(li);
+        });
+
+        healthFindings = data.findings.slice().sort(
+            (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || (b.metric || 0) - (a.metric || 0)
+        );
+        healthFilter = "all";
+        renderHealthFilters();
+        renderHealthFindings();
+        healthReport.classList.remove("hidden");
+    }
+
+    function renderHealthFilters() {
+        const filters = el("health-filters");
+        clear(filters);
+        const present = new Set(healthFindings.map((f) => f.check));
+        const options = [["all", "all (" + healthFindings.length + ")"]].concat(
+            Object.keys(CHECK_LABELS)
+                .filter((c) => present.has(c))
+                .map((c) => [c, CHECK_LABELS[c] + " (" + healthFindings.filter((f) => f.check === c).length + ")"])
+        );
+        options.forEach(([value, label]) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "chip chip-small" + (value === healthFilter ? " chip-active" : "");
+            btn.textContent = label;
+            btn.addEventListener("click", () => {
+                healthFilter = value;
+                renderHealthFilters();
+                renderHealthFindings();
+            });
+            filters.appendChild(btn);
+        });
+    }
+
+    function renderHealthFindings() {
+        const list = el("health-findings");
+        clear(list);
+        const shown = healthFindings.filter((f) => healthFilter === "all" || f.check === healthFilter);
+        if (shown.length === 0) {
+            const li = document.createElement("li");
+            li.className = "dim";
+            li.textContent = "no findings — nice.";
+            list.appendChild(li);
+            return;
+        }
+        shown.forEach((f) => {
+            const li = document.createElement("li");
+            li.className = "health-finding";
+
+            const header = document.createElement("div");
+            header.className = "health-finding-header";
+            const badge = document.createElement("span");
+            badge.className = "badge badge-" + f.severity;
+            badge.textContent = f.severity;
+            const title = document.createElement("span");
+            title.className = "health-finding-title";
+            title.textContent = f.title;
+            header.append(badge, title);
+            li.appendChild(header);
+
+            const detail = document.createElement("p");
+            detail.className = "health-finding-detail dim";
+            detail.textContent = f.detail;
+            li.appendChild(detail);
+
+            if (f.files.length) {
+                const files = document.createElement("ul");
+                files.className = "chip-list";
+                f.files.forEach((path) => {
+                    const label = f.line && f.files.length === 1 ? path + ":" + f.line : path;
+                    files.appendChild(chip(label, { title: "Open " + path, onClick: () => openFile(path) }));
+                });
+                li.appendChild(files);
+            }
+            list.appendChild(li);
+        });
+    }
+
+    if (healthBtn) healthBtn.addEventListener("click", loadHealth);
 })();

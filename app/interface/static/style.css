@@ -1039,3 +1039,54 @@ g.node.selected-node circle {
     .file-panel { width: 100vw; }
     .onboarding-intro { flex-direction: column; align-items: stretch; }
 }
+
+/* ---------- Code health ---------- */
+
+.health-summary {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    flex-wrap: wrap;
+    margin-top: 24px;
+    padding: 20px 24px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+}
+.health-score { display: flex; align-items: baseline; gap: 10px; }
+.health-grade {
+    font-size: 44px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--accent);
+}
+.health-grade.grade-c { color: var(--warn); }
+.health-grade.grade-d, .health-grade.grade-f { color: var(--error); }
+.health-score-value { font-size: 26px; font-weight: 600; color: var(--ink); }
+.health-score-label { font-size: 12px; color: var(--ink-faint); }
+.health-stats {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    font-size: 12.5px;
+    color: var(--ink-muted);
+}
+
+.health-deductions { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+.health-deductions li { display: flex; align-items: center; gap: 12px; padding: 5px 0; }
+.health-deductions li > span:first-child { min-width: 160px; color: var(--ink-body); }
+.deduction-bar { display: inline-block; height: 8px; background: var(--warn); opacity: 0.8; }
+
+.health-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.chip-active { color: var(--accent); border-color: var(--accent); }
+
+.health-findings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.health-finding { padding: 12px 14px; border: 1px solid var(--hairline); background: var(--surface); }
+.health-finding-header { display: flex; align-items: center; gap: 10px; }
+.health-finding-title { font-size: 13.5px; color: var(--ink); }
+.health-finding-detail { font-size: 12.5px; line-height: 1.6; margin: 6px 0 8px; }
+.badge-high { color: var(--error); border-color: var(--error); }
+.badge-medium { color: var(--warn); border-color: var(--warn); }
+.badge-low { color: var(--ink-faint); }

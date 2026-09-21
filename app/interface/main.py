@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.interface.dependencies import build_container
-from app.interface.routes import ask, diagram, impact, ingest, investigate_stream, onboarding, source
+from app.interface.routes import ask, code_health, diagram, impact, ingest, investigate_stream, onboarding, source
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,6 +42,7 @@ app.include_router(diagram.router)
 app.include_router(onboarding.router)
 app.include_router(source.router)
 app.include_router(impact.router)
+app.include_router(code_health.router)
 
 templates = Jinja2Templates(directory="app/interface/templates")
 app.mount("/static", StaticFiles(directory="app/interface/static"), name="static")

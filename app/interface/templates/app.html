@@ -31,6 +31,7 @@
                 <button class="tab-btn active" data-tab="onboarding-tab">learn this codebase</button>
                 <button class="tab-btn" data-tab="ask-tab">ask a question</button>
                 <button class="tab-btn" data-tab="diagram-tab">architecture diagram</button>
+                <button class="tab-btn" data-tab="health-tab">code health</button>
             </nav>
 
             <div id="repo-info" class="hidden sidebar-repo-info">
@@ -88,6 +89,36 @@
                         <section class="guide-block">
                             <h3>$ questions to ask next</h3>
                             <ul id="suggested-questions" class="chip-list"></ul>
+                        </section>
+                    </div>
+                </div>
+
+                <div id="health-tab" class="tab-content">
+                    <div class="onboarding-intro">
+                        <p class="dim">a maintainability report card computed from the parsed index — cycles, hubs, test gaps, long functions. no LLM involved.</p>
+                        <button id="health-btn" class="cmd-btn cmd-btn-primary">run report</button>
+                    </div>
+                    <div id="health-status"></div>
+
+                    <div id="health-report" class="hidden">
+                        <section class="health-summary">
+                            <div class="health-score">
+                                <span id="health-grade" class="health-grade"></span>
+                                <span id="health-score-value" class="health-score-value"></span>
+                                <span class="health-score-label">/ 100 · heuristic</span>
+                            </div>
+                            <ul id="health-stats" class="health-stats"></ul>
+                        </section>
+
+                        <section class="guide-block">
+                            <h3>$ deductions</h3>
+                            <ul id="health-deductions" class="health-deductions"></ul>
+                        </section>
+
+                        <section class="guide-block">
+                            <h3>$ findings</h3>
+                            <div id="health-filters" class="health-filters"></div>
+                            <ul id="health-findings" class="health-findings"></ul>
                         </section>
                     </div>
                 </div>
