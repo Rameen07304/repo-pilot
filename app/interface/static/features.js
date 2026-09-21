@@ -302,6 +302,7 @@
                 repo_full_name: keys.repo_full_name,
                 commit_sha: keys.commit_sha,
                 question: question,
+                persona: RP.getPersona(),
             });
             const source = new EventSource("/api/ask/stream?" + params.toString());
             activeStream = source;

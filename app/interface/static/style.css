@@ -1090,3 +1090,13 @@ g.node.selected-node circle {
 .badge-high { color: var(--error); border-color: var(--error); }
 .badge-medium { color: var(--warn); border-color: var(--warn); }
 .badge-low { color: var(--ink-faint); }
+
+.persona-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink-dim);
+    font-size: 12.5px;
+    white-space: nowrap;
+}
+.persona-select { width: auto; min-width: 0; padding: 8px 10px; font-size: 12.5px; }

@@ -138,6 +138,14 @@
                             <input type="checkbox" id="deep-mode-checkbox" />
                             deep investigation mode
                         </label>
+                        <label class="persona-toggle" title="Same evidence and citations every time — this only changes who the explanation is written for.">
+                            answer for
+                            <select id="persona-select" class="symbol-select persona-select">
+                                <option value="newcomer" selected>a new developer</option>
+                                <option value="senior">a senior engineer</option>
+                                <option value="product">a product manager</option>
+                            </select>
+                        </label>
                         <button type="submit" id="ask-btn" class="cmd-btn cmd-btn-primary">ask</button>
                     </form>
                     <div id="ask-status"></div>

@@ -6,7 +6,7 @@ these shapes, not the other way around.
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
-from app.domain.value_objects import RepoUrl, Citation, QuestionMode, ConfidenceScore
+from app.domain.value_objects import RepoUrl, Citation, QuestionMode, ConfidenceScore, Persona
 
 
 @dataclass
@@ -66,6 +66,7 @@ class Question:
     """A user's question, and which Explainer mode should handle it."""
     text: str
     mode: QuestionMode = QuestionMode.QUICK
+    persona: Persona = Persona.NEWCOMER
 
     def __post_init__(self):
         if not self.text.strip():

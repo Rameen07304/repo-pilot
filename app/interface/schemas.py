@@ -25,6 +25,7 @@ class AskRequest(BaseModel):
     commit_sha: str = Field(..., max_length=100)
     question: str = Field(..., min_length=1, max_length=500)
     deep_mode: bool = False
+    persona: str = Field(default="newcomer", pattern="^(newcomer|senior|product)$")
 
 
 class AskResponse(BaseModel):

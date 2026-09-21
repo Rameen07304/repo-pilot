@@ -33,7 +33,7 @@ from app.application.investigation_events import (
 )
 from app.application.use_cases.answer_question import RepoNotIngestedError
 from app.domain.entities import Question
-from app.domain.value_objects import QuestionMode
+from app.domain.value_objects import Persona, QuestionMode
 from app.infrastructure.llm.quota_aware_llm_client import DailyQuotaExceededError
 from app.interface.client_ip import get_client_ip
 
@@ -58,6 +58,7 @@ async def stream_investigation(
     repo_full_name: str = Query(..., max_length=200),
     commit_sha: str = Query(..., max_length=100),
     question: str = Query(..., min_length=1, max_length=500),
+    persona: str = Query(default="newcomer", pattern="^(newcomer|senior|product)$"),
 ) -> StreamingResponse:
     container = request.app.state.container
     client_ip = get_client_ip(request, trust_proxy_headers=container.trust_proxy_headers)
@@ -73,7 +74,7 @@ async def stream_investigation(
         )
 
     try:
-        parsed_question = Question(text=question, mode=QuestionMode.DEEP)
+        parsed_question = Question(text=question, mode=QuestionMode.DEEP, persona=Persona(persona))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

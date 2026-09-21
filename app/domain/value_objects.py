@@ -86,3 +86,13 @@ class ConfidenceScore:
 class QuestionMode(str, Enum):
     QUICK = "quick"
     DEEP = "deep"
+
+class Persona(str, Enum):
+    """
+    Who the answer is written for. Changes only the tone and depth of
+    the explanation — retrieval, tracing and citations are identical
+    across personas, so every answer rests on the same evidence.
+    """
+    NEWCOMER = "newcomer"  # plain language, defines terms, explains the why
+    SENIOR = "senior"  # terse, architectural, assumes fluency
+    PRODUCT = "product"  # behaviour and user impact, no code detail

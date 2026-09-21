@@ -8,6 +8,7 @@ let currentRepo = null; // { repoFullName, commitSha }
 // and the two only ever meet through this object.
 window.RepoPilot = {
     getCurrentRepo: () => currentRepo,
+    getPersona: () => getPersona(),
     setStatus: (el, message, type) => setStatus(el, message, type),
     askQuestion: (text) => askQuestion(text),
     setAskContext: (path) => setAskContext(path),
@@ -18,6 +19,11 @@ window.RepoPilot = {
     streamInvestigation: null,
     hideInvestigationTimeline: () => {},
 };
+
+function getPersona() {
+    const select = document.getElementById("persona-select");
+    return select ? select.value : "newcomer";
+}
 
 const ingestForm = document.getElementById("ingest-form");
 const ingestStatus = document.getElementById("ingest-status");
@@ -293,6 +299,7 @@ askForm.addEventListener("submit", async (e) => {
                 commit_sha: currentRepo.commitSha,
                 question: question,
                 deep_mode: deepMode,
+                persona: getPersona(),
             }),
         });
 
