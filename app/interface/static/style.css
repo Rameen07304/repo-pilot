@@ -61,14 +61,22 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     50%, 100% { opacity: 0; }
 }
 
-/* ---------- Landing hero ---------- */
+/* ---------- Landing ---------- */
 
-.hero {
+.landing {
     background:
-        radial-gradient(ellipse 55% 38% at 50% 30%, rgba(110, 231, 168, 0.07), transparent 70%),
+        radial-gradient(ellipse 60% 40% at 15% 8%, rgba(110, 231, 168, 0.06), transparent 70%),
         repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.02) 0px, rgba(255, 255, 255, 0.02) 1px, transparent 1px, transparent 3px),
         var(--base);
     min-height: 100dvh;
+}
+.landing main { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+.landing h2 {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 20px 0;
+    text-wrap: balance;
 }
 
 .term-bar {
@@ -93,34 +101,30 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     color: var(--ink-faint);
 }
 
-.hero-inner {
-    max-width: 700px;
-    margin: 0 auto;
-    padding: 70px 20px 0 20px;
-    text-align: center;
+/* Hero: text left, real output right. Deliberately not centred. */
+.hero-split {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    gap: 56px;
+    align-items: center;
+    padding: 84px 0 96px;
 }
-
-.hero-meta { font-size: 12px; color: var(--ink-faint); margin-bottom: 28px; }
-.hero-transcript { font-size: 13px; margin-bottom: 30px; text-align: left; display: inline-block; }
-.accent-line { color: var(--accent); }
-
-.hero h1 {
-    font-size: 58px;
+.hero-copy h1 {
+    /* Monospace runs wide: this ceiling keeps the headline to two lines
+       in the hero column rather than four. */
+    font-size: clamp(28px, 3.5vw, 40px);
     font-weight: 700;
-    margin: 0 0 22px 0;
-    line-height: 1.05;
-    letter-spacing: -0.025em;
-    text-wrap: balance;
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+    margin: 0 0 20px 0;
 }
-
 .hero-sub {
-    font-size: 16.5px;
+    font-size: 16px;
     line-height: 1.7;
     color: var(--ink-muted);
-    max-width: 560px;
-    margin: 0 auto 34px auto;
+    max-width: 46ch;
+    margin: 0 0 30px 0;
 }
-
 .cta-btn {
     display: inline-block;
     background: transparent;
@@ -137,44 +141,95 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 .cta-btn:hover { background: var(--accent); color: var(--accent-ink); }
 .cta-btn:active { transform: translateY(1px); }
 
-/* Asymmetric bento: the ingest transcript anchors the left, the two follow-ups stack beside it */
-.hero-features {
-    max-width: 1180px;
-    margin: 96px auto 0 auto;
-    padding: 0 20px;
+.hero-figure { margin: 0; min-width: 0; }
+.hero-figure figcaption {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--ink-faint);
+}
+
+/* The diagram is exported Mermaid output with its own stylesheet removed,
+   so it is themed here and follows the palette. */
+.repo-graph { width: 100%; height: auto; display: block; }
+.repo-graph .cluster rect { fill: var(--surface-alt); stroke: var(--hairline); stroke-width: 1px; }
+.repo-graph .node rect { fill: var(--surface); stroke: var(--accent); stroke-width: 1px; }
+.repo-graph .flowchart-link { stroke: var(--accent); stroke-width: 1.6px; fill: none; }
+.repo-graph .marker { fill: var(--accent); stroke: var(--accent); }
+.repo-graph .nodeLabel {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 15px;
+    color: var(--ink);
+}
+.repo-graph .cluster-label .nodeLabel { color: var(--ink-muted); }
+
+/* Claim: the one idea worth remembering, given the width of the page. */
+.claim {
+    padding: 56px 0;
+    border-top: 1px solid var(--hairline);
+}
+.claim h2 { color: var(--accent); max-width: 20ch; }
+.claim-body {
     display: grid;
-    grid-template-columns: 5fr 7fr;
-    gap: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 28px;
+    max-width: 92ch;
 }
-.hero-features .feature-chip:first-child { grid-row: 1 / 3; }
+.claim-body p { margin: 0; font-size: 14px; line-height: 1.75; color: var(--ink-body); }
 
-@media (max-width: 640px) {
-    .hero-features { grid-template-columns: 1fr; }
-    .hero-features .feature-chip:first-child { grid-row: auto; }
-    .hero h1 { font-size: 44px; }
-}
-
-.feature-chip {
-    background: var(--surface);
+/* Modes: five items, five cells, first one wider. */
+.modes { padding: 56px 0; border-top: 1px solid var(--hairline); }
+.mode-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--hairline);
     border: 1px solid var(--hairline);
-    padding: 24px;
-    text-align: left;
 }
-.feature-label { display: block; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 14px; }
-.feature-transcript { font-size: 12.5px; line-height: 1.9; color: var(--ink-dim); }
+.mode-cell { background: var(--base); padding: 22px 24px; }
+.mode-cell-wide { grid-column: 1 / -1; }
+.mode-cell h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 0 0 8px 0;
+}
+.mode-cell p { margin: 0; font-size: 13px; line-height: 1.7; color: var(--ink-dim); }
+
+/* Facts: definition pairs, no hairline under every row. */
+.facts { padding: 56px 0; border-top: 1px solid var(--hairline); }
+.fact-list {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 26px 40px;
+}
+.fact-list dt { font-size: 13.5px; color: var(--ink); margin-bottom: 6px; }
+.fact-list dd { margin: 0; font-size: 13px; line-height: 1.7; color: var(--ink-dim); }
 
 .landing-footer {
     max-width: 1180px;
-    margin: 80px auto 0 auto;
-    padding: 26px 20px 60px 20px;
+    margin: 0 auto;
+    padding: 28px 24px 64px;
     border-top: 1px solid var(--hairline);
     display: flex;
-    justify-content: center;
-    gap: 36px;
-    font-size: 12px;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    font-size: 12.5px;
     color: var(--ink-faint);
-    letter-spacing: 0.04em;
 }
+.landing-footer p { margin: 0; }
+
+@media (max-width: 860px) {
+    .hero-split { grid-template-columns: 1fr; gap: 40px; padding: 56px 0 64px; }
+    .mode-grid { grid-template-columns: 1fr; }
+    .mode-cell-wide { grid-column: auto; }
+}
+
 
 /* ---------- App shell (sidebar layout) ---------- */
 
@@ -481,7 +536,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 /* Override Mermaid's default max-width:100%, which was scaling the
-   entire diagram down to fit the container — shrinking width AND
+   entire diagram down to fit the container, shrinking width AND
    height together, making wide diagrams look tiny. We want the
    diagram at its real size, with scrolling for anything that doesn't
    fit, not a shrunk-down thumbnail. */
@@ -649,7 +704,7 @@ body.has-fullscreen-diagram { overflow: hidden; }
 
 /* ==============================================================
    Onboarding guide, live investigation, file drawer, impact.
-   Reuses the existing tokens only — no new palette.
+   Reuses the existing tokens only, no new palette.
    ============================================================== */
 
 
@@ -890,7 +945,7 @@ g.node.selected-node circle {
     stroke-width: 3px;
 }
 
-/* Blast radius overlay. Only restyles existing nodes — nothing is
+/* Blast radius overlay. Only restyles existing nodes, nothing is
    added to or removed from the rendered graph. */
 .impact-active g.node.impact-dimmed { opacity: 0.25; }
 .impact-active g.node.impact-target rect,
