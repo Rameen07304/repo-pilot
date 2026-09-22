@@ -116,7 +116,10 @@
                             <p class="mode-desc">A report card for maintainability: circular imports, modules everything depends on, code no test covers, functions and files that have grown too big.</p>
                             <p class="mode-note">Computed entirely from the parsed code, no AI involved, so it is instant and the same every time.</p>
                         </div>
-                        <button id="health-btn" class="cmd-btn cmd-btn-primary">run report</button>
+                        <div class="mode-actions">
+                            <button id="health-btn" class="cmd-btn cmd-btn-primary">run report</button>
+                            <button id="health-download-btn" class="cmd-btn secondary-btn hidden" type="button">download report</button>
+                        </div>
                     </header>
                     <div id="health-status"></div>
 

@@ -9,8 +9,10 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 
 from app.application.use_cases.analyze_code_health import RepoNotIndexedError
+from app.interface.report_markdown import render_code_health_markdown
 from app.interface.schemas import CodeHealthFindingResponse, CodeHealthRequest, CodeHealthResponse
 
 logger = logging.getLogger(__name__)
@@ -45,4 +47,29 @@ async def code_health(payload: CodeHealthRequest, request: Request) -> CodeHealt
             for f in report.findings
         ],
         deductions=report.deductions,
+    )
+
+
+@router.post("/api/code-health/report", response_class=PlainTextResponse)
+async def code_health_report(payload: CodeHealthRequest, request: Request) -> PlainTextResponse:
+    """The same report as a Markdown document, downloaded as a file."""
+    container = request.app.state.container
+    try:
+        report = await container.code_health_use_case.execute(
+            repo_full_name=payload.repo_full_name,
+            commit_sha=payload.commit_sha,
+        )
+    except RepoNotIndexedError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Unexpected error rendering the code health report")
+        raise HTTPException(status_code=500, detail="Failed to build the report.") from e
+
+    # The repo name reaches a Content-Disposition header, so keep it to
+    # characters that cannot break out of the quoted filename.
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "-" for c in report.repo_full_name)
+    return PlainTextResponse(
+        render_code_health_markdown(report),
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}-code-health.md"'},
     )

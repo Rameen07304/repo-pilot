@@ -1255,3 +1255,4 @@ g.node.selected-node circle {
 
 /* The badge now names the check, so colour alone carries severity. */
 .health-finding .badge { text-transform: none; letter-spacing: 0; }
+.mode-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: flex-start; }

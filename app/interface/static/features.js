@@ -735,6 +735,7 @@
         renderHealthFilters();
         renderHealthFindings();
         healthReport.classList.remove("hidden");
+        el("health-download-btn").classList.remove("hidden");
     }
 
     function nextStepSentence(counts, findings) {
@@ -832,5 +833,33 @@
         });
     }
 
+    async function downloadHealthReport() {
+        const keys = repoKeys();
+        if (!keys) return;
+        const btn = el("health-download-btn");
+        btn.disabled = true;
+        try {
+            const res = await fetch("/api/code-health/report", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(keys),
+            });
+            if (!res.ok) throw new Error("The report could not be generated.");
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = keys.repo_full_name.replace(/[^\w-]/g, "-") + "-code-health.md";
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            RP.setStatus(healthStatus, err.message, "error");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
     if (healthBtn) healthBtn.addEventListener("click", loadHealth);
+    const healthDownloadBtn = el("health-download-btn");
+    if (healthDownloadBtn) healthDownloadBtn.addEventListener("click", downloadHealthReport);
 })();
