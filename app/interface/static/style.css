@@ -108,6 +108,9 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 9px;
     font-size: 12px;
     color: var(--ink-faint);
 }
@@ -196,6 +199,35 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 }
 .cta-btn:hover .cta-icon { transform: translate(2px, -2px); background: rgba(11, 14, 12, 0.22); }
 
+/* The mascot carries its own near-black field. Rather than hope it matches
+   the page exactly, the edges are faded out with a mask so the illustration
+   dissolves into the background instead of sitting in a visible square. */
+.hero-pilot {
+    min-width: 0;
+    display: flex;
+    justify-content: center;
+}
+.hero-pilot img {
+    width: 100%;
+    max-width: 520px;
+    height: auto;
+    display: block;
+    -webkit-mask-image: radial-gradient(circle at 50% 48%, #000 56%, transparent 78%);
+    mask-image: radial-gradient(circle at 50% 48%, #000 56%, transparent 78%);
+}
+
+/* The mark, used in the header and repeated as the favicon. */
+.pilot-mark {
+    width: 22px;
+    height: 22px;
+    display: block;
+    flex: none;
+    --mark-accent: var(--accent);
+    --mark-shell: #F2EFE6;
+    --mark-visor: #15191B;
+    --mark-stem: #4A5550;
+}
+
 /* Double shell: outer tray, inner plate, concentric inset. Gives the
    diagram physical depth without rounding off the terminal language. */
 .hero-figure { margin: 0; min-width: 0; }
@@ -259,6 +291,80 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     from { opacity: 0; transform: translateY(18px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* Scroll reveal. Transform and opacity only, so a reveal never reflows the
+   page.
+
+   This is an animation rather than a transition on purpose. Several reveal
+   targets (.step, .mode-cell) carry their own `transition` shorthand for
+   hover, and a shorthand resets the whole list: at equal specificity the
+   later rule silently dropped the reveal's delay and left the stagger flat.
+   An animation cannot be clobbered that way.
+
+   The hidden start state applies only under .js-reveal, which the inline
+   script in the document head sets. If scripting is off, or landing.js
+   never arrives, the class is absent or is removed by the failsafe and
+   every section renders plainly. Content is never hidden behind a script. */
+@media (prefers-reduced-motion: no-preference) {
+    .js-reveal [data-reveal] { opacity: 0; }
+    .js-reveal [data-reveal].is-revealed {
+        animation: rp-reveal 0.75s var(--ease-out-expo) calc(var(--i, 0) * 0.09s) both;
+    }
+}
+@keyframes rp-reveal {
+    from { opacity: 0; transform: translateY(22px); }
+    to { opacity: 1; transform: none; }
+}
+
+/* A second call to action beside the filled one, carrying no accent fill:
+   the accent budget is spent on the primary. */
+.hero-actions { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.cta-ghost {
+    color: var(--ink-muted);
+    text-decoration: none;
+    font-size: 13.5px;
+    border-bottom: 1px solid var(--hairline);
+    padding-bottom: 3px;
+    transition: color 0.45s var(--ease-out-expo), border-color 0.45s var(--ease-out-expo);
+}
+.cta-ghost:hover { color: var(--ink); border-bottom-color: var(--ink-dim); }
+
+/* How it works: three steps, numbered, read as a sequence rather than a grid. */
+.how { padding: 72px 0 64px; border-top: 1px solid var(--hairline); }
+.step-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 1px;
+    background: var(--hairline);
+    border: 1px solid var(--hairline);
+}
+.step {
+    display: flex;
+    gap: 22px;
+    align-items: flex-start;
+    background: var(--surface-raised);
+    padding: 26px 26px;
+    transition: background 0.45s var(--ease-out-expo);
+}
+.step:hover { background: var(--surface); }
+.step-num {
+    flex: none;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    padding-top: 3px;
+    min-width: 28px;
+}
+.step-body h3 { font-size: 15px; font-weight: 600; color: var(--ink); margin: 0 0 8px 0; }
+.step-body p { margin: 0; font-size: 13.5px; line-height: 1.75; color: var(--ink-dim); max-width: 68ch; }
+
+/* Proof: the diagram, given its own section and a reason to be there. */
+.proof { padding: 64px 0; border-top: 1px solid var(--hairline); }
+.proof-head { max-width: 62ch; margin-bottom: 30px; }
+.proof-head p { margin: 10px 0 0 0; font-size: 14px; line-height: 1.75; color: var(--ink-muted); }
 
 /* Claim: the one idea worth remembering, given the width of the page. */
 .claim {
@@ -345,6 +451,11 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     .hero-split { grid-template-columns: 1fr; gap: 40px; padding: 56px 0 64px; }
     .mode-grid { grid-template-columns: 1fr; }
     .mode-cell-wide { grid-column: auto; }
+    /* The headline stays first on a phone. Leading with the mascot pushes
+       what the product actually is below the fold. */
+    .hero-pilot img { max-width: 280px; }
+    .step { flex-direction: column; gap: 10px; padding: 22px 20px; }
+    .how { padding: 56px 0 48px; }
 }
 
 
@@ -376,7 +487,12 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     text-decoration: none;
     font-size: 16px;
     font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
+.sidebar-logo .pilot-mark { width: 26px; height: 26px; }
+.sidebar-logo-text { display: inline-flex; align-items: baseline; }
 
 .sidebar-nav {
     display: flex;

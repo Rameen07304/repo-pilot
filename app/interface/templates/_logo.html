@@ -1,0 +1,20 @@
+{# The Repo Pilot mark: the mascot reduced to the parts that survive at
+   24px in a browser tab. Shell, visor and accent are CSS variables so the
+   mark follows the palette instead of carrying its own hard-coded colours. #}
+<svg class="pilot-mark" viewBox="0 0 64 64" role="img" aria-label="Repo Pilot" xmlns="http://www.w3.org/2000/svg">
+    <g class="pilot-mark-antenna">
+        <path d="M32 17V9" stroke="var(--mark-stem, #4A5550)" stroke-width="3.2" stroke-linecap="round"/>
+        <circle cx="32" cy="6.4" r="4.4" fill="var(--mark-accent, #6EE7A8)"/>
+    </g>
+    <rect x="3.5" y="29" width="9.5" height="15" rx="4.75" fill="var(--mark-shell, #F2EFE6)"/>
+    <rect x="51" y="29" width="9.5" height="15" rx="4.75" fill="var(--mark-shell, #F2EFE6)"/>
+    <circle cx="8.25" cy="36.5" r="3.1" fill="var(--mark-accent, #6EE7A8)"/>
+    <circle cx="55.75" cy="36.5" r="3.1" fill="var(--mark-accent, #6EE7A8)"/>
+    <rect x="8" y="16" width="48" height="41" rx="18" fill="var(--mark-shell, #F2EFE6)"/>
+    <rect x="14.5" y="23" width="35" height="24" rx="11" fill="var(--mark-visor, #15191B)"/>
+    <g fill="none" stroke="var(--mark-accent, #6EE7A8)" stroke-width="3" stroke-linecap="round">
+        <path d="M22.5 33.5a4.6 4.6 0 0 1 8 0"/>
+        <path d="M33.5 33.5a4.6 4.6 0 0 1 8 0"/>
+        <path d="M28.6 40.4a4.3 4.3 0 0 0 6.8 0"/>
+    </g>
+</svg>

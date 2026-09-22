@@ -6,11 +6,26 @@
     <title>Repo Pilot (Codebase Onboarding Agent)</title>
     <meta name="description" content="Point Repo Pilot at a GitHub repository. Get cited answers, a reading order, an architecture diagram parsed from the real imports, and a maintainability report.">
     <meta name="theme-color" content="#0B0E0C">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230B0E0C'/%3E%3Ctext x='4' y='23' font-family='monospace' font-size='18' font-weight='700' fill='%236EE7A8'%3E%3E_%3C/text%3E%3C/svg%3E">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20fill%3D%22%230B0E0C%22%2F%3E%3Cpath%20d%3D%22M32%2018V11%22%20stroke%3D%22%234A5550%22%20stroke-width%3D%223.6%22%20stroke-linecap%3D%22round%22%2F%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%228%22%20r%3D%224.6%22%20fill%3D%22%236EE7A8%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%2230%22%20width%3D%228.5%22%20height%3D%2214%22%20rx%3D%224.25%22%20fill%3D%22%23F2EFE6%22%2F%3E%3Crect%20x%3D%2250.5%22%20y%3D%2230%22%20width%3D%228.5%22%20height%3D%2214%22%20rx%3D%224.25%22%20fill%3D%22%23F2EFE6%22%2F%3E%3Crect%20x%3D%229%22%20y%3D%2217%22%20width%3D%2246%22%20height%3D%2240%22%20rx%3D%2217%22%20fill%3D%22%23F2EFE6%22%2F%3E%3Crect%20x%3D%2215%22%20y%3D%2224%22%20width%3D%2234%22%20height%3D%2223%22%20rx%3D%2210.5%22%20fill%3D%22%2315191B%22%2F%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%236EE7A8%22%20stroke-width%3D%223.1%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M22.6%2034a4.5%204.5%200%200%201%207.8%200%22%2F%3E%3Cpath%20d%3D%22M33.6%2034a4.5%204.5%200%200%201%207.8%200%22%2F%3E%3Cpath%20d%3D%22M28.8%2040.6a4.2%204.2%200%200%200%206.4%200%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
+    <script>
+        /* Arm the scroll reveal before the stylesheet paints, so nothing
+           flashes in and then hides. If landing.js never reports ready, the
+           failsafe disarms it and every section renders plainly: the page
+           must not depend on a script to be readable. */
+        (function () {
+            var root = document.documentElement;
+            root.className += " js-reveal";
+            window.setTimeout(function () {
+                if (!root.hasAttribute("data-reveal-ready")) {
+                    root.className = root.className.replace(" js-reveal", "");
+                }
+            }, 2500);
+        }());
+    </script>
 </head>
 <body class="landing">
     <header class="term-bar">
@@ -19,7 +34,10 @@
             <span class="dot dot-yellow"></span>
             <span class="dot dot-green"></span>
         </div>
-        <span class="term-title">repo-pilot</span>
+        <span class="term-title">
+            {% include "_logo.html" %}
+            repo-pilot
+        </span>
     </header>
 
     <main>
@@ -27,34 +45,74 @@
             <div class="hero-copy">
                 <span class="hero-eyebrow rise rise-1">parsed, not guessed</span>
                 <h1 class="rise rise-2">Understand code<span class="line-soft">you did not write.</span></h1>
-                <p class="hero-sub rise rise-3">Point it at a GitHub repository. Get cited answers, a reading order, and a diagram built from the real imports.</p>
-                <a href="/app" class="cta-btn rise rise-4">
-                    open repo pilot
-                    <span class="cta-icon" aria-hidden="true">&#8599;</span>
-                </a>
+                <p class="hero-sub rise rise-3">Point Repo Pilot at a GitHub repository. It reads the real structure and gives you cited answers, a reading order, and a diagram drawn from the imports that are actually there.</p>
+                <div class="hero-actions rise rise-4">
+                    <a href="/app" class="cta-btn">
+                        open repo pilot
+                        <span class="cta-icon" aria-hidden="true">&#8599;</span>
+                    </a>
+                    <a href="#how" class="cta-ghost">see how it works</a>
+                </div>
             </div>
-            <figure class="hero-figure rise rise-5">
+            <div class="hero-pilot rise rise-5">
+                <img src="/static/img/pilot.webp?v={{ static_version }}" alt="The Repo Pilot robot at a laptop, surrounded by panels reading analyze repo, code quality, insights and summary." width="1248" height="1248" fetchpriority="high" decoding="async">
+            </div>
+        </section>
+
+        <section class="how" id="how" aria-labelledby="how-title">
+            <h2 id="how-title" data-reveal>How it works</h2>
+            <ol class="step-list">
+                <li class="step" data-reveal style="--i: 0">
+                    <span class="step-num">01</span>
+                    <div class="step-body">
+                        <h3>Give it a repository</h3>
+                        <p>Paste any public GitHub URL. The whole repository arrives in a single archive download, so a large codebase costs the same three requests as a small one.</p>
+                    </div>
+                </li>
+                <li class="step" data-reveal style="--i: 1">
+                    <span class="step-num">02</span>
+                    <div class="step-body">
+                        <h3>It parses the structure</h3>
+                        <p>Every file is read with tree-sitter and every import is resolved to the file it actually points at, across nine languages. Nothing here is inferred by a model.</p>
+                    </div>
+                </li>
+                <li class="step" data-reveal style="--i: 2">
+                    <span class="step-num">03</span>
+                    <div class="step-body">
+                        <h3>Ask it anything</h3>
+                        <p>Answers arrive with file and line citations you can open. Follow up with "it" and "that", and pick whether the explanation is written for a new developer, a senior engineer, a product manager, or someone hunting for ideas.</p>
+                    </div>
+                </li>
+            </ol>
+        </section>
+
+        <section class="proof" aria-labelledby="proof-title">
+            <div class="proof-head" data-reveal>
+                <h2 id="proof-title">Real output, not a mockup</h2>
+                <p>This is an architecture diagram Repo Pilot produced from an actual repository, exported from the app and dropped straight onto this page.</p>
+            </div>
+            <figure class="hero-figure" data-reveal>
                 <div class="figure-shell">
                     <div class="figure-core">
                         <div class="figure-rule">backend/</div>
                         {% include "_sample_graph.html" %}
                     </div>
                 </div>
-                <figcaption>Output from a real repository, drawn from its imports.</figcaption>
+                <figcaption>Drawn from the repository's own imports. Every box is a file that exists; every arrow is an import that is really there.</figcaption>
             </figure>
         </section>
 
         <section class="claim">
-            <h2>The structure is parsed, not guessed.</h2>
-            <div class="claim-body">
+            <h2 data-reveal>The structure is parsed, not guessed.</h2>
+            <div class="claim-body" data-reveal>
                 <p>Most tools hand a codebase to a language model and print whatever it says back. A model asked to describe an architecture will invent dependencies that look plausible and are not there.</p>
                 <p>Here the graph comes from tree-sitter and the repository's own imports. The model is given what was found and asked to explain it. It cannot add an edge to the diagram, and it cannot produce a citation: every file and line reference is taken from retrieval and checked against the real file list before it reaches you.</p>
             </div>
         </section>
 
         <section class="modes" aria-labelledby="modes-title">
-            <h2 id="modes-title">Five ways in</h2>
-            <ul class="mode-grid">
+            <h2 id="modes-title" data-reveal>Five ways in</h2>
+            <ul class="mode-grid" data-reveal>
                 <li class="mode-cell mode-cell-wide">
                     <h3>Learn this codebase</h3>
                     <p>Ranks every file by how much the rest of the repository leans on it, then lays out what to read first and why. For the moment you have cloned something and have no idea where to start.</p>
@@ -79,8 +137,8 @@
         </section>
 
         <section class="facts">
-            <h2>How it behaves</h2>
-            <dl class="fact-list">
+            <h2 data-reveal>How it behaves</h2>
+            <dl class="fact-list" data-reveal>
                 <div>
                     <dt>Three requests per repository</dt>
                     <dd>The whole repository arrives in one archive download, whatever its size, so ingestion does not exhaust an API budget.</dd>
@@ -105,5 +163,6 @@
         <p>Repo Pilot, by Rameen Fatima and Dania Imran. Open source under the MIT license.</p>
         <a href="/app" class="link-btn">open repo pilot</a>
     </footer>
+    <script src="/static/landing.js?v={{ static_version }}" defer></script>
 </body>
 </html>
