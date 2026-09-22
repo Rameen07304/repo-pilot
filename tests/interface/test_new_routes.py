@@ -8,6 +8,7 @@ Chroma and no SQLite — they test the route layer's wiring, status
 codes and payload shape, not the use cases (those have their own
 tests).
 """
+import json
 import unittest
 
 from fastapi import FastAPI
@@ -185,3 +186,39 @@ class ImpactRouteTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StreamHistoryParsingTest(unittest.TestCase):
+    """The history query parameter is attacker-editable, so bad input degrades to no history."""
+
+    def setUp(self):
+        from app.interface.routes.investigate_stream import _parse_history
+        self.parse = _parse_history
+
+    def test_empty_and_malformed_yield_no_history(self):
+        for raw in ["", "   ", "not json", "{}", '"a string"', "[1, 2, 3]", '[{"no_question": 1}]']:
+            self.assertEqual(self.parse(raw), [], f"for {raw!r}")
+
+    def test_well_formed_history_is_parsed(self):
+        turns = self.parse('[{"question": "q1", "answer": "a1", "cited_files": ["app/a.py"]}]')
+        self.assertEqual(len(turns), 1)
+        self.assertEqual(turns[0].question, "q1")
+        self.assertEqual(turns[0].answer, "a1")
+        self.assertEqual(turns[0].cited_files, ["app/a.py"])
+
+    def test_fields_are_length_and_count_capped(self):
+        raw = json.dumps([{"question": "q" * 900, "answer": "a" * 9000, "cited_files": ["f"] * 50}])
+        turns = self.parse(raw)
+        self.assertEqual(len(turns[0].question), 500)
+        self.assertEqual(len(turns[0].answer), 4000)
+        self.assertEqual(len(turns[0].cited_files), 20)
+
+    def test_turn_count_is_capped_keeping_the_most_recent(self):
+        raw = json.dumps([{"question": f"q{i}"} for i in range(30)])
+        turns = self.parse(raw, max_turns=3)
+        self.assertEqual([t.question for t in turns], ["q27", "q28", "q29"])
+
+    def test_wrong_types_inside_a_turn_are_coerced_away(self):
+        turns = self.parse('[{"question": "q", "answer": 42, "cited_files": "not-a-list"}]')
+        self.assertEqual(turns[0].answer, "")
+        self.assertEqual(turns[0].cited_files, [])

@@ -152,7 +152,7 @@ class DeepInvestigationUseCase(AnswerQuestionUseCase):
                     )
             return new_hits
 
-        phrase = question.text
+        phrase = question.retrieval_text()
         steps = 0
         while steps < self._max_steps:
             steps += 1

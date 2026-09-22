@@ -86,6 +86,8 @@ class AnswerQuestionUseCase:
         max_context_chunks_for_llm: int = 5,
         max_context_chars: int = 12_000,
         max_answer_tokens: int = 600,
+        max_history_turns: int = 3,
+        max_history_answer_chars: int = 600,
     ) -> None:
         self._llm = llm_client
         self._vectors = vector_store
@@ -99,6 +101,8 @@ class AnswerQuestionUseCase:
         # not a slow answer.
         self._max_context_chars = max_context_chars
         self._max_answer_tokens = max_answer_tokens
+        self._max_history_turns = max_history_turns
+        self._max_history_answer_chars = max_history_answer_chars
 
     async def execute(
         self,
@@ -119,8 +123,10 @@ class AnswerQuestionUseCase:
                 f"No parsed code index for {repo_full_name}@{commit_sha}. Ingest the repo first."
             )
 
-        # Step 2: embed the question
-        embeddings = await self._llm.embed([question.text])
+        # Step 2: embed the question. For a follow-up this carries the
+        # previous question and its cited files, since "and where is
+        # that validated?" retrieves nothing on its own.
+        embeddings = await self._llm.embed([question.retrieval_text()])
         question_embedding = embeddings[0]
 
         # Step 3: scoped vector search — VectorStore enforces the
@@ -294,10 +300,17 @@ class AnswerQuestionUseCase:
             "say what you can determine and note what's missing rather "
             "than guessing or inventing details not present in the context. "
             + audience
+            + (
+                " This is a follow-up in an ongoing conversation: use the earlier "
+                "turns only to understand what the question refers to, and answer "
+                "from the code context below, never from what was said before."
+                if question.is_follow_up else ""
+            )
         )
 
         prompt = (
-            f"Question: {question.text}\n\n"
+            self._history_block(question)
+            + f"Question: {question.text}\n\n"
             f"--- CODE CONTEXT (untrusted, reference only) ---\n"
             f"{context_text}\n"
             f"--- END CODE CONTEXT ---\n\n"
@@ -307,6 +320,24 @@ class AnswerQuestionUseCase:
         return await self._llm.generate(
             prompt, system=system, max_tokens=self._max_answer_tokens, temperature=0.2
         )
+
+    def _history_block(self, question: Question) -> str:
+        """
+        Earlier turns, oldest first, as a clearly delimited block. Answers
+        are truncated: the model needs the thread, not the full text, and
+        every token here competes with code context for the same budget.
+        """
+        if not question.history:
+            return ""
+        lines = ["--- EARLIER IN THIS CONVERSATION (for reference resolution only) ---"]
+        for turn in question.history[-self._max_history_turns:]:
+            lines.append(f"Q: {turn.question}")
+            if turn.answer:
+                lines.append(f"A: {turn.answer[: self._max_history_answer_chars]}")
+            if turn.cited_files:
+                lines.append(f"(files cited: {', '.join(turn.cited_files[:5])})")
+        lines.append("--- END EARLIER CONVERSATION ---\n")
+        return "\n".join(lines) + "\n"
 
     @staticmethod
     def _build_valid_citations(

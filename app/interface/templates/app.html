@@ -150,6 +150,15 @@
                             <p class="mode-desc">Ask how anything works. The answer is built from the real code and every claim is cited to a file and line range you can open.</p>
                         </div>
                     </header>
+                    <section id="conversation-thread" class="hidden conversation-thread">
+                        <div class="thread-header">
+                            <span class="thread-label">conversation</span>
+                            <button type="button" id="conversation-clear" class="link-btn" title="Forget these questions and start a fresh thread">start over</button>
+                        </div>
+                        <ol id="conversation-turns" class="thread-turns"></ol>
+                        <p class="thread-hint dim">follow-ups can say "it" or "that" — earlier questions are sent along so they resolve.</p>
+                    </section>
+
                     <div id="ask-context" class="hidden ask-context">
                         <span class="ask-context-label">context</span>
                         <code id="ask-context-path"></code>

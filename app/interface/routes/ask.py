@@ -13,7 +13,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 
 from app.application.use_cases.answer_question import RepoNotIngestedError
-from app.domain.entities import Question
+from app.domain.entities import ConversationTurn, Question
 from app.domain.value_objects import Persona, QuestionMode
 from app.infrastructure.llm.quota_aware_llm_client import DailyQuotaExceededError
 from app.interface.client_ip import get_client_ip
@@ -47,7 +47,15 @@ async def ask_question(payload: AskRequest, request: Request) -> AskResponse:
             )
 
     try:
-        question = Question(text=payload.question, mode=mode, persona=Persona(payload.persona))
+        question = Question(
+            text=payload.question,
+            mode=mode,
+            persona=Persona(payload.persona),
+            history=[
+                ConversationTurn(question=t.question, answer=t.answer, cited_files=t.cited_files)
+                for t in payload.history
+            ],
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

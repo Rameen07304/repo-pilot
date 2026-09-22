@@ -14,6 +14,9 @@ window.RepoPilot = {
     setAskContext: (path) => setAskContext(path),
     clearAskContext: () => setAskContext(null),
     setImpactHighlight: (highlight) => setImpactHighlight(highlight),
+    conversationPayload: () => conversationPayload(),
+    recordTurn: (question, data) => recordTurn(question, data),
+    clearConversation: () => clearConversation(),
     // Filled in by features.js once it loads.
     openFile: () => {},
     streamInvestigation: null,
@@ -177,7 +180,9 @@ ingestForm.addEventListener("submit", async (e) => {
             return;
         }
 
+        const switchedRepo = !currentRepo || currentRepo.repoFullName !== data.repo_full_name;
         currentRepo = { repoFullName: data.repo_full_name, commitSha: data.commit_sha };
+        if (switchedRepo) clearConversation();  // a thread is about one repo
 
         if (data.skipped_file_count > 0) {
             setStatus(
@@ -229,6 +234,57 @@ const askForm = document.getElementById("ask-form");
 const askStatus = document.getElementById("ask-status");
 const answerBox = document.getElementById("answer-box");
 
+// Conversation history for follow-up questions, kept in the page only:
+// it is sent with each request and never stored on the server, so a
+// reload starts a fresh thread. Trimmed to the last few turns because
+// the backend only uses the most recent ones.
+const MAX_HISTORY_TURNS = 6;
+let conversation = [];
+
+function conversationPayload() {
+    return conversation.slice(-MAX_HISTORY_TURNS).map((t) => ({
+        question: t.question,
+        answer: t.answer,
+        cited_files: t.cited_files,
+    }));
+}
+
+function recordTurn(question, data) {
+    conversation.push({
+        question: question,
+        // Only the gist: the backend truncates anyway, and the whole
+        // thread has to fit alongside code context in one prompt.
+        answer: (data.answer_text || "").slice(0, 1200),
+        cited_files: (data.citations || []).map((c) => String(c).split(":")[0]).slice(0, 5),
+    });
+    renderConversation();
+}
+
+function clearConversation() {
+    conversation = [];
+    renderConversation();
+}
+
+function renderConversation() {
+    const box = document.getElementById("conversation-thread");
+    const list = document.getElementById("conversation-turns");
+    if (!box || !list) return;
+    box.classList.toggle("hidden", conversation.length === 0);
+    list.innerHTML = "";
+    conversation.forEach((turn, i) => {
+        const li = document.createElement("li");
+        li.className = "thread-turn";
+        const n = document.createElement("span");
+        n.className = "thread-num";
+        n.textContent = i + 1;
+        const q = document.createElement("span");
+        q.className = "thread-q";
+        q.textContent = turn.question;  // user text: never innerHTML
+        li.append(n, q);
+        list.appendChild(li);
+    });
+}
+
 // A file chosen from the diagram or the onboarding guide. When set,
 // the question is prefixed with the path so retrieval is grounded in
 // that file — the backend still does its own searching, so this steers
@@ -246,6 +302,7 @@ function setAskContext(path) {
 }
 
 document.getElementById("ask-context-clear").addEventListener("click", () => setAskContext(null));
+document.getElementById("conversation-clear").addEventListener("click", () => clearConversation());
 
 function applyAskContext(question) {
     return askContextPath ? `In the file ${askContextPath}: ${question}` : question;
@@ -328,6 +385,7 @@ askForm.addEventListener("submit", async (e) => {
                 commit_sha: currentRepo.commitSha,
             });
             renderAnswer(data);
+            recordTurn(question, data);
             return;
         }
 
@@ -343,6 +401,7 @@ askForm.addEventListener("submit", async (e) => {
                 question: question,
                 deep_mode: deepMode,
                 persona: getPersona(),
+                history: conversationPayload(),
             }),
         });
 
@@ -355,6 +414,7 @@ askForm.addEventListener("submit", async (e) => {
 
         setStatus(askStatus, "", "success");
         renderAnswer(data);
+        recordTurn(question, data);
     } catch (err) {
         setStatus(askStatus, err.message || "Something went wrong.", "error");
     } finally {

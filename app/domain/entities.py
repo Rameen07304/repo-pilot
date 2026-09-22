@@ -62,15 +62,50 @@ class CodeChunk:
 
 
 @dataclass
+class ConversationTurn:
+    """
+    One earlier question and the gist of its answer, supplied by the
+    client so a follow-up ("and where is that validated?") can be
+    understood. History is never stored server-side: it arrives with
+    the request and is used for this request only.
+    """
+    question: str
+    answer: str = ""
+    cited_files: list[str] = field(default_factory=list)
+
+
+@dataclass
 class Question:
     """A user's question, and which Explainer mode should handle it."""
     text: str
     mode: QuestionMode = QuestionMode.QUICK
     persona: Persona = Persona.NEWCOMER
+    history: list[ConversationTurn] = field(default_factory=list)
 
     def __post_init__(self):
         if not self.text.strip():
             raise ValueError("Question text cannot be empty")
+
+    @property
+    def is_follow_up(self) -> bool:
+        return bool(self.history)
+
+    def retrieval_text(self) -> str:
+        """
+        What to embed when searching. A follow-up is often unsearchable
+        alone ("and where is that validated?" matches nothing), so it is
+        prefixed with the previous question and the files that answer
+        cited — real repo terms, which is what the vector search needs.
+        The user's own words stay last so they dominate the embedding.
+        """
+        if not self.history:
+            return self.text
+        recent = self.history[-1]
+        parts = [recent.question]
+        if recent.cited_files:
+            parts.append(" ".join(recent.cited_files[:3]))
+        parts.append(self.text)
+        return " ".join(p for p in parts if p.strip())
 
 
 @dataclass

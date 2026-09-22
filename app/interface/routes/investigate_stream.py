@@ -32,7 +32,7 @@ from app.application.investigation_events import (
     InvestigationEventType as EventType,
 )
 from app.application.use_cases.answer_question import RepoNotIngestedError
-from app.domain.entities import Question
+from app.domain.entities import ConversationTurn, Question
 from app.domain.value_objects import Persona, QuestionMode
 from app.infrastructure.llm.quota_aware_llm_client import DailyQuotaExceededError
 from app.interface.client_ip import get_client_ip
@@ -52,6 +52,35 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
+def _parse_history(raw: str, *, max_turns: int = 10) -> list[ConversationTurn]:
+    """
+    Decode the history query parameter. Anything unexpected yields an
+    empty history rather than an error — a follow-up without history is
+    still a perfectly answerable question.
+    """
+    if not raw.strip():
+        return []
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        logger.warning("Ignoring malformed history parameter on /api/ask/stream")
+        return []
+    if not isinstance(data, list):
+        return []
+
+    turns: list[ConversationTurn] = []
+    for item in data[-max_turns:]:
+        if not isinstance(item, dict) or not isinstance(item.get("question"), str):
+            continue
+        cited = item.get("cited_files")
+        turns.append(ConversationTurn(
+            question=item["question"][:500],
+            answer=item["answer"][:4000] if isinstance(item.get("answer"), str) else "",
+            cited_files=[c[:500] for c in cited[:20] if isinstance(c, str)] if isinstance(cited, list) else [],
+        ))
+    return turns
+
+
 @router.get("/api/ask/stream")
 async def stream_investigation(
     request: Request,
@@ -59,6 +88,11 @@ async def stream_investigation(
     commit_sha: str = Query(..., max_length=100),
     question: str = Query(..., min_length=1, max_length=500),
     persona: str = Query(default="newcomer", pattern="^(newcomer|senior|product)$"),
+    # EventSource can only issue a GET, so the conversation history
+    # arrives as one JSON-encoded parameter rather than a body. It is
+    # parsed defensively and silently dropped if malformed: history is
+    # an aid to understanding the question, never required to answer it.
+    history: str = Query(default="", max_length=8000),
 ) -> StreamingResponse:
     container = request.app.state.container
     client_ip = get_client_ip(request, trust_proxy_headers=container.trust_proxy_headers)
@@ -74,7 +108,12 @@ async def stream_investigation(
         )
 
     try:
-        parsed_question = Question(text=question, mode=QuestionMode.DEEP, persona=Persona(persona))
+        parsed_question = Question(
+            text=question,
+            mode=QuestionMode.DEEP,
+            persona=Persona(persona),
+            history=_parse_history(history),
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

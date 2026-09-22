@@ -303,6 +303,7 @@
                 commit_sha: keys.commit_sha,
                 question: question,
                 persona: RP.getPersona(),
+                history: JSON.stringify(RP.conversationPayload()),
             });
             const source = new EventSource("/api/ask/stream?" + params.toString());
             activeStream = source;

@@ -20,12 +20,21 @@ class IngestResponse(BaseModel):
     skipped_file_count: int = 0
 
 
+class ConversationTurnRequest(BaseModel):
+    question: str = Field(..., max_length=500)
+    answer: str = Field(default="", max_length=4000)
+    cited_files: list[str] = Field(default_factory=list, max_length=20)
+
+
 class AskRequest(BaseModel):
     repo_full_name: str = Field(..., max_length=200)
     commit_sha: str = Field(..., max_length=100)
     question: str = Field(..., min_length=1, max_length=500)
     deep_mode: bool = False
     persona: str = Field(default="newcomer", pattern="^(newcomer|senior|product)$")
+    # Conversation history, oldest first, supplied by the client. Never
+    # stored server-side: it is used for this request only.
+    history: list[ConversationTurnRequest] = Field(default_factory=list, max_length=10)
 
 
 class AskResponse(BaseModel):

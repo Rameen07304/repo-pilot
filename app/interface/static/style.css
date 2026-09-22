@@ -1205,3 +1205,20 @@ g.node.selected-node circle {
     .mode-header { flex-direction: column; }
     .mode-header .cmd-btn { align-self: flex-start; }
 }
+
+/* ---------- Conversation thread ---------- */
+
+.conversation-thread {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-left: 2px solid var(--accent);
+}
+.thread-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.thread-label { font-size: 11px; letter-spacing: 0.08em; color: var(--ink-faint); }
+.thread-turns { list-style: none; margin: 8px 0 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.thread-turn { display: flex; align-items: baseline; gap: 9px; font-size: 12.5px; }
+.thread-num { color: var(--accent); flex-shrink: 0; }
+.thread-q { color: var(--ink-muted); overflow-wrap: anywhere; }
+.thread-hint { font-size: 12px; margin: 10px 0 0 0; }
