@@ -240,3 +240,42 @@ class CalibrationTest(unittest.TestCase):
         report = run({"README.md": "# docs only", "templates/x.gitignore": "*.pyc"})
         self.assertEqual(by_check(report, "untested_module"), [])
         self.assertEqual(report.score, 100)
+
+    def test_decorated_functions_are_not_reported_as_unreferenced(self):
+        # Flask-style route: registered by decorator, never called by name
+        files = {
+            "app.py": (
+                "@api.route('/health')\n"
+                "def health_endpoint():\n"
+                "    return 'ok'\n"
+                "\n"
+                "@api.route('/scan')\n"
+                "# a comment between decorator and def\n"
+                "def scan_endpoint():\n"
+                "    return 'ok'\n"
+                "\n"
+                "def really_dead():\n"
+                "    pass\n"
+            ),
+            "tests/t.py": "",
+        }
+        symbols = [
+            sym("health_endpoint", "app.py", 2, 3),
+            sym("scan_endpoint", "app.py", 7, 8),
+            sym("really_dead", "app.py", 10, 11),
+        ]
+        report = run(files, symbols=symbols, edges=[("tests/t.py", "app.py")])
+        names = {f.symbol for f in by_check(report, "unreferenced_symbol")}
+        self.assertEqual(names, {"really_dead"})
+
+    def test_functions_wired_up_from_markup_are_not_dead(self):
+        files = {
+            "js/app.js": "function downloadPDF() {}\nfunction reallyDead() {}\n",
+            "index.html": '<button onclick="downloadPDF()">Save</button>\n',
+            "tests/t.js": "",
+        }
+        symbols = [sym("downloadPDF", "js/app.js", 1, 1), sym("reallyDead", "js/app.js", 2, 2)]
+        report = run(files, symbols=symbols, edges=[("tests/t.js", "js/app.js")])
+        names = {f.symbol for f in by_check(report, "unreferenced_symbol")}
+        self.assertEqual(names, {"reallyDead"})
+        self.assertEqual(report.source_file_count, 2)  # the .html is referenced, not graded

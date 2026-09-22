@@ -36,6 +36,7 @@ _SOURCE_SUFFIXES = (
     ".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".vue", ".svelte",
     ".dart", ".go", ".rs", ".rb", ".java", ".php",
 )
+_MARKUP_SUFFIXES = (".html", ".htm", ".jinja", ".jinja2", ".j2", ".twig", ".erb", ".ejs", ".hbs", ".blade.php")
 _TEST_DIR_SEGMENTS = {"test", "tests", "__tests__", "spec", "specs", "e2e"}
 _TEST_FILE_MARKERS = ("test_", "_test.", ".test.", ".spec.", "_spec.", "spec_")
 _GENERATED_MARKERS = (".g.dart", ".freezed.dart", ".min.js", "migrations/")
@@ -99,6 +100,14 @@ class AnalyzeCodeHealthUseCase:
         source_set = set(source_files)
         contents = {f.path: f.content for f in manifest.files if f.content and f.path in source_set}
         line_counts = {path: text.count("\n") + 1 for path, text in contents.items()}
+        # Markup is not source we grade, but it REFERENCES source: a
+        # handler wired up as onclick="downloadPDF()" is live code, and
+        # without this the dead-code check would call it unused.
+        reference_only = {
+            f.path: f.content for f in manifest.files
+            if f.content and f.path not in source_set
+            and f.path.lower().endswith(_MARKUP_SUFFIXES)
+        }
         in_edges, out_edges = self._edge_maps(parsed_index)
 
         findings: list[CodeHealthFinding] = []
@@ -107,7 +116,7 @@ class AnalyzeCodeHealthUseCase:
         findings += self._untested_modules(in_edges, source_files)
         findings += self._long_functions(parsed_index, source_files)
         findings += self._large_files(line_counts)
-        findings += self._unreferenced_symbols(parsed_index, source_files, contents)
+        findings += self._unreferenced_symbols(parsed_index, source_files, {**contents, **reference_only})
 
         score, deductions = self._score(findings)
         test_files = [p for p in source_files if self._is_test_file(p)]
@@ -358,6 +367,8 @@ class AnalyzeCodeHealthUseCase:
                 continue
             if self._referenced_in_text(s.name, s.file_path, s.start_line, contents):
                 continue
+            if self._is_decorated(s.file_path, s.start_line, contents):
+                continue
             candidates.append(s)
 
         candidates.sort(key=lambda s: (-(s.end_line - s.start_line), s.file_path, s.name))
@@ -374,6 +385,28 @@ class AnalyzeCodeHealthUseCase:
                 metric=s.end_line - s.start_line + 1,
             ))
         return findings
+
+    @staticmethod
+    def _is_decorated(file_path: str, def_line: int, contents: dict[str, str]) -> bool:
+        """
+        A decorated function is registered with something that calls it
+        later — a Flask/FastAPI route, a Django receiver, a CLI command,
+        a pytest fixture. Nothing in the repo calls it by name, and that
+        is not a smell. Looks upward from the definition, skipping
+        comments and blank lines, for an @decorator line.
+        """
+        text = contents.get(file_path)
+        if not text:
+            return False
+        lines = text.split("\n")
+        for i in range(def_line - 2, max(-1, def_line - 12), -1):  # def_line is 1-indexed
+            if i < 0 or i >= len(lines):
+                break
+            stripped = lines[i].strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            return stripped.startswith("@")
+        return False
 
     @staticmethod
     def _referenced_in_text(name: str, own_file: str, def_line: int, contents: dict[str, str]) -> bool:
