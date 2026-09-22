@@ -31,7 +31,7 @@ class AskRequest(BaseModel):
     commit_sha: str = Field(..., max_length=100)
     question: str = Field(..., min_length=1, max_length=500)
     deep_mode: bool = False
-    persona: str = Field(default="newcomer", pattern="^(newcomer|senior|product)$")
+    persona: str = Field(default="newcomer", pattern="^(newcomer|senior|product|learner)$")
     # Conversation history, oldest first, supplied by the client. Never
     # stored server-side: it is used for this request only.
     history: list[ConversationTurnRequest] = Field(default_factory=list, max_length=10)

@@ -96,3 +96,4 @@ class Persona(str, Enum):
     NEWCOMER = "newcomer"  # plain language, defines terms, explains the why
     SENIOR = "senior"  # terse, architectural, assumes fluency
     PRODUCT = "product"  # behaviour and user impact, no code detail
+    LEARNER = "learner"  # exploring someone else's project for ideas to borrow

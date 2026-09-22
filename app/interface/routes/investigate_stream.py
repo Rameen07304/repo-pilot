@@ -87,7 +87,7 @@ async def stream_investigation(
     repo_full_name: str = Query(..., max_length=200),
     commit_sha: str = Query(..., max_length=100),
     question: str = Query(..., min_length=1, max_length=500),
-    persona: str = Query(default="newcomer", pattern="^(newcomer|senior|product)$"),
+    persona: str = Query(default="newcomer", pattern="^(newcomer|senior|product|learner)$"),
     # EventSource can only issue a GET, so the conversation history
     # arrives as one JSON-encoded parameter rather than a body. It is
     # parsed defensively and silently dropped if malformed: history is

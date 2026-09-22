@@ -78,7 +78,7 @@ class PersonaTest(unittest.TestCase):
     def test_prompts_differ_only_in_audience(self):
         prompts = {p: ask(p)[1] for p in Persona}
         systems = {p: s for p, (s, _) in prompts.items()}
-        self.assertEqual(len(set(systems.values())), 3)  # each persona has its own system text
+        self.assertEqual(len(set(systems.values())), len(Persona))  # every persona has its own system text
         # the shared safety rules are present verbatim in all three
         for system in systems.values():
             self.assertIn("using ONLY the code context", system)
@@ -88,6 +88,7 @@ class PersonaTest(unittest.TestCase):
         self.assertEqual(len(contexts), 1)
 
     def test_persona_wording(self):
+        self.assertIn("learn from it", ask(Persona.LEARNER)[1][0])
         self.assertIn("just joined", ask(Persona.NEWCOMER)[1][0])
         self.assertIn("senior engineer", ask(Persona.SENIOR)[1][0])
         self.assertIn("product manager", ask(Persona.PRODUCT)[1][0])

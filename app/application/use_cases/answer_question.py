@@ -66,6 +66,17 @@ _PERSONA_PROMPTS: dict[Persona, tuple[str, str]] = {
         "may still name the file a behaviour lives in.",
         "Answer in plain language for a product manager, focused on behaviour and user impact.",
     ),
+    Persona.LEARNER: (
+        "Your reader is exploring this project to learn from it — they may "
+        "want to build something similar. Point out the techniques, libraries "
+        "and patterns worth noticing, say what is interesting or unusual about "
+        "the approach and why it was likely chosen, and mention what someone "
+        "would need in order to build the same thing. Name the specific library "
+        "or technique rather than describing it vaguely, and stay grounded in "
+        "what the code actually does — never invent a rationale the code does "
+        "not support.",
+        "Answer for someone studying this project for ideas: what is worth noticing here, and why.",
+    ),
 }
 
 
