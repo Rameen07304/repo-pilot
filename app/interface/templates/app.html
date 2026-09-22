@@ -124,11 +124,16 @@
                         <section class="health-summary">
                             <div class="health-score">
                                 <span id="health-grade" class="health-grade"></span>
-                                <span id="health-score-value" class="health-score-value"></span>
-                                <span class="health-score-label">/ 100 · heuristic</span>
+                                <div class="health-score-text">
+                                    <span><span id="health-score-value" class="health-score-value"></span><span class="health-score-label"> / 100</span></span>
+                                    <p id="health-verdict" class="health-verdict"></p>
+                                </div>
                             </div>
                             <ul id="health-stats" class="health-stats"></ul>
                         </section>
+
+                        <p id="health-next" class="health-next"></p>
+                        <p class="health-caveat dim">the score is a rule-of-thumb from the parsed code, not a judgement of whether the project works. it counts structure only — it never runs the code or reads what it does.</p>
 
                         <section class="guide-block">
                             <h3>$ deductions</h3>

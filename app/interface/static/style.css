@@ -1222,3 +1222,36 @@ g.node.selected-node circle {
 .thread-num { color: var(--accent); flex-shrink: 0; }
 .thread-q { color: var(--ink-muted); overflow-wrap: anywhere; }
 .thread-hint { font-size: 12px; margin: 10px 0 0 0; }
+
+/* Code health: making the grade and severities mean something */
+.health-score { display: flex; align-items: center; gap: 16px; }
+.health-score-text { display: flex; flex-direction: column; gap: 4px; }
+.health-verdict { margin: 0; font-size: 13px; color: var(--ink-body); max-width: 46ch; }
+.health-next {
+    margin: 16px 0 0 0;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--ink);
+    background: rgba(110, 231, 168, 0.06);
+    border-left: 2px solid var(--accent);
+}
+.health-caveat { font-size: 12px; margin: 10px 0 0 0; max-width: 78ch; line-height: 1.6; }
+
+.severity-heading {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 18px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--hairline);
+}
+.severity-heading:first-child { margin-top: 0; }
+.severity-name { font-size: 13px; font-weight: 600; }
+.severity-high .severity-name { color: var(--error); }
+.severity-medium .severity-name { color: var(--warn); }
+.severity-low .severity-name { color: var(--ink-muted); }
+.severity-blurb { font-size: 12px; color: var(--ink-faint); }
+
+/* The badge now names the check, so colour alone carries severity. */
+.health-finding .badge { text-transform: none; letter-spacing: 0; }

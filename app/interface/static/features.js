@@ -633,6 +633,31 @@
     };
     const SEVERITY_ORDER = { high: 0, medium: 1, low: 2 };
 
+    // "low" on its own tells a reader nothing. Each severity gets a
+    // verb (what to do) and a sentence (why it is in that band).
+    const SEVERITY_META = {
+        high: { label: "worth fixing", blurb: "These slow down or mislead anyone working in the code. Start here." },
+        medium: { label: "worth a look", blurb: "Not urgent, but they make the code harder to change than it needs to be." },
+        low: { label: "minor", blurb: "Small cleanups. Nothing here is broken — fix them when you are already in the file." },
+    };
+
+    const GRADE_MEANING = {
+        A: "Healthy. Nothing here needs attention right now.",
+        B: "In good shape. A few things worth tidying when you are nearby.",
+        C: "Workable, with some real friction worth planning in.",
+        D: "Rough edges that will slow down anyone new to this code.",
+        F: "Hard to work in safely. Worth addressing before adding features.",
+    };
+
+    const CHECK_EXPLAINERS = {
+        circular_import: "modules that import each other in a loop",
+        hub_module: "modules that many others depend on",
+        untested_module: "code no test file imports",
+        long_function: "functions long enough to hide several jobs",
+        large_file: "files large enough to be hard to navigate",
+        unreferenced_symbol: "functions nothing else appears to call",
+    };
+
     let healthFindings = [];
     let healthFilter = "all";
 
@@ -662,15 +687,18 @@
         grade.className = "health-grade grade-" + data.grade.toLowerCase();
         el("health-score-value").textContent = data.score;
 
-        const stats = el("health-stats");
-        clear(stats);
         const counts = { high: 0, medium: 0, low: 0 };
         data.findings.forEach((f) => { counts[f.severity] += 1; });
+        el("health-verdict").textContent = GRADE_MEANING[data.grade] || "";
+        el("health-next").textContent = nextStepSentence(counts, data.findings);
+
+        const stats = el("health-stats");
+        clear(stats);
         [
             data.source_file_count + " source files",
             data.test_file_count + " test files",
             data.symbol_count + " symbols",
-            counts.high + " high · " + counts.medium + " medium · " + counts.low + " low",
+            data.findings.length + " findings",
         ].forEach((text) => {
             const li = document.createElement("li");
             li.textContent = text;
@@ -709,6 +737,15 @@
         healthReport.classList.remove("hidden");
     }
 
+    function nextStepSentence(counts, findings) {
+        if (findings.length === 0) return "No findings — nothing to act on.";
+        const band = counts.high ? "high" : counts.medium ? "medium" : "low";
+        const first = findings.find((f) => f.severity === band);
+        const n = counts[band];
+        const noun = n === 1 ? "finding" : "findings";
+        return `${n} ${SEVERITY_META[band].label} ${noun}. Start with: ${first.title}`;
+    }
+
     function renderHealthFilters() {
         const filters = el("health-filters");
         clear(filters);
@@ -723,6 +760,7 @@
             btn.type = "button";
             btn.className = "chip chip-small" + (value === healthFilter ? " chip-active" : "");
             btn.textContent = label;
+            if (CHECK_EXPLAINERS[value]) btn.title = CHECK_EXPLAINERS[value];
             btn.addEventListener("click", () => {
                 healthFilter = value;
                 renderHealthFilters();
@@ -743,7 +781,24 @@
             list.appendChild(li);
             return;
         }
+
+        // A heading before each severity run, so a reader meets the
+        // explanation of the band before the findings inside it.
+        let currentBand = null;
         shown.forEach((f) => {
+            if (f.severity !== currentBand) {
+                currentBand = f.severity;
+                const head = document.createElement("li");
+                head.className = "severity-heading severity-" + f.severity;
+                const name = document.createElement("span");
+                name.className = "severity-name";
+                name.textContent = SEVERITY_META[f.severity].label;
+                const blurb = document.createElement("span");
+                blurb.className = "severity-blurb";
+                blurb.textContent = SEVERITY_META[f.severity].blurb;
+                head.append(name, blurb);
+                list.appendChild(head);
+            }
             const li = document.createElement("li");
             li.className = "health-finding";
 
@@ -751,7 +806,8 @@
             header.className = "health-finding-header";
             const badge = document.createElement("span");
             badge.className = "badge badge-" + f.severity;
-            badge.textContent = f.severity;
+            badge.textContent = CHECK_LABELS[f.check] || f.check;
+            badge.title = CHECK_EXPLAINERS[f.check] || "";
             const title = document.createElement("span");
             title.className = "health-finding-title";
             title.textContent = f.title;
