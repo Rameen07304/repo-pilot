@@ -14,6 +14,17 @@
     --success: #6EE7A8;
     --warn: #E6C25A;
     --error: #FF6B6B;
+
+    /* The middle tone the palette was missing. Base carries ~70% of the
+       page, these raised surfaces ~30%, and --accent stays near 10% so it
+       still reads as an accent instead of decoration. */
+    --surface-raised: #171E19;
+    --surface-sunken: #0D120F;
+    --edge-soft: rgba(255, 255, 255, 0.07);
+    --edge-bright: rgba(255, 255, 255, 0.13);
+
+    /* Weighted easing: motion with mass, never linear or ease-in-out. */
+    --ease-out-expo: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 * { box-sizing: border-box; }
@@ -101,66 +112,153 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     color: var(--ink-faint);
 }
 
-/* Hero: text left, real output right. Deliberately not centred. */
+/* Hero: editorial split. Text carries the left, real output the right.
+   Deliberately not centred, and deliberately layered: the figure sits in
+   a shell so it reads as a physical plate rather than pasted onto the page. */
 .hero-split {
     display: grid;
     grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-    gap: 56px;
+    gap: 64px;
     align-items: center;
-    padding: 84px 0 96px;
+    padding: 104px 0 112px;
 }
+
+.hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 6px 14px 6px 11px;
+    margin-bottom: 26px;
+    background: var(--surface-raised);
+    border: 1px solid var(--edge-soft);
+    font-size: 11.5px;
+    letter-spacing: 0.1em;
+    color: var(--ink-muted);
+}
+.hero-eyebrow::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+}
+
 .hero-copy h1 {
-    /* Monospace runs wide: this ceiling keeps the headline to two lines
-       in the hero column rather than four. */
-    font-size: clamp(28px, 3.5vw, 40px);
+    /* Monospace runs wide: this ceiling keeps the headline to two lines. */
+    font-size: clamp(28px, 3.5vw, 41px);
     font-weight: 700;
-    line-height: 1.08;
-    letter-spacing: -0.03em;
-    margin: 0 0 20px 0;
+    line-height: 1.1;
+    letter-spacing: -0.035em;
+    margin: 0 0 22px 0;
 }
+/* Hierarchy from weight and tone, not from a second colour. */
+.hero-copy h1 .line-soft {
+    display: block;
+    color: var(--ink-muted);
+    font-weight: 500;
+}
+
 .hero-sub {
     font-size: 16px;
-    line-height: 1.7;
+    line-height: 1.75;
     color: var(--ink-muted);
-    max-width: 46ch;
-    margin: 0 0 30px 0;
+    max-width: 44ch;
+    margin: 0 0 34px 0;
 }
-.cta-btn {
-    display: inline-block;
-    background: transparent;
-    color: var(--accent);
-    text-decoration: none;
-    font-weight: 500;
-    font-size: 14px;
-    padding: 13px 26px;
-    border: 1px solid var(--accent);
-    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
-}
-.cta-btn::before { content: "[ "; }
-.cta-btn::after { content: " ]"; }
-.cta-btn:hover { background: var(--accent); color: var(--accent-ink); }
-.cta-btn:active { transform: translateY(1px); }
 
+/* The single strongest accent moment on the page: one filled block,
+   rather than green scattered across every outline. */
+.cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 14px 16px 14px 22px;
+    border: 1px solid var(--accent);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 10px 24px rgba(0, 0, 0, 0.45);
+    transition: background 0.5s var(--ease-out-expo), box-shadow 0.5s var(--ease-out-expo), transform 0.2s var(--ease-out-expo);
+}
+.cta-btn:hover { background: var(--accent-hover); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.34), 0 14px 30px rgba(0, 0, 0, 0.55); }
+.cta-btn:active { transform: translateY(1px); }
+/* The arrow is nested in its own field rather than floating beside the text. */
+.cta-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    background: rgba(11, 14, 12, 0.14);
+    font-size: 13px;
+    transition: transform 0.5s var(--ease-out-expo), background 0.5s var(--ease-out-expo);
+}
+.cta-btn:hover .cta-icon { transform: translate(2px, -2px); background: rgba(11, 14, 12, 0.22); }
+
+/* Double shell: outer tray, inner plate, concentric inset. Gives the
+   diagram physical depth without rounding off the terminal language. */
 .hero-figure { margin: 0; min-width: 0; }
+.figure-shell {
+    padding: 10px;
+    background: var(--surface-sunken);
+    border: 1px solid var(--edge-soft);
+}
+.figure-core {
+    padding: 22px 20px 16px;
+    background: var(--surface-raised);
+    border: 1px solid var(--edge-bright);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.figure-rule {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 18px;
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    color: var(--ink-dim);
+}
+.figure-rule::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--edge-soft);
+}
 .hero-figure figcaption {
-    margin-top: 12px;
+    margin-top: 14px;
     font-size: 12px;
     color: var(--ink-faint);
 }
 
 /* The diagram is exported Mermaid output with its own stylesheet removed,
-   so it is themed here and follows the palette. */
+   so it is themed here and follows the palette. Only the nodes that carry
+   meaning take the accent; the containers stay in the middle tone. */
 .repo-graph { width: 100%; height: auto; display: block; }
-.repo-graph .cluster rect { fill: var(--surface-alt); stroke: var(--hairline); stroke-width: 1px; }
-.repo-graph .node rect { fill: var(--surface); stroke: var(--accent); stroke-width: 1px; }
-.repo-graph .flowchart-link { stroke: var(--accent); stroke-width: 1.6px; fill: none; }
+.repo-graph .cluster rect { fill: rgba(255, 255, 255, 0.022); stroke: var(--edge-soft); stroke-width: 1px; }
+.repo-graph .node rect { fill: var(--surface-sunken); stroke: var(--edge-bright); stroke-width: 1px; }
+.repo-graph .flowchart-link { stroke: var(--accent); stroke-width: 1.5px; fill: none; opacity: 0.85; }
 .repo-graph .marker { fill: var(--accent); stroke: var(--accent); }
 .repo-graph .nodeLabel {
     font-family: "JetBrains Mono", monospace;
     font-size: 15px;
-    color: var(--ink);
+    color: var(--ink-body);
 }
-.repo-graph .cluster-label .nodeLabel { color: var(--ink-muted); }
+.repo-graph .cluster-label .nodeLabel { color: var(--ink-dim); font-size: 14px; }
+
+/* Entrance: weighted fade-up, staggered. Transform and opacity only. */
+@media (prefers-reduced-motion: no-preference) {
+    .rise { animation: rp-rise 0.9s var(--ease-out-expo) both; }
+    .rise-1 { animation-delay: 0.05s; }
+    .rise-2 { animation-delay: 0.13s; }
+    .rise-3 { animation-delay: 0.21s; }
+    .rise-4 { animation-delay: 0.29s; }
+    .rise-5 { animation-delay: 0.16s; }
+}
+@keyframes rp-rise {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
 /* Claim: the one idea worth remembering, given the width of the page. */
 .claim {
@@ -188,13 +286,32 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     background: var(--hairline);
     border: 1px solid var(--hairline);
 }
-.mode-cell { background: var(--base); padding: 22px 24px; }
+/* Raised, so the grid carries the same middle tone as the hero figure
+   instead of dropping back to the page colour one section later. */
+.mode-cell {
+    background: var(--surface-raised);
+    padding: 22px 24px;
+    transition: background 0.45s var(--ease-out-expo);
+}
+.mode-cell:hover { background: var(--surface); }
 .mode-cell-wide { grid-column: 1 / -1; }
+/* The heading takes the page's ink and the marker takes the accent: five
+   green headings would spend the accent budget the CTA needs. */
 .mode-cell h3 {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
     font-size: 15px;
     font-weight: 600;
-    color: var(--accent);
+    color: var(--ink);
     margin: 0 0 8px 0;
+}
+.mode-cell h3::before {
+    content: "";
+    flex: none;
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
 }
 .mode-cell p { margin: 0; font-size: 13px; line-height: 1.7; color: var(--ink-dim); }
 

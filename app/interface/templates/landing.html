@@ -25,12 +25,21 @@
     <main>
         <section class="hero-split">
             <div class="hero-copy">
-                <h1>Understand code<br>you did not write.</h1>
-                <p class="hero-sub">Point it at a GitHub repository. Get cited answers, a reading order, and a diagram built from the real imports.</p>
-                <a href="/app" class="cta-btn">open repo pilot &rarr;</a>
+                <span class="hero-eyebrow rise rise-1">parsed, not guessed</span>
+                <h1 class="rise rise-2">Understand code<span class="line-soft">you did not write.</span></h1>
+                <p class="hero-sub rise rise-3">Point it at a GitHub repository. Get cited answers, a reading order, and a diagram built from the real imports.</p>
+                <a href="/app" class="cta-btn rise rise-4">
+                    open repo pilot
+                    <span class="cta-icon" aria-hidden="true">&#8599;</span>
+                </a>
             </div>
-            <figure class="hero-figure">
-                {% include "_sample_graph.html" %}
+            <figure class="hero-figure rise rise-5">
+                <div class="figure-shell">
+                    <div class="figure-core">
+                        <div class="figure-rule">backend/</div>
+                        {% include "_sample_graph.html" %}
+                    </div>
+                </div>
                 <figcaption>Output from a real repository, drawn from its imports.</figcaption>
             </figure>
         </section>
