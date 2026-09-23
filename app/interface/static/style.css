@@ -506,7 +506,10 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
         [data-reveal] {
             animation: rp-reveal 1s linear backwards;
             animation-timeline: view();
-            animation-range: entry calc(2% + var(--i, 0) * 4%) entry calc(46% + var(--i, 0) * 4%);
+            /* Runs across most of the entry range rather than finishing in
+               the first third, so the movement is visible while the element
+               is on its way in instead of being over before it arrives. */
+            animation-range: entry calc(4% + var(--i, 0) * 4%) entry calc(88% + var(--i, 0) * 4%);
         }
     }
 
@@ -522,7 +525,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     }
 }
 @keyframes rp-reveal {
-    from { opacity: 0; transform: translateY(22px); }
+    from { opacity: 0; transform: translateY(46px) scale(0.972); }
     to { opacity: 1; transform: none; }
 }
 
@@ -823,6 +826,102 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
    enough to neutral that it barely moves. Measured, not guessed: 62deg had
    it landing on cyan. */
 .hero-pilot img { filter: hue-rotate(90deg); }
+
+
+/* ---------- Motion ---------- */
+
+@media (prefers-reduced-motion: no-preference) {
+    /* Progress through the page, drawn on the nav's lower edge. Driven by
+       the scroll position itself, so it costs no script. */
+    @supports (animation-timeline: scroll()) {
+        .nav-progress {
+            transform-origin: 0 50%;
+            animation: rp-progress auto linear;
+            animation-timeline: scroll();
+        }
+    }
+
+    /* The mascot breathes, and drifts slightly against the scroll. Both are
+       transform only, so neither touches layout. */
+    .hero-pilot img {
+        animation: rp-float 7s var(--ease-out-expo) infinite;
+    }
+    @supports ((animation-timeline: view()) and (animation-range: entry)) {
+        .hero-pilot {
+            animation: rp-drift 1s linear both;
+            animation-timeline: view();
+            animation-range: entry 0% exit 100%;
+        }
+    }
+
+    /* The diagram draws itself in: each edge is dashed out and the dash is
+       pulled back as the figure enters. The figure publishes a named
+       timeline because the paths are far too small to track their own. */
+    @supports ((animation-timeline: view()) and (animation-range: entry)) {
+        .proof .hero-figure { view-timeline: --figure block; }
+        .repo-graph .flowchart-link {
+            stroke-dasharray: 320;
+            animation: rp-draw 1s linear backwards;
+            animation-timeline: --figure;
+            animation-range: entry 32% entry 92%;
+        }
+        .repo-graph .flowchart-link:nth-of-type(2) { animation-range: entry 40% entry 96%; }
+        .repo-graph .flowchart-link:nth-of-type(3) { animation-range: entry 48% entry 100%; }
+        .repo-graph .marker {
+            animation: rp-fade-in 1s linear backwards;
+            animation-timeline: --figure;
+            animation-range: entry 70% entry 100%;
+        }
+    }
+}
+
+/* Cards lift on hover. Transform and border only. */
+.mode-cell,
+.step,
+.stat {
+    transition:
+        background-color 0.45s var(--ease-out-expo),
+        transform 0.45s var(--ease-out-expo);
+}
+.mode-cell:hover,
+.step:hover,
+.stat:hover { transform: translateY(-3px); }
+
+/* The counter is swapped digit by digit, so it needs a stable width or the
+   layout twitches on every frame. */
+.stat-num { font-variant-numeric: tabular-nums; }
+
+.nav-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: var(--accent);
+    transform: scaleX(0);
+    pointer-events: none;
+}
+
+@keyframes rp-progress {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+}
+@keyframes rp-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-14px); }
+}
+@keyframes rp-drift {
+    from { transform: translateY(26px); }
+    to { transform: translateY(-26px); }
+}
+@keyframes rp-draw {
+    from { stroke-dashoffset: 320; }
+    to { stroke-dashoffset: 0; }
+}
+@keyframes rp-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
 
 /* ---------- Landing: ambient hero light ---------- */
 

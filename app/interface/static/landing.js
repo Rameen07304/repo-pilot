@@ -169,7 +169,64 @@
         render();
     }
 
+
+    /* The figures count up once, the first time the band is reached. The
+       markup already holds the final number, so if this never runs, or the
+       reader prefers reduced motion, the correct value is simply there. */
+    function setUpCounters() {
+        var counters = document.querySelectorAll("[data-count-to]");
+        if (!counters.length) {
+            return;
+        }
+
+        var reduced = window.matchMedia
+            && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (reduced || typeof IntersectionObserver === "undefined") {
+            return;
+        }
+
+        function run(el) {
+            var target = parseInt(el.getAttribute("data-count-to"), 10);
+            if (isNaN(target) || target === 0) {
+                return;
+            }
+            var duration = 900;
+            var started = null;
+
+            function frame(now) {
+                if (started === null) {
+                    started = now;
+                }
+                var t = Math.min((now - started) / duration, 1);
+                /* Ease out, so it decelerates onto the final number rather
+                   than stopping dead. */
+                var eased = 1 - Math.pow(1 - t, 3);
+                el.textContent = String(Math.round(target * eased));
+                if (t < 1) {
+                    window.requestAnimationFrame(frame);
+                }
+            }
+
+            el.textContent = "0";
+            window.requestAnimationFrame(frame);
+        }
+
+        var observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (entry.isIntersecting) {
+                    observer.unobserve(entry.target);
+                    run(entry.target);
+                }
+            });
+        }, { threshold: 0.6 });
+
+        for (var i = 0; i < counters.length; i++) {
+            observer.observe(counters[i]);
+        }
+    }
+
     setUpReveal();
     setUpScrollSpy();
     setUpThemeToggle();
+    setUpCounters();
 }());
