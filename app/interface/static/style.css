@@ -1055,6 +1055,271 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 }
 
 
+
+/* ---------- Brand, nav furniture ---------- */
+
+.brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex: none;
+    background: var(--surface-sunken);
+    border: 1px solid var(--edge-bright);
+}
+.brand-mark .pilot-mark { width: 22px; height: 22px; }
+.brand-word { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.nav-end { display: flex; align-items: center; gap: 12px; flex: none; }
+.nav-links a { font-family: var(--font-sans); font-size: 13.5px; letter-spacing: 0; }
+
+/* Filled pill, the one strong accent in the bar. */
+.nav-cta {
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: var(--accent-ink);
+    padding: 9px 16px;
+    border-radius: 999px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+}
+.nav-cta:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+/* ---------- Hero ---------- */
+
+.hero-kicker {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin: 0 0 30px 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+.kicker-live {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex: none;
+}
+.kicker-strong { color: var(--accent); }
+.kicker-rest { color: var(--ink-dim); }
+
+/* The one word the whole product turns on, set in the machine face. */
+.hero-copy h1 em {
+    font-style: normal;
+    font-family: var(--font-mono);
+    color: var(--accent);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.hero-micro {
+    display: flex;
+    gap: 26px;
+    flex-wrap: wrap;
+    margin: 22px 0 0 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-dim);
+}
+.hero-scroll {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 56px 0 0 0;
+    padding-top: 18px;
+    border-top: 1px solid var(--hairline);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+}
+
+/* Blueprint rules: the drafting lines the design runs behind the hero. */
+.blueprint { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.bp { position: absolute; border: 1px solid var(--edge-soft); }
+.bp-1 { left: -4%; top: 8%; width: 12%; height: 26%; border-right: 0; border-top: 0; }
+.bp-2 { left: 22%; top: -6%; width: 18%; height: 22%; border-left: 0; border-bottom: 0; }
+.bp-3 { right: 8%; top: 54%; width: 22%; height: 30%; border-right: 0; border-bottom: 0; }
+.bp-4 { left: 38%; bottom: -8%; width: 14%; height: 24%; border-left: 0; border-top: 0; }
+
+/* ---------- Modes as an editorial list ---------- */
+
+.modes-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 40px;
+}
+.modes-head h2 { margin: 0; max-width: 16ch; }
+.modes-note {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-dim);
+}
+.mode-list { list-style: none; margin: 0; padding: 0; }
+/* Index, title, body, affordance. The title column is fixed so the five
+   rows read as one list rather than five independent blocks. */
+.mode-row {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 320px) minmax(0, 1fr) 20px;
+    gap: 28px;
+    align-items: start;
+    padding: 30px 0;
+    border-top: 1px solid var(--hairline);
+    transition: border-color 0.45s var(--ease-out-expo);
+}
+.mode-row:last-child { border-bottom: 1px solid var(--hairline); }
+.mode-row:hover { border-top-color: var(--accent); }
+.mode-idx {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+    padding-top: 9px;
+}
+.mode-row h3 {
+    margin: 0;
+    font-size: clamp(22px, 2.3vw, 31px);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+}
+.mode-body p { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--ink-muted); }
+.mode-micro {
+    margin-top: 12px !important;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-dim) !important;
+}
+.mode-arrow {
+    justify-self: end;
+    padding-top: 6px;
+    color: var(--ink-faint);
+    transition: color 0.4s var(--ease-out-expo), transform 0.4s var(--ease-out-expo);
+}
+.mode-row:hover .mode-arrow { color: var(--accent); transform: translate(2px, -2px); }
+
+.persona-chips {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 14px 0 0 0;
+    padding: 0;
+}
+.persona-chips li {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 5px 10px;
+    color: var(--ink-dim);
+    background: var(--surface-raised);
+    border: 1px solid var(--edge-soft);
+}
+
+/* ---------- Pinned panel field ---------- */
+
+.pin-meta,
+.pin-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-dim);
+}
+.pin-meta { margin-bottom: 12px; }
+.pin-field {
+    position: relative;
+    height: calc(100% - 62px);
+    border: 1px solid var(--edge-soft);
+    background:
+        linear-gradient(var(--scanline) 1px, transparent 1px) 0 0 / 30px 30px,
+        linear-gradient(90deg, var(--scanline) 1px, transparent 1px) 0 0 / 30px 30px,
+        var(--surface-sunken);
+    overflow: hidden;
+}
+.pin-cluster {
+    position: absolute;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    opacity: 0.5;
+}
+.pin-cluster-a { left: 12%; top: 10%; }
+.pin-cluster-b { left: 46%; top: 10%; }
+.pin-cluster-c { right: 10%; top: 10%; }
+
+.pin-chips { list-style: none; margin: 0; padding: 0; }
+/* Each chip is placed on the field and tilted: the design shows the files
+   scattered before the tree is built. */
+.pin-chips li {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    transform: rotate(var(--r));
+    padding: 6px 11px;
+    background: var(--surface-raised);
+    border: 1px solid var(--edge-bright);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-body);
+    white-space: nowrap;
+}
+.pin-foot { position: relative; height: 18px; margin-top: 12px; }
+.pin-foot .pin-line { position: absolute; inset: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+    @supports ((animation-timeline: view()) and (animation-range: contain)) {
+        /* The chips settle: they arrive scattered and straighten as the
+           parse completes. Transform and opacity only. */
+        .pin-chips li {
+            animation: rp-settle 1s linear both;
+            animation-timeline: --pin;
+            animation-range: contain calc(20% + var(--s) * 3%) contain calc(48% + var(--s) * 3%);
+        }
+        .pin-cluster {
+            animation: rp-cluster 1s linear both;
+            animation-timeline: --pin;
+            animation-range: contain 54% contain 70%;
+        }
+    }
+}
+@keyframes rp-settle {
+    from { opacity: 0; transform: rotate(var(--r)) translateY(16px) scale(0.94); }
+    to { opacity: 1; transform: rotate(0deg) translateY(0) scale(1); }
+}
+@keyframes rp-line-swap {
+    0% { opacity: 0; }
+    14%, 86% { opacity: 1; }
+    100% { opacity: 0; }
+}
+@keyframes rp-cluster {
+    from { opacity: 0; }
+    to { opacity: 0.5; }
+}
+
+@media (max-width: 860px) {
+    .nav-links { display: none; }
+    .brand-word { display: none; }
+    .hero-scroll { display: none; }
+    .blueprint { display: none; }
+    .mode-row { grid-template-columns: 28px minmax(0, 1fr); gap: 8px 16px; padding: 24px 0; }
+    .mode-row h3 { grid-column: 2; }
+    .mode-body { grid-column: 2; margin-top: 10px; }
+    .mode-arrow { display: none; }
+    .modes-head { display: block; }
+    .modes-note { margin-top: 10px; }
+}
+
 /* ---------- Pinned walkthrough ---------- */
 
 /* A tall section holding a sticky panel: scrolling through its height
@@ -1183,10 +1448,18 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
             animation-timeline: --pin;
             animation-range: contain 52% contain 64%;
         }
+        /* One status line at a time. Each fades out as the next arrives,
+           because they are stacked in the same box and two opaque lines
+           would simply overprint each other. The last one holds: it is the
+           true end state, and it is what shows with no timeline at all. */
         .pin-line {
-            animation: rp-fade-in 1s linear both;
+            animation: rp-line-swap 1s linear both;
             animation-timeline: --pin;
-            animation-range: contain calc(var(--s) * 30%) contain calc(10% + var(--s) * 30%);
+            animation-range: contain calc(var(--s) * 30%) contain calc(30% + var(--s) * 30%);
+        }
+        .pin-line:last-child {
+            animation-name: rp-fade-in;
+            animation-range: contain 60% contain 72%;
         }
     }
 }

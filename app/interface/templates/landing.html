@@ -61,47 +61,56 @@
     <header class="site-nav">
         <div class="nav-inner">
             <a class="nav-brand" href="/">
-                {% include "_logo.html" %}
-                <span>repo&#8209;pilot</span>
+                <span class="brand-mark">{% include "_logo.html" %}</span>
+                <span class="brand-word">Repo Pilot</span>
             </a>
             <nav class="nav-links" aria-label="Sections">
-                <a href="#how">how it works</a>
-                <a href="#modes">what it does</a>
-                <a href="#proof">real output</a>
+                <a href="#how">How it works</a>
+                <a href="#modes">Modes</a>
+                <a href="#proof">Parsed, not guessed</a>
+                <a href="#hood">Under the hood</a>
             </nav>
-            <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false">
-                <span class="theme-toggle-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" class="icon-sun"><circle cx="12" cy="12" r="4.4"/><path d="M12 2.6v2.4M12 19v2.4M2.6 12h2.4M19 12h2.4M5.3 5.3l1.7 1.7M17 17l1.7 1.7M18.7 5.3L17 7M7 17l-1.7 1.7"/></svg>
-                    <svg viewBox="0 0 24 24" class="icon-moon"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.4 8.4 0 1 0 10.2 10.2z"/></svg>
-                </span>
-                <span class="visually-hidden" data-theme-label>Switch to light theme</span>
-            </button>
-            <a href="/app" class="nav-cta">
-                open repo pilot
-                <span class="cta-icon" aria-hidden="true">&#8599;</span>
-            </a>
+            <div class="nav-end">
+                <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false">
+                    <span class="theme-toggle-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" class="icon-sun"><circle cx="12" cy="12" r="4.4"/><path d="M12 2.6v2.4M12 19v2.4M2.6 12h2.4M19 12h2.4M5.3 5.3l1.7 1.7M17 17l1.7 1.7M18.7 5.3L17 7M7 17l-1.7 1.7"/></svg>
+                        <svg viewBox="0 0 24 24" class="icon-moon"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.4 8.4 0 1 0 10.2 10.2z"/></svg>
+                    </span>
+                    <span class="visually-hidden" data-theme-label>Switch to light theme</span>
+                </button>
+                <a href="/app" class="nav-cta">Open the app <span aria-hidden="true">&#8594;</span></a>
+            </div>
             <div class="nav-progress" aria-hidden="true"></div>
         </div>
     </header>
 
     <main>
         <section class="hero-split">
+            <div class="blueprint" aria-hidden="true">
+                <span class="bp bp-1"></span><span class="bp bp-2"></span>
+                <span class="bp bp-3"></span><span class="bp bp-4"></span>
+            </div>
             <div class="hero-glow" aria-hidden="true"></div>
             <div class="hero-copy">
-                <span class="hero-eyebrow rise rise-1">codebase onboarding agent &middot; open source</span>
-                <h1 class="rise rise-2">Read any codebase<span class="line-soft">from the imports up.</span></h1>
-                <p class="hero-sub rise rise-3">Point Repo Pilot at a GitHub repository. It reads the real structure and gives you cited answers, a reading order, and a diagram drawn from the imports that are actually there.</p>
+                <p class="hero-kicker rise rise-1">
+                    <span class="kicker-live" aria-hidden="true"></span>
+                    <span class="kicker-strong">codebase onboarding agent</span>
+                    <span class="kicker-rest">open source &middot; MIT</span>
+                </p>
+                <h1 class="rise rise-2">Read any codebase from the <em>imports</em> up.</h1>
+                <p class="hero-sub rise rise-3">For the moment you have cloned something large and have no idea where to start. Repo Pilot parses the repository with tree&#8209;sitter, resolves every import to the file it points at, and only then lets a model explain it, with citations checked against the real files.</p>
                 <div class="hero-actions rise rise-4">
-                    <a href="/app" class="cta-btn">
-                        open repo pilot
-                        <span class="cta-icon" aria-hidden="true">&#8599;</span>
-                    </a>
-                    <a href="#how" class="cta-ghost">see how it works</a>
+                    <a href="/app" class="cta-btn">Pilot a repo <span aria-hidden="true">&#8594;</span></a>
+                    <a href="https://github.com/Rameen07304/repo-pilot" class="cta-ghost">Source on GitHub <span aria-hidden="true">&#8599;</span></a>
                 </div>
+                <p class="hero-micro rise rise-4">
+                    <span>No account</span><span>No config</span><span>No plugin</span>
+                </p>
             </div>
             <div class="hero-pilot rise rise-5">
                 <img src="/static/img/pilot.webp?v={{ static_version }}" alt="The Repo Pilot robot at a laptop, surrounded by panels reading analyze repo, code quality, insights and summary." width="1248" height="1248" fetchpriority="high" decoding="async">
             </div>
+            <p class="hero-scroll" aria-hidden="true"><span>Scroll &mdash; watch it parse a repo</span><span>&darr;</span></p>
         </section>
 
         <section class="stats" aria-label="At a glance" data-reveal>
@@ -156,18 +165,32 @@
 
                     {# Decorative: the steps beside it carry the meaning. #}
                     <div class="pin-panel" aria-hidden="true">
-                        <ul class="pin-tree">
-                            <li style="--s: 0"><span class="pin-path">./</span></li>
-                            <li style="--s: 1"><span class="pin-path">app/api/</span><span class="pin-rank">rank 1</span></li>
-                            <li style="--s: 2"><span class="pin-path">app/core/</span><span class="pin-rank">rank 2</span></li>
-                            <li style="--s: 3"><span class="pin-path">app/utils/</span><span class="pin-rank">rank 5</span></li>
-                            <li style="--s: 4"><span class="pin-path">tests/</span><span class="pin-rank">rank 9</span></li>
-                        </ul>
-                        <p class="pin-reject">a model's guess <span>rejected, not in the parse tree</span></p>
-                        <div class="pin-status">
-                            <span class="pin-line" style="--s: 0">archive received &middot; 11 files &middot; parsing</span>
-                            <span class="pin-line" style="--s: 1">imports resolved &middot; 14 edges &middot; nothing inferred</span>
-                            <span class="pin-line" style="--s: 2">ranked by dependents &middot; reading order ready</span>
+                        <div class="pin-meta">
+                            <span>example/fastapi&#8209;service</span>
+                            <span>illustrative &middot; python</span>
+                        </div>
+                        <div class="pin-field">
+                            <span class="pin-cluster pin-cluster-a">app/api</span>
+                            <span class="pin-cluster pin-cluster-b">app/core</span>
+                            <span class="pin-cluster pin-cluster-c">app/services</span>
+                            <ul class="pin-chips">
+                            <li style="--x: 18%; --y: 14%; --r: -4deg; --s: 0">schemas.py</li>
+                            <li style="--x: 42%; --y: 10%; --r: 3deg; --s: 1">main.py</li>
+                            <li style="--x: 73%; --y: 16%; --r: -5deg; --s: 2">models.py</li>
+                            <li style="--x: 8%; --y: 27%; --r: 2deg; --s: 3">config.py</li>
+                            <li style="--x: 60%; --y: 33%; --r: -3deg; --s: 4">db.py</li>
+                            <li style="--x: 22%; --y: 41%; --r: 4deg; --s: 5">cache.py</li>
+                            <li style="--x: 44%; --y: 55%; --r: -6deg; --s: 6">test_auth.py</li>
+                            <li style="--x: 66%; --y: 57%; --r: 3deg; --s: 7">deps.py</li>
+                            <li style="--x: 10%; --y: 66%; --r: -2deg; --s: 8">routes.py</li>
+                            <li style="--x: 38%; --y: 72%; --r: 2deg; --s: 9">auth.py</li>
+                            <li style="--x: 64%; --y: 74%; --r: -4deg; --s: 10">hashing.py</li>
+                            </ul>
+                        </div>
+                        <div class="pin-foot">
+                            <span class="pin-line" style="--s: 0">&darr; archive received &middot; 11 files &middot; parsing</span>
+                            <span class="pin-line" style="--s: 1">&check; parsed with tree&#8209;sitter &middot; tree built from folders</span>
+                            <span class="pin-line" style="--s: 2">&check; ranked by dependents &middot; reading order ready</span>
                         </div>
                     </div>
                 </div>
@@ -175,48 +198,62 @@
         </section>
 
         <section class="modes" id="modes" aria-labelledby="modes-title">
-            <div class="section-head" data-reveal>
-                <span class="section-tag">five ways in</span>
+            <div class="modes-head" data-reveal>
                 <h2 id="modes-title">One parse. Five ways in.</h2>
-                <p>Every mode reads the same parsed structure. Nothing is re-derived, and nothing is invented.</p>
+                <p class="modes-note">every mode reads the same parsed structure</p>
             </div>
-            <ul class="mode-grid" data-reveal>
-                <li class="mode-cell mode-cell-wide">
-                    <div class="mode-top">
-                        <span class="mode-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-learn"/></svg></span>
-                        <h3>Learn this codebase</h3>
+            <ol class="mode-list">
+                <li class="mode-row" data-reveal style="--i: 0">
+                    <span class="mode-idx">01</span>
+                    <h3>Learn this codebase</h3>
+                    <div class="mode-body">
+                        <p>Ranks every file by how much the rest of the repository depends on it, then gives you a reading order and says why.</p>
+                        <p class="mode-micro">&rarr; ranked reading order, with reasons</p>
                     </div>
-                    <p>Ranks every file by how much the rest of the repository leans on it, then lays out what to read first and why. For the moment you have cloned something and have no idea where to start.</p>
+                    <span class="mode-arrow" aria-hidden="true">&#8599;</span>
                 </li>
-                <li class="mode-cell">
-                    <div class="mode-top">
-                        <span class="mode-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ask"/></svg></span>
-                        <h3>Ask a question</h3>
+                <li class="mode-row" data-reveal style="--i: 1">
+                    <span class="mode-idx">02</span>
+                    <h3>Ask a question</h3>
+                    <div class="mode-body">
+                        <p>Answers carry clickable file and line citations. Follow up with "it" and "that". You choose who is reading.</p>
+                        <ul class="persona-chips">
+                            <li>new developer</li>
+                            <li>senior engineer</li>
+                            <li>product manager</li>
+                            <li>idea hunter</li>
+                        </ul>
                     </div>
-                    <p>Answers carry file and line citations you can open. Ask follow&#8209;ups with "it" and "that"; pick whether the answer is written for a new developer, a senior engineer, a product manager, or someone hunting for ideas.</p>
+                    <span class="mode-arrow" aria-hidden="true">&#8599;</span>
                 </li>
-                <li class="mode-cell">
-                    <div class="mode-top">
-                        <span class="mode-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dig"/></svg></span>
-                        <h3>Deep investigation</h3>
+                <li class="mode-row" data-reveal style="--i: 2">
+                    <span class="mode-idx">03</span>
+                    <h3>Deep investigation</h3>
+                    <div class="mode-body">
+                        <p>For questions one search cannot answer. It runs several rounds, decides what to look for next from what it just found, and streams the trail live.</p>
+                        <p class="mode-micro">search &rarr; read &rarr; decide &rarr; search again</p>
                     </div>
-                    <p>For questions one search cannot answer. It runs several rounds, deciding what to look for next from what it just found, and shows you the trail as it goes.</p>
+                    <span class="mode-arrow" aria-hidden="true">&#8599;</span>
                 </li>
-                <li class="mode-cell">
-                    <div class="mode-top">
-                        <span class="mode-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-graph"/></svg></span>
-                        <h3>Architecture diagram</h3>
+                <li class="mode-row" data-reveal style="--i: 3">
+                    <span class="mode-idx">04</span>
+                    <h3>Architecture diagram</h3>
+                    <div class="mode-body">
+                        <p>The import graph drawn as a folder tree. Click any file to read its source, ask about it, or see what breaks if you change it.</p>
+                        <p class="mode-micro">read &middot; ask &middot; impact</p>
                     </div>
-                    <p>The import graph as a folder tree. Click any file to read its source, ask about it, or see what would break if you changed it.</p>
+                    <span class="mode-arrow" aria-hidden="true">&#8599;</span>
                 </li>
-                <li class="mode-cell">
-                    <div class="mode-top">
-                        <span class="mode-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pulse"/></svg></span>
-                        <h3>Code health</h3>
+                <li class="mode-row" data-reveal style="--i: 4">
+                    <span class="mode-idx">05</span>
+                    <h3>Code health</h3>
+                    <div class="mode-body">
+                        <p>Circular imports, modules everything depends on, code no test covers. Six checks computed from the parsed structure with no model involved, so it is instant and identical every run.</p>
+                        <p class="mode-micro">six checks &middot; deterministic &middot; downloadable report</p>
                     </div>
-                    <p>Circular imports, modules everything depends on, code no test covers. Computed from the parsed structure with no model involved, so it is instant and identical every run. Downloadable as a report.</p>
+                    <span class="mode-arrow" aria-hidden="true">&#8599;</span>
                 </li>
-            </ul>
+            </ol>
         </section>
 
         <section class="proof" id="proof" aria-labelledby="proof-title">
@@ -238,7 +275,7 @@
             </figure>
         </section>
 
-        <section class="facts" aria-labelledby="facts-title">
+        <section class="facts" id="hood" aria-labelledby="facts-title">
             <div class="section-head" data-reveal>
                 <span class="section-tag">under the hood</span>
                 <h2 id="facts-title">The numbers, all of them true.</h2>
