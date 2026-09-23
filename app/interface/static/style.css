@@ -1,30 +1,227 @@
 :root {
-    --base: #0B0E0C;
-    --surface: #121613;
-    --surface-alt: #0F1310;
-    --hairline: #23302A;
-    --accent: #6EE7A8;
-    --accent-hover: #9CF0C4;
-    --accent-ink: #0B0E0C;
-    --ink: #F2F6F3;
-    --ink-body: #C7D3CC;
-    --ink-muted: #9AAAA1;
-    --ink-dim: #7C8B82;
-    --ink-faint: #72827A; /* ~4.7:1 on --base: the floor for 12px text, so keep this the darkest gray */
-    --success: #6EE7A8;
-    --warn: #E6C25A;
-    --error: #FF6B6B;
+    /* Follows the operating system by default. Never pinned to one value
+       here: the toggle pins it by adding a class, so with scripting off the
+       page still honours the reader's system setting. */
+    color-scheme: light dark;
 
-    /* The middle tone the palette was missing. Base carries ~70% of the
-       page, these raised surfaces ~30%, and --accent stays near 10% so it
-       still reads as an accent instead of decoration. */
-    --surface-raised: #171E19;
-    --surface-sunken: #0D120F;
-    --edge-soft: rgba(255, 255, 255, 0.07);
-    --edge-bright: rgba(255, 255, 255, 0.13);
+    /* Both palettes are held as raw pairs and the active one is assigned
+       below. This is deliberately not light-dark(): Chromium does not
+       re-resolve light-dark() inside a custom property when color-scheme
+       changes at runtime, so clicking the toggle produced a dark page that
+       kept its white cards and white nav bar. Swapping the custom property
+       values invalidates everything that uses them, which is what the
+       toggle needs. Base carries ~70% of the page, the raised surfaces
+       ~30%, and --accent stays near 10%. */
+    --base-l: #F6F8FC;
+    --base-d: #0A0D12;
+    --surface-l: #FFFFFF;
+    --surface-d: #121722;
+    --surface-alt-l: #F1F5FA;
+    --surface-alt-d: #0F141D;
+    --surface-raised-l: #FFFFFF;
+    --surface-raised-d: #161D29;
+    --surface-sunken-l: #EBF1F8;
+    --surface-sunken-d: #0C1119;
+    --hairline-l: #D5DEEA;
+    --hairline-d: #222C3C;
+    --accent-l: #0B5FD0;
+    --accent-d: #5AA9FF;
+    --accent-hover-l: #0A52B5;
+    --accent-hover-d: #8CC3FF;
+    --accent-ink-l: #FFFFFF;
+    --accent-ink-d: #05203F;
+    --ink-l: #0B1420;
+    --ink-d: #F1F5FA;
+    --ink-body-l: #35425A;
+    --ink-body-d: #C6D1E0;
+    --ink-muted-l: #55637B;
+    --ink-muted-d: #9DAABD;
+    --ink-dim-l: #5E6B82;
+    --ink-dim-d: #7E8EA4;
+    --ink-faint-l: #616E7D;
+    --ink-faint-d: #74849A;
+    --success-l: #0B7A43;
+    --success-d: #5CD69A;
+    --warn-l: #8A6200;
+    --warn-d: #E6C25A;
+    --error-l: #C0392B;
+    --error-d: #FF6B6B;
+    --edge-soft-l: rgba(11, 20, 32, 0.10);
+    --edge-soft-d: rgba(255, 255, 255, 0.07);
+    --edge-bright-l: rgba(11, 20, 32, 0.17);
+    --edge-bright-d: rgba(255, 255, 255, 0.13);
+    --nav-veil-l: rgba(246, 248, 252, 0.88);
+    --nav-veil-d: rgba(10, 13, 18, 0.88);
+    --nav-veil-stuck-l: rgba(246, 248, 252, 0.96);
+    --nav-veil-stuck-d: rgba(10, 13, 18, 0.94);
+    --elevation-l: rgba(11, 20, 32, 0.10);
+    --elevation-d: rgba(0, 0, 0, 0.5);
+    --elevation-strong-l: rgba(11, 20, 32, 0.16);
+    --elevation-strong-d: rgba(0, 0, 0, 0.6);
+    --sheen-l: rgba(255, 255, 255, 0.9);
+    --sheen-d: rgba(255, 255, 255, 0.08);
+    --sheen-strong-l: rgba(255, 255, 255, 0.30);
+    --sheen-strong-d: rgba(255, 255, 255, 0.28);
+    --on-accent-veil-l: rgba(255, 255, 255, 0.20);
+    --on-accent-veil-d: rgba(5, 32, 63, 0.16);
+    --on-accent-veil-strong-l: rgba(255, 255, 255, 0.32);
+    --on-accent-veil-strong-d: rgba(5, 32, 63, 0.26);
+    --wash-l: rgba(11, 95, 208, 0.07);
+    --wash-d: rgba(90, 169, 255, 0.08);
+    --glow-l: rgba(11, 95, 208, 0.10);
+    --glow-d: rgba(90, 169, 255, 0.13);
+    --scanline-l: rgba(11, 20, 32, 0.022);
+    --scanline-d: rgba(255, 255, 255, 0.02);
+    --graph-cluster-l: rgba(11, 20, 32, 0.03);
+    --graph-cluster-d: rgba(255, 255, 255, 0.022);
+    --mark-shell-l: #1B2634;
+    --mark-shell-d: #EDF1F6;
+    --mark-visor-l: #EDF1F6;
+    --mark-visor-d: #131A24;
+    --mark-stem-l: #7A8798;
+    --mark-stem-d: #55616F;
+
+    /* Light is the written default. */
+    --base: var(--base-l);
+    --surface: var(--surface-l);
+    --surface-alt: var(--surface-alt-l);
+    --surface-raised: var(--surface-raised-l);
+    --surface-sunken: var(--surface-sunken-l);
+    --hairline: var(--hairline-l);
+    --accent: var(--accent-l);
+    --accent-hover: var(--accent-hover-l);
+    --accent-ink: var(--accent-ink-l);
+    --ink: var(--ink-l);
+    --ink-body: var(--ink-body-l);
+    --ink-muted: var(--ink-muted-l);
+    --ink-dim: var(--ink-dim-l);
+    --ink-faint: var(--ink-faint-l);
+    --success: var(--success-l);
+    --warn: var(--warn-l);
+    --error: var(--error-l);
+    --edge-soft: var(--edge-soft-l);
+    --edge-bright: var(--edge-bright-l);
+    --nav-veil: var(--nav-veil-l);
+    --nav-veil-stuck: var(--nav-veil-stuck-l);
+    --elevation: var(--elevation-l);
+    --elevation-strong: var(--elevation-strong-l);
+    --sheen: var(--sheen-l);
+    --sheen-strong: var(--sheen-strong-l);
+    --on-accent-veil: var(--on-accent-veil-l);
+    --on-accent-veil-strong: var(--on-accent-veil-strong-l);
+    --wash: var(--wash-l);
+    --glow: var(--glow-l);
+    --scanline: var(--scanline-l);
+    --graph-cluster: var(--graph-cluster-l);
+    --mark-shell: var(--mark-shell-l);
+    --mark-visor: var(--mark-visor-l);
+    --mark-stem: var(--mark-stem-l);
+
+    /* Display sans for prose and headlines, mono kept for code, labels and
+       figures. Monospace cannot carry a 5rem headline: it runs so wide that
+       every line breaks early, which is what kept the old type timid. */
+    --font-sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
     /* Weighted easing: motion with mass, never linear or ease-in-out. */
     --ease-out-expo: cubic-bezier(0.32, 0.72, 0, 1);
+
+    accent-color: var(--accent);
+}
+
+/* System preference, unless the reader has pinned light. */
+@media (prefers-color-scheme: dark) {
+    :root:not(.scheme-light) {
+        --base: var(--base-d);
+        --surface: var(--surface-d);
+        --surface-alt: var(--surface-alt-d);
+        --surface-raised: var(--surface-raised-d);
+        --surface-sunken: var(--surface-sunken-d);
+        --hairline: var(--hairline-d);
+        --accent: var(--accent-d);
+        --accent-hover: var(--accent-hover-d);
+        --accent-ink: var(--accent-ink-d);
+        --ink: var(--ink-d);
+        --ink-body: var(--ink-body-d);
+        --ink-muted: var(--ink-muted-d);
+        --ink-dim: var(--ink-dim-d);
+        --ink-faint: var(--ink-faint-d);
+        --success: var(--success-d);
+        --warn: var(--warn-d);
+        --error: var(--error-d);
+        --edge-soft: var(--edge-soft-d);
+        --edge-bright: var(--edge-bright-d);
+        --nav-veil: var(--nav-veil-d);
+        --nav-veil-stuck: var(--nav-veil-stuck-d);
+        --elevation: var(--elevation-d);
+        --elevation-strong: var(--elevation-strong-d);
+        --sheen: var(--sheen-d);
+        --sheen-strong: var(--sheen-strong-d);
+        --on-accent-veil: var(--on-accent-veil-d);
+        --on-accent-veil-strong: var(--on-accent-veil-strong-d);
+        --wash: var(--wash-d);
+        --glow: var(--glow-d);
+        --scanline: var(--scanline-d);
+        --graph-cluster: var(--graph-cluster-d);
+        --mark-shell: var(--mark-shell-d);
+        --mark-visor: var(--mark-visor-d);
+        --mark-stem: var(--mark-stem-d);
+    }
+}
+
+/* Transitions are suppressed for the frame in which the scheme changes.
+   Two reasons, one cosmetic and one a hard requirement: without it every
+   surface cross-fades for half a second, and more importantly a running
+   background-color transition pins its computed value when the underlying
+   custom property is swapped, so the cards and the nav bar kept their light
+   colours on a dark page. Killing the transition releases them. */
+.theme-switching,
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+    transition: none !important;
+}
+
+/* The toggle pins a scheme by class, and landing.js updates the matching
+   <meta name="color-scheme"> so the browser paints the right canvas before
+   this stylesheet has even arrived. */
+:root.scheme-light { color-scheme: light; }
+:root.scheme-dark {
+    color-scheme: dark;
+    --base: var(--base-d);
+    --surface: var(--surface-d);
+    --surface-alt: var(--surface-alt-d);
+    --surface-raised: var(--surface-raised-d);
+    --surface-sunken: var(--surface-sunken-d);
+    --hairline: var(--hairline-d);
+    --accent: var(--accent-d);
+    --accent-hover: var(--accent-hover-d);
+    --accent-ink: var(--accent-ink-d);
+    --ink: var(--ink-d);
+    --ink-body: var(--ink-body-d);
+    --ink-muted: var(--ink-muted-d);
+    --ink-dim: var(--ink-dim-d);
+    --ink-faint: var(--ink-faint-d);
+    --success: var(--success-d);
+    --warn: var(--warn-d);
+    --error: var(--error-d);
+    --edge-soft: var(--edge-soft-d);
+    --edge-bright: var(--edge-bright-d);
+    --nav-veil: var(--nav-veil-d);
+    --nav-veil-stuck: var(--nav-veil-stuck-d);
+    --elevation: var(--elevation-d);
+    --elevation-strong: var(--elevation-strong-d);
+    --sheen: var(--sheen-d);
+    --sheen-strong: var(--sheen-strong-d);
+    --on-accent-veil: var(--on-accent-veil-d);
+    --on-accent-veil-strong: var(--on-accent-veil-strong-d);
+    --wash: var(--wash-d);
+    --glow: var(--glow-d);
+    --scanline: var(--scanline-d);
+    --graph-cluster: var(--graph-cluster-d);
+    --mark-shell: var(--mark-shell-d);
+    --mark-visor: var(--mark-visor-d);
+    --mark-stem: var(--mark-stem-d);
 }
 
 * { box-sizing: border-box; }
@@ -34,12 +231,16 @@ html { scroll-behavior: smooth; }
 body {
     background: var(--base);
     color: var(--ink-body);
-    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-sans);
     margin: 0;
     -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3 { color: var(--ink); }
+
+/* The app shell stays mono throughout: it is a terminal, and the identity
+   belongs there. Only the marketing page takes the display sans. */
+.app-body { font-family: var(--font-mono); }
 p { text-wrap: pretty; }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -76,16 +277,17 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 
 .landing {
     background:
-        radial-gradient(ellipse 60% 40% at 15% 8%, rgba(110, 231, 168, 0.06), transparent 70%),
-        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.02) 0px, rgba(255, 255, 255, 0.02) 1px, transparent 1px, transparent 3px),
+        radial-gradient(ellipse 60% 40% at 15% 8%, var(--wash), transparent 70%),
+        repeating-linear-gradient(0deg, var(--scanline) 0px, var(--scanline) 1px, transparent 1px, transparent 3px),
         var(--base);
     min-height: 100dvh;
 }
-.landing main { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+.landing main { max-width: 1280px; margin: 0 auto; padding: 0 clamp(20px, 4vw, 48px); }
 .landing h2 {
-    font-size: 26px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    font-size: clamp(30px, 4vw, 52px);
+    font-weight: 600;
+    line-height: 1.02;
+    letter-spacing: -0.035em;
     margin: 0 0 20px 0;
     text-wrap: balance;
 }
@@ -99,11 +301,12 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
     gap: 64px;
     align-items: center;
-    padding: 104px 0 112px;
+    padding: clamp(96px, 11vw, 148px) 0 clamp(88px, 10vw, 136px);
 }
 
 .hero-eyebrow {
     display: inline-flex;
+    font-family: var(--font-mono);
     align-items: center;
     gap: 9px;
     padding: 6px 14px 6px 11px;
@@ -122,12 +325,14 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 }
 
 .hero-copy h1 {
-    /* Monospace runs wide: this ceiling keeps the headline to two lines. */
-    font-size: clamp(28px, 3.5vw, 41px);
-    font-weight: 700;
-    line-height: 1.1;
-    letter-spacing: -0.035em;
-    margin: 0 0 22px 0;
+    /* Ceiling set against the width of the hero's left column, not the
+       viewport: 84px overflowed it and broke the headline into four lines. */
+    font-size: clamp(36px, 4.6vw, 64px);
+    font-weight: 600;
+    line-height: 1.0;
+    letter-spacing: -0.045em;
+    margin: 0 0 26px 0;
+    text-wrap: balance;
 }
 /* Hierarchy from weight and tone, not from a second colour. */
 .hero-copy h1 .line-soft {
@@ -137,11 +342,11 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 }
 
 .hero-sub {
-    font-size: 16px;
-    line-height: 1.75;
+    font-size: clamp(15px, 1.15vw, 17.5px);
+    line-height: 1.65;
     color: var(--ink-muted);
-    max-width: 44ch;
-    margin: 0 0 34px 0;
+    max-width: 50ch;
+    margin: 0 0 38px 0;
 }
 
 /* The single strongest accent moment on the page: one filled block,
@@ -157,10 +362,10 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     font-size: 14px;
     padding: 14px 16px 14px 22px;
     border: 1px solid var(--accent);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 10px 24px rgba(0, 0, 0, 0.45);
-    transition: background 0.5s var(--ease-out-expo), box-shadow 0.5s var(--ease-out-expo), transform 0.2s var(--ease-out-expo);
+    box-shadow: inset 0 1px 0 var(--sheen-strong), 0 10px 24px var(--elevation);
+    transition: background-color 0.5s var(--ease-out-expo), box-shadow 0.5s var(--ease-out-expo), transform 0.2s var(--ease-out-expo);
 }
-.cta-btn:hover { background: var(--accent-hover); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.34), 0 14px 30px rgba(0, 0, 0, 0.55); }
+.cta-btn:hover { background: var(--accent-hover); box-shadow: inset 0 1px 0 var(--sheen-strong), 0 14px 30px var(--elevation-strong); }
 .cta-btn:active { transform: translateY(1px); }
 /* The arrow is nested in its own field rather than floating beside the text. */
 .cta-icon {
@@ -169,15 +374,19 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     justify-content: center;
     width: 26px;
     height: 26px;
-    background: rgba(11, 14, 12, 0.14);
+    background: var(--on-accent-veil);
     font-size: 13px;
-    transition: transform 0.5s var(--ease-out-expo), background 0.5s var(--ease-out-expo);
+    transition: transform 0.5s var(--ease-out-expo), background-color 0.5s var(--ease-out-expo);
 }
-.cta-btn:hover .cta-icon { transform: translate(2px, -2px); background: rgba(11, 14, 12, 0.22); }
+.cta-btn:hover .cta-icon { transform: translate(2px, -2px); background: var(--on-accent-veil-strong); }
 
 /* The mascot carries its own near-black field. Rather than hope it matches
    the page exactly, the edges are faded out with a mask so the illustration
    dissolves into the background instead of sitting in a visible square. */
+/* The art shipped with a solid near-black field baked in, which on a light
+   page was a heavy dark disc. The field has been flood-filled out from the
+   border to real transparency, so the mascot now sits on whatever colour
+   the page is and needs neither a mask nor a stage behind it. */
 .hero-pilot {
     min-width: 0;
     display: flex;
@@ -185,11 +394,9 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 }
 .hero-pilot img {
     width: 100%;
-    max-width: 520px;
+    max-width: 540px;
     height: auto;
     display: block;
-    -webkit-mask-image: radial-gradient(circle at 50% 48%, #000 56%, transparent 78%);
-    mask-image: radial-gradient(circle at 50% 48%, #000 56%, transparent 78%);
 }
 
 /* The mark, used in the header and repeated as the favicon. */
@@ -199,9 +406,6 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     display: block;
     flex: none;
     --mark-accent: var(--accent);
-    --mark-shell: #F2EFE6;
-    --mark-visor: #15191B;
-    --mark-stem: #4A5550;
 }
 
 /* Double shell: outer tray, inner plate, concentric inset. Gives the
@@ -216,9 +420,10 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     padding: 22px 20px 16px;
     background: var(--surface-raised);
     border: 1px solid var(--edge-bright);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 0 var(--sheen);
 }
 .figure-rule {
+    font-family: var(--font-mono);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -243,7 +448,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
    so it is themed here and follows the palette. Only the nodes that carry
    meaning take the accent; the containers stay in the middle tone. */
 .repo-graph { width: 100%; height: auto; display: block; }
-.repo-graph .cluster rect { fill: rgba(255, 255, 255, 0.022); stroke: var(--edge-soft); stroke-width: 1px; }
+.repo-graph .cluster rect { fill: var(--graph-cluster); stroke: var(--edge-soft); stroke-width: 1px; }
 .repo-graph .node rect { fill: var(--surface-sunken); stroke: var(--edge-bright); stroke-width: 1px; }
 .repo-graph .flowchart-link { stroke: var(--accent); stroke-width: 1.5px; fill: none; opacity: 0.85; }
 .repo-graph .marker { fill: var(--accent); stroke: var(--accent); }
@@ -330,7 +535,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 .cta-ghost:hover { color: var(--ink); border-bottom-color: var(--ink-dim); }
 
 /* How it works: three steps, numbered, read as a sequence rather than a grid. */
-.how { padding: 72px 0 64px; border-top: 1px solid var(--hairline); }
+.how { padding: clamp(88px, 11vw, 150px) 0 clamp(64px, 7vw, 96px); border-top: 1px solid var(--hairline); }
 .step-list {
     list-style: none;
     margin: 0;
@@ -346,11 +551,12 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     align-items: flex-start;
     background: var(--surface-raised);
     padding: 26px 26px;
-    transition: background 0.45s var(--ease-out-expo);
+    transition: background-color 0.45s var(--ease-out-expo);
 }
 .step:hover { background: var(--surface); }
 .step-num {
     flex: none;
+    font-family: var(--font-mono);
     font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.1em;
@@ -381,7 +587,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 .claim-body p { margin: 0; font-size: 14px; line-height: 1.75; color: var(--ink-body); }
 
 /* Modes: five items, five cells, first one wider. */
-.modes { padding: 56px 0; border-top: 1px solid var(--hairline); }
+.modes { padding: clamp(88px, 11vw, 150px) 0; border-top: 1px solid var(--hairline); }
 .mode-grid {
     list-style: none;
     margin: 0;
@@ -393,11 +599,16 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     border: 1px solid var(--hairline);
 }
 /* Raised, so the grid carries the same middle tone as the hero figure
-   instead of dropping back to the page colour one section later. */
+   instead of dropping back to the page colour one section later.
+
+   background-color, not the background shorthand: transitioning the
+   shorthand pins the computed value, so when the theme toggle swapped the
+   custom property these cells kept their old colour and the dark page came
+   up with white cards. The longhand updates. */
 .mode-cell {
     background: var(--surface-raised);
     padding: 22px 24px;
-    transition: background 0.45s var(--ease-out-expo);
+    transition: background-color 0.45s var(--ease-out-expo);
 }
 .mode-cell:hover { background: var(--surface); }
 .mode-cell-wide { grid-column: 1 / -1; }
@@ -412,7 +623,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 .mode-cell p { margin: 0; font-size: 13px; line-height: 1.7; color: var(--ink-dim); }
 
 /* Facts: definition pairs, no hairline under every row. */
-.facts { padding: 56px 0; border-top: 1px solid var(--hairline); }
+.facts { padding: clamp(88px, 11vw, 150px) 0; border-top: 1px solid var(--hairline); }
 .fact-list {
     margin: 0;
     display: grid;
@@ -471,9 +682,9 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     gap: 28px;
     /* Full-bleed background, content still aligned to the page measure. */
     padding: 13px max(24px, (100% - 1180px) / 2);
-    background: rgba(11, 14, 12, 0.88);
+    background: var(--nav-veil);
     border-bottom: 1px solid var(--hairline);
-    transition: background 0.4s var(--ease-out-expo), box-shadow 0.4s var(--ease-out-expo);
+    transition: background-color 0.4s var(--ease-out-expo), box-shadow 0.4s var(--ease-out-expo);
 }
 /* Blur only on this fixed-position element, never on scrolling content. */
 @supports (backdrop-filter: blur(4px)) {
@@ -483,8 +694,8 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
    where scroll-state queries exist it gains depth once it is stuck. */
 @container sitenav scroll-state(stuck: top) {
     .nav-inner {
-        background: rgba(11, 14, 12, 0.94);
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+        background: var(--nav-veil-stuck);
+        box-shadow: 0 12px 30px var(--elevation);
     }
 }
 .nav-brand {
@@ -506,6 +717,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     scroll-target-group: auto;
 }
 .nav-links a {
+    font-family: var(--font-mono);
     color: var(--ink-dim);
     text-decoration: none;
     font-size: 13px;
@@ -533,18 +745,79 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     padding: 9px 10px 9px 16px;
     border: 1px solid var(--hairline);
     background: var(--surface-raised);
-    transition: border-color 0.4s var(--ease-out-expo), background 0.4s var(--ease-out-expo);
+    transition: border-color 0.4s var(--ease-out-expo), background-color 0.4s var(--ease-out-expo);
 }
 .nav-cta:hover { border-color: var(--accent); background: var(--surface); }
 .nav-cta .cta-icon {
     width: 22px;
     height: 22px;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--edge-soft);
     color: var(--accent);
 }
 
 /* Anchor targets clear the sticky bar instead of landing under it. */
 .landing section[id] { scroll-margin-top: 78px; }
+
+
+/* ---------- Theme toggle ---------- */
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    cursor: pointer;
+    color: var(--ink-muted);
+    background: var(--surface-raised);
+    border: 1px solid var(--hairline);
+    font: inherit;
+    transition: color 0.4s var(--ease-out-expo), border-color 0.4s var(--ease-out-expo);
+}
+.theme-toggle:hover { color: var(--ink); border-color: var(--accent); }
+.theme-toggle svg {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.theme-toggle-icon { display: inline-flex; }
+/* The button shows the scheme it switches TO: a sun while the page is
+   dark, a moon while it is light. Four cases, because the page is dark
+   either by system setting or by being pinned. */
+.icon-sun { display: none; }
+.icon-moon { display: block; }
+@media (prefers-color-scheme: dark) {
+    :root:not(.scheme-light) .icon-sun { display: block; }
+    :root:not(.scheme-light) .icon-moon { display: none; }
+}
+:root.scheme-dark .icon-sun { display: block; }
+:root.scheme-dark .icon-moon { display: none; }
+:root.scheme-light .icon-sun { display: none; }
+:root.scheme-light .icon-moon { display: block; }
+
+/* The mascot art is drawn in the original mint, whose dominant hue measures
+   130deg. 90deg carries it to ~212deg, which is the accent's own hue, so the
+   robot and the interface end up the same blue. The cream body is close
+   enough to neutral that it barely moves. Measured, not guessed: 62deg had
+   it landing on cyan. */
+.hero-pilot img { filter: hue-rotate(90deg); }
 
 /* ---------- Landing: ambient hero light ---------- */
 
@@ -559,7 +832,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     right: -18%;
     width: min(620px, 80%);
     aspect-ratio: 1;
-    background: radial-gradient(circle, rgba(110, 231, 168, 0.10), transparent 66%);
+    background: radial-gradient(circle, var(--glow), transparent 66%);
     pointer-events: none;
     z-index: 0;
 }
@@ -577,12 +850,13 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 .stat {
     background: var(--surface-raised);
     padding: 28px 24px;
-    transition: background 0.45s var(--ease-out-expo);
+    transition: background-color 0.45s var(--ease-out-expo);
 }
 .stat:hover { background: var(--surface); }
 .stat-num {
     display: block;
-    font-size: 34px;
+    font-family: var(--font-mono);
+    font-size: clamp(34px, 3.4vw, 46px);
     font-weight: 700;
     line-height: 1;
     letter-spacing: -0.03em;
@@ -590,6 +864,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 }
 .stat-label {
     display: block;
+    font-family: var(--font-mono);
     margin-top: 9px;
     font-size: 12.5px;
     line-height: 1.6;
@@ -610,6 +885,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 }
 .section-tag {
     grid-column: 1;
+    font-family: var(--font-mono);
     display: flex;
     align-items: center;
     gap: 9px;
@@ -681,7 +957,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     grid-template-columns: 5fr 6fr;
     gap: 54px;
     align-items: center;
-    padding: 76px 0;
+    padding: clamp(88px, 11vw, 150px) 0;
     border-top: 1px solid var(--hairline);
 }
 .proof-copy h2 { margin: 0 0 16px 0; max-width: 18ch; }
@@ -695,7 +971,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     text-align: center;
     background: var(--surface-raised);
     border: 1px solid var(--edge-bright);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 1px 0 var(--sheen);
 }
 .closer-inner h2 { margin: 0 0 10px 0; }
 .closer-inner p { margin: 0 0 26px 0; font-size: 14px; color: var(--ink-muted); }
@@ -777,7 +1053,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     padding: 10px 10px 10px 12px;
     font-weight: 500;
     font-size: 13.5px;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 .sidebar-nav .tab-btn:hover { background: rgba(255, 255, 255, 0.04); color: var(--ink-body); }
 .sidebar-nav .tab-btn.active {
@@ -903,7 +1179,7 @@ button { font-family: inherit; cursor: pointer; }
     border: 1px solid var(--hairline);
     background: transparent;
     color: var(--ink-dim);
-    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
 }
 .cmd-btn::before { content: "[ "; }
 .cmd-btn::after { content: " ]"; }
@@ -1149,7 +1425,7 @@ body.has-fullscreen-diagram { overflow: hidden; }
     cursor: pointer;
     color: var(--ink-muted);
     font-size: 12.5px;
-    transition: background 0.15s ease;
+    transition: background-color 0.15s ease;
 }
 
 .recent-repo-item:hover {
@@ -1710,7 +1986,7 @@ g.node.selected-node circle {
     padding: 9px 10px;
     border: 1px solid transparent;
     cursor: pointer;
-    transition: border-color 0.15s ease, background 0.15s ease;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 .option-card:hover { background: rgba(255, 255, 255, 0.03); }
 .option-card.selected { border-color: var(--accent); background: rgba(110, 231, 168, 0.06); }
