@@ -1219,7 +1219,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 .persona-chips li {
     font-family: var(--font-mono);
     font-size: 12px;
-    padding: 5px 10px;
+    padding: 8px 12px;
     color: var(--ink-dim);
     background: var(--surface-raised);
     border: 1px solid var(--edge-soft);
@@ -1266,7 +1266,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     left: var(--x);
     top: var(--y);
     transform: rotate(var(--r));
-    padding: 6px 11px;
+    padding: 8px 12px;
     background: var(--surface-raised);
     border: 1px solid var(--edge-bright);
     font-family: var(--font-mono);
