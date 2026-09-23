@@ -118,9 +118,14 @@
     --mark-stem: var(--mark-stem-l);
 
     /* Display sans for prose and headlines, mono kept for code, labels and
-       figures. Monospace cannot carry a 5rem headline: it runs so wide that
-       every line breaks early, which is what kept the old type timid. */
-    --font-sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+       figures. Monospace cannot carry a large headline: it runs so wide that
+       every line breaks early, which is what kept the old type timid.
+
+       Archivo rather than Geist: Geist is Vercel's face and the house font
+       of almost every generated developer-tool page, which is the exact
+       look this page is trying not to have. Archivo is a grotesque with
+       tighter apertures and more character at display sizes. */
+    --font-sans: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
     /* Weighted easing: motion with mass, never linear or ease-in-out. */
@@ -309,7 +314,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     font-family: var(--font-mono);
     align-items: center;
     gap: 9px;
-    padding: 6px 14px 6px 11px;
+    padding: 8px 14px 8px 11px;
     margin-bottom: 26px;
     background: var(--surface-raised);
     border: 1px solid var(--edge-soft);
