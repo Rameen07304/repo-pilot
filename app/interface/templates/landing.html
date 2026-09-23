@@ -88,8 +88,8 @@
         <section class="hero-split">
             <div class="hero-glow" aria-hidden="true"></div>
             <div class="hero-copy">
-                <span class="hero-eyebrow rise rise-1">parsed, not guessed</span>
-                <h1 class="rise rise-2">Understand code<span class="line-soft">you did not write.</span></h1>
+                <span class="hero-eyebrow rise rise-1">codebase onboarding agent &middot; open source</span>
+                <h1 class="rise rise-2">Read any codebase<span class="line-soft">from the imports up.</span></h1>
                 <p class="hero-sub rise rise-3">Point Repo Pilot at a GitHub repository. It reads the real structure and gives you cited answers, a reading order, and a diagram drawn from the imports that are actually there.</p>
                 <div class="hero-actions rise rise-4">
                     <a href="/app" class="cta-btn">
@@ -123,42 +123,62 @@
             </div>
         </section>
 
-        <section class="how" id="how" aria-labelledby="how-title">
-            <div class="section-head" data-reveal>
-                <span class="section-tag">the flow</span>
-                <h2 id="how-title">Three steps from clone to clarity</h2>
-                <p>No configuration, no plugin, no account. Paste a URL and read the answer.</p>
+        <section class="pin" id="how" aria-labelledby="pin-title">
+            <div class="pin-stage">
+                <div class="pin-inner">
+                    <div class="pin-copy">
+                        <span class="section-tag">how it works</span>
+                        <h2 id="pin-title">Watch it read a repo.</h2>
+                        <ol class="pin-steps">
+                            <li class="pin-step" style="--s: 0">
+                                <span class="pin-num">01</span>
+                                <div>
+                                    <h3>Give it a repo</h3>
+                                    <p>Paste any public GitHub URL. The whole repository arrives as one archive: three API requests, whatever its size.</p>
+                                </div>
+                            </li>
+                            <li class="pin-step" style="--s: 1">
+                                <span class="pin-num">02</span>
+                                <div>
+                                    <h3>It parses the structure</h3>
+                                    <p>tree&#8209;sitter reads every file and resolves every import to the file it actually points at. If the parser did not find it, it is not there.</p>
+                                </div>
+                            </li>
+                            <li class="pin-step" style="--s: 2">
+                                <span class="pin-num">03</span>
+                                <div>
+                                    <h3>Ask anything</h3>
+                                    <p>Files are ranked by how much of the repository depends on them. You get a reading order, and answers that cite real lines.</p>
+                                </div>
+                            </li>
+                        </ol>
+                    </div>
+
+                    {# Decorative: the steps beside it carry the meaning. #}
+                    <div class="pin-panel" aria-hidden="true">
+                        <ul class="pin-tree">
+                            <li style="--s: 0"><span class="pin-path">./</span></li>
+                            <li style="--s: 1"><span class="pin-path">app/api/</span><span class="pin-rank">rank 1</span></li>
+                            <li style="--s: 2"><span class="pin-path">app/core/</span><span class="pin-rank">rank 2</span></li>
+                            <li style="--s: 3"><span class="pin-path">app/utils/</span><span class="pin-rank">rank 5</span></li>
+                            <li style="--s: 4"><span class="pin-path">tests/</span><span class="pin-rank">rank 9</span></li>
+                        </ul>
+                        <p class="pin-reject">a model's guess <span>rejected, not in the parse tree</span></p>
+                        <div class="pin-status">
+                            <span class="pin-line" style="--s: 0">archive received &middot; 11 files &middot; parsing</span>
+                            <span class="pin-line" style="--s: 1">imports resolved &middot; 14 edges &middot; nothing inferred</span>
+                            <span class="pin-line" style="--s: 2">ranked by dependents &middot; reading order ready</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <ol class="step-list" data-reveal>
-                <li class="step">
-                    <span class="step-num">01</span>
-                    <div class="step-body">
-                        <h3>Give it a repository</h3>
-                        <p>Paste any public GitHub URL. The whole repository arrives in a single archive download, so a large codebase costs the same three requests as a small one.</p>
-                    </div>
-                </li>
-                <li class="step">
-                    <span class="step-num">02</span>
-                    <div class="step-body">
-                        <h3>It parses the structure</h3>
-                        <p>Every file is read with tree&#8209;sitter and every import is resolved to the file it actually points at, across nine languages. Nothing here is inferred by a model.</p>
-                    </div>
-                </li>
-                <li class="step">
-                    <span class="step-num">03</span>
-                    <div class="step-body">
-                        <h3>Ask it anything</h3>
-                        <p>Answers arrive with file and line citations you can open. Follow up with "it" and "that", and pick whether the explanation is written for a new developer, a senior engineer, a product manager, or someone hunting for ideas.</p>
-                    </div>
-                </li>
-            </ol>
         </section>
 
         <section class="modes" id="modes" aria-labelledby="modes-title">
             <div class="section-head" data-reveal>
                 <span class="section-tag">five ways in</span>
-                <h2 id="modes-title">Whatever you came to find out</h2>
-                <p>Each mode answers a different question about a codebase you have never seen before.</p>
+                <h2 id="modes-title">One parse. Five ways in.</h2>
+                <p>Every mode reads the same parsed structure. Nothing is re-derived, and nothing is invented.</p>
             </div>
             <ul class="mode-grid" data-reveal>
                 <li class="mode-cell mode-cell-wide">
@@ -202,7 +222,7 @@
         <section class="proof" id="proof" aria-labelledby="proof-title">
             <div class="proof-copy">
                 <span class="section-tag" data-reveal>the difference</span>
-                <h2 id="proof-title" data-reveal>The structure is parsed, not guessed.</h2>
+                <h2 id="proof-title" data-reveal>The parser decides what exists. The model only explains it.</h2>
                 <p data-reveal>Most tools hand a codebase to a language model and print whatever it says back. A model asked to describe an architecture will invent dependencies that look plausible and are not there.</p>
                 <p data-reveal>Here the graph comes from tree&#8209;sitter and the repository's own imports. The model is given what was found and asked to explain it. It cannot add an edge to the diagram, and it cannot produce a citation: every file and line reference is taken from retrieval and checked against the real file list before it reaches you.</p>
                 <a href="/app" class="cta-ghost" data-reveal>try it on your own repository</a>
@@ -221,7 +241,7 @@
         <section class="facts" aria-labelledby="facts-title">
             <div class="section-head" data-reveal>
                 <span class="section-tag">under the hood</span>
-                <h2 id="facts-title">How it behaves</h2>
+                <h2 id="facts-title">The numbers, all of them true.</h2>
             </div>
             <dl class="fact-list">
                 <div data-reveal style="--i: 0">
@@ -245,8 +265,8 @@
 
         <section class="closer" data-reveal>
             <div class="closer-inner">
-                <h2>Point it at something you have never read.</h2>
-                <p>Free, open source, and it works on any public repository.</p>
+                <h2>Point it at a repo.</h2>
+                <p>Any public GitHub repository. You will know where to start before you have opened a file.</p>
                 <a href="/app" class="cta-btn">
                     open repo pilot
                     <span class="cta-icon" aria-hidden="true">&#8599;</span>

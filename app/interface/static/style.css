@@ -1054,6 +1054,162 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     stroke-linejoin: round;
 }
 
+
+/* ---------- Pinned walkthrough ---------- */
+
+/* A tall section holding a sticky panel: scrolling through its height
+   scrubs the sequence rather than moving the panel. The scrub is a view
+   timeline on the tall section, read over its `contain` range, which is
+   exactly the stretch where the panel fills the viewport. No script. */
+.pin {
+    position: relative;
+    height: 340vh;
+    border-top: 1px solid var(--hairline);
+}
+.pin-stage {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    padding: 84px 0 28px;
+}
+.pin-inner {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    gap: 56px;
+    align-items: center;
+    width: 100%;
+}
+.pin-copy h2 { margin: 0 0 30px 0; }
+.pin-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 20px; }
+.pin-step {
+    display: flex;
+    gap: 14px;
+    align-items: baseline;
+    border-top: 1px solid var(--hairline);
+    padding-top: 14px;
+    /* The resting state is dimmed, so with no scroll timeline the list is
+       still perfectly readable, just evenly lit. */
+    opacity: 0.4;
+}
+.pin-num {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+    flex: none;
+}
+.pin-step h3 { margin: 0 0 6px 0; font-size: 19px; font-weight: 600; letter-spacing: -0.02em; }
+.pin-step p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--ink-muted); }
+
+.pin-panel {
+    position: relative;
+    min-width: 0;
+    height: min(62vh, 440px);
+    padding: 22px;
+    background:
+        linear-gradient(var(--scanline) 1px, transparent 1px) 0 0 / 28px 28px,
+        linear-gradient(90deg, var(--scanline) 1px, transparent 1px) 0 0 / 28px 28px,
+        var(--surface-sunken);
+    border: 1px solid var(--edge-soft);
+    overflow: hidden;
+}
+.pin-tree { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pin-tree li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 9px 12px;
+    background: var(--surface-raised);
+    border: 1px solid var(--edge-soft);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--ink-body);
+}
+.pin-rank { color: var(--accent); font-size: 11.5px; }
+.pin-reject {
+    margin: 16px 0 0 0;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--ink-dim);
+}
+.pin-reject span {
+    color: var(--error);
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+}
+.pin-status {
+    position: absolute;
+    left: 22px;
+    right: 22px;
+    bottom: 18px;
+    height: 16px;
+}
+.pin-line {
+    position: absolute;
+    inset: 0;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    color: var(--ink-dim);
+}
+/* Stacked in one place: each fades in over its own slice and holds, and
+   the later one paints over the earlier. Without a timeline the last
+   status line is the one showing, which is the true end state. */
+.pin-line:not(:last-child) { opacity: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+    @supports ((animation-timeline: view()) and (animation-range: contain)) {
+        .pin { view-timeline: --pin block; }
+
+        .pin-step {
+            animation: rp-light 1s linear both;
+            animation-timeline: --pin;
+            animation-range: contain calc(var(--s) * 30%) contain calc(18% + var(--s) * 30%);
+        }
+        .pin-tree li {
+            animation: rp-row 1s linear both;
+            animation-timeline: --pin;
+            animation-range: contain calc(22% + var(--s) * 7%) contain calc(40% + var(--s) * 7%);
+        }
+        .pin-rank {
+            animation: rp-fade-in 1s linear both;
+            animation-timeline: --pin;
+            animation-range: contain 74% contain 90%;
+        }
+        .pin-reject {
+            animation: rp-fade-in 1s linear both;
+            animation-timeline: --pin;
+            animation-range: contain 52% contain 64%;
+        }
+        .pin-line {
+            animation: rp-fade-in 1s linear both;
+            animation-timeline: --pin;
+            animation-range: contain calc(var(--s) * 30%) contain calc(10% + var(--s) * 30%);
+        }
+    }
+}
+
+@keyframes rp-light {
+    from { opacity: 0.4; transform: translateX(-8px); }
+    to { opacity: 1; transform: none; }
+}
+@keyframes rp-row {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 860px) {
+    /* A sticky scrub needs height to scrub through and room to show both
+       halves. On a phone it becomes an ordinary stacked section. */
+    .pin { height: auto; }
+    .pin-stage { position: static; height: auto; padding: 56px 0; }
+    .pin-inner { grid-template-columns: 1fr; gap: 32px; }
+    .pin-step { opacity: 1; }
+    .pin-panel { height: 340px; }
+}
+
 /* ---------- Landing: proof split ---------- */
 
 .proof {
