@@ -12,12 +12,17 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
     <script>
-        /* Arm the scroll reveal before the stylesheet paints, so nothing
-           flashes in and then hides. If landing.js never reports ready, the
-           failsafe disarms it and every section renders plainly: the page
-           must not depend on a script to be readable. */
+        /* Where the browser can drive the reveal from the scroll position
+           itself, CSS does all of it and this script has nothing to do.
+           Only the fallback path hides sections up front, so only that path
+           is armed here, and a failsafe disarms it if landing.js never
+           reports in: a dropped request must not leave the page blank. */
         (function () {
             var root = document.documentElement;
+            if (window.CSS && CSS.supports
+                && CSS.supports("(animation-timeline: view()) and (animation-range: entry)")) {
+                return;
+            }
             root.className += " js-reveal";
             window.setTimeout(function () {
                 if (!root.hasAttribute("data-reveal-ready")) {
@@ -28,20 +33,36 @@
     </script>
 </head>
 <body class="landing">
-    <header class="term-bar">
-        <div class="term-dots">
-            <span class="dot dot-red"></span>
-            <span class="dot dot-yellow"></span>
-            <span class="dot dot-green"></span>
+    {# One sprite, referenced by <use>, so each icon is defined once. #}
+    <svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+        <symbol id="i-learn" viewBox="0 0 24 24"><path d="M3.5 5h6A2.5 2.5 0 0 1 12 7.5V20a2 2 0 0 0-2-2H3.5zM20.5 5h-6A2.5 2.5 0 0 0 12 7.5V20a2 2 0 0 1 2-2h6.5z"/></symbol>
+        <symbol id="i-ask" viewBox="0 0 24 24"><path d="M4 5h16a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 20 17H9.5L5 20.5V17H4a1.5 1.5 0 0 1-1.5-1.5v-9A1.5 1.5 0 0 1 4 5z"/><path d="M8 9.5h8M8 13h4.5"/></symbol>
+        <symbol id="i-dig" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/><path d="M8 10.5h5M10.5 8v5"/></symbol>
+        <symbol id="i-graph" viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="5" rx="1"/><rect x="2.5" y="16.5" width="6" height="5" rx="1"/><rect x="15.5" y="16.5" width="6" height="5" rx="1"/><path d="M12 7.5v4.5M12 12H5.5v4.5M12 12h6.5v4.5"/></symbol>
+        <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M2.5 12.5h4l2.5-7 3.5 12 2.5-7 1.8 2h4.7"/></symbol>
+    </svg>
+
+    <header class="site-nav">
+        <div class="nav-inner">
+            <a class="nav-brand" href="/">
+                {% include "_logo.html" %}
+                <span>repo&#8209;pilot</span>
+            </a>
+            <nav class="nav-links" aria-label="Sections">
+                <a href="#how">how it works</a>
+                <a href="#modes">what it does</a>
+                <a href="#proof">real output</a>
+            </nav>
+            <a href="/app" class="nav-cta">
+                open repo pilot
+                <span class="cta-icon" aria-hidden="true">&#8599;</span>
+            </a>
         </div>
-        <span class="term-title">
-            {% include "_logo.html" %}
-            repo-pilot
-        </span>
     </header>
 
     <main>
         <section class="hero-split">
+            <div class="hero-glow" aria-hidden="true"></div>
             <div class="hero-copy">
                 <span class="hero-eyebrow rise rise-1">parsed, not guessed</span>
                 <h1 class="rise rise-2">Understand code<span class="line-soft">you did not write.</span></h1>
@@ -59,8 +80,31 @@
             </div>
         </section>
 
+        <section class="stats" aria-label="At a glance">
+            <div class="stat" data-reveal style="--i: 0">
+                <span class="stat-num">9</span>
+                <span class="stat-label">languages parsed</span>
+            </div>
+            <div class="stat" data-reveal style="--i: 1">
+                <span class="stat-num">3</span>
+                <span class="stat-label">API requests per repository</span>
+            </div>
+            <div class="stat" data-reveal style="--i: 2">
+                <span class="stat-num">6</span>
+                <span class="stat-label">health checks, no model involved</span>
+            </div>
+            <div class="stat" data-reveal style="--i: 3">
+                <span class="stat-num">0</span>
+                <span class="stat-label">invented dependencies</span>
+            </div>
+        </section>
+
         <section class="how" id="how" aria-labelledby="how-title">
-            <h2 id="how-title" data-reveal>How it works</h2>
+            <div class="section-head" data-reveal>
+                <span class="section-tag">the flow</span>
+                <h2 id="how-title">Three steps from clone to clarity</h2>
+                <p>No configuration, no plugin, no account. Paste a URL and read the answer.</p>
+            </div>
             <ol class="step-list">
                 <li class="step" data-reveal style="--i: 0">
                     <span class="step-num">01</span>
@@ -73,7 +117,7 @@
                     <span class="step-num">02</span>
                     <div class="step-body">
                         <h3>It parses the structure</h3>
-                        <p>Every file is read with tree-sitter and every import is resolved to the file it actually points at, across nine languages. Nothing here is inferred by a model.</p>
+                        <p>Every file is read with tree&#8209;sitter and every import is resolved to the file it actually points at, across nine languages. Nothing here is inferred by a model.</p>
                     </div>
                 </li>
                 <li class="step" data-reveal style="--i: 2">
@@ -86,10 +130,48 @@
             </ol>
         </section>
 
-        <section class="proof" aria-labelledby="proof-title">
-            <div class="proof-head" data-reveal>
-                <h2 id="proof-title">Real output, not a mockup</h2>
-                <p>This is an architecture diagram Repo Pilot produced from an actual repository, exported from the app and dropped straight onto this page.</p>
+        <section class="modes" id="modes" aria-labelledby="modes-title">
+            <div class="section-head" data-reveal>
+                <span class="section-tag">five ways in</span>
+                <h2 id="modes-title">Whatever you came to find out</h2>
+                <p>Each mode answers a different question about a codebase you have never seen before.</p>
+            </div>
+            <ul class="mode-grid">
+                <li class="mode-cell mode-cell-wide" data-reveal style="--i: 0">
+                    <span class="mode-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-learn"/></svg></span>
+                    <h3>Learn this codebase</h3>
+                    <p>Ranks every file by how much the rest of the repository leans on it, then lays out what to read first and why. For the moment you have cloned something and have no idea where to start.</p>
+                </li>
+                <li class="mode-cell" data-reveal style="--i: 1">
+                    <span class="mode-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ask"/></svg></span>
+                    <h3>Ask a question</h3>
+                    <p>Answers carry file and line citations you can open. Ask follow&#8209;ups with "it" and "that"; pick whether the answer is written for a new developer, a senior engineer, a product manager, or someone hunting for ideas.</p>
+                </li>
+                <li class="mode-cell" data-reveal style="--i: 2">
+                    <span class="mode-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dig"/></svg></span>
+                    <h3>Deep investigation</h3>
+                    <p>For questions one search cannot answer. It runs several rounds, deciding what to look for next from what it just found, and shows you the trail as it goes.</p>
+                </li>
+                <li class="mode-cell" data-reveal style="--i: 3">
+                    <span class="mode-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-graph"/></svg></span>
+                    <h3>Architecture diagram</h3>
+                    <p>The import graph as a folder tree. Click any file to read its source, ask about it, or see what would break if you changed it.</p>
+                </li>
+                <li class="mode-cell" data-reveal style="--i: 4">
+                    <span class="mode-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pulse"/></svg></span>
+                    <h3>Code health</h3>
+                    <p>Circular imports, modules everything depends on, code no test covers. Computed from the parsed structure with no model involved, so it is instant and identical every run. Downloadable as a report.</p>
+                </li>
+            </ul>
+        </section>
+
+        <section class="proof" id="proof" aria-labelledby="proof-title">
+            <div class="proof-copy">
+                <span class="section-tag" data-reveal>the difference</span>
+                <h2 id="proof-title" data-reveal>The structure is parsed, not guessed.</h2>
+                <p data-reveal>Most tools hand a codebase to a language model and print whatever it says back. A model asked to describe an architecture will invent dependencies that look plausible and are not there.</p>
+                <p data-reveal>Here the graph comes from tree&#8209;sitter and the repository's own imports. The model is given what was found and asked to explain it. It cannot add an edge to the diagram, and it cannot produce a citation: every file and line reference is taken from retrieval and checked against the real file list before it reaches you.</p>
+                <a href="/app" class="cta-ghost" data-reveal>try it on your own repository</a>
             </div>
             <figure class="hero-figure" data-reveal>
                 <div class="figure-shell">
@@ -98,71 +180,56 @@
                         {% include "_sample_graph.html" %}
                     </div>
                 </div>
-                <figcaption>Drawn from the repository's own imports. Every box is a file that exists; every arrow is an import that is really there.</figcaption>
+                <figcaption>Real output, exported from the app. Every box is a file that exists; every arrow is an import that is really there.</figcaption>
             </figure>
         </section>
 
-        <section class="claim">
-            <h2 data-reveal>The structure is parsed, not guessed.</h2>
-            <div class="claim-body" data-reveal>
-                <p>Most tools hand a codebase to a language model and print whatever it says back. A model asked to describe an architecture will invent dependencies that look plausible and are not there.</p>
-                <p>Here the graph comes from tree-sitter and the repository's own imports. The model is given what was found and asked to explain it. It cannot add an edge to the diagram, and it cannot produce a citation: every file and line reference is taken from retrieval and checked against the real file list before it reaches you.</p>
+        <section class="facts" aria-labelledby="facts-title">
+            <div class="section-head" data-reveal>
+                <span class="section-tag">under the hood</span>
+                <h2 id="facts-title">How it behaves</h2>
             </div>
-        </section>
-
-        <section class="modes" aria-labelledby="modes-title">
-            <h2 id="modes-title" data-reveal>Five ways in</h2>
-            <ul class="mode-grid" data-reveal>
-                <li class="mode-cell mode-cell-wide">
-                    <h3>Learn this codebase</h3>
-                    <p>Ranks every file by how much the rest of the repository leans on it, then lays out what to read first and why. For the moment you have cloned something and have no idea where to start.</p>
-                </li>
-                <li class="mode-cell">
-                    <h3>Ask a question</h3>
-                    <p>Answers carry file and line citations you can open. Ask follow-ups with "it" and "that"; pick whether the answer is written for a new developer, a senior engineer, a product manager, or someone hunting for ideas.</p>
-                </li>
-                <li class="mode-cell">
-                    <h3>Deep investigation</h3>
-                    <p>For questions one search cannot answer. It runs several rounds, deciding what to look for next from what it just found, and shows you the trail as it goes.</p>
-                </li>
-                <li class="mode-cell">
-                    <h3>Architecture diagram</h3>
-                    <p>The import graph as a folder tree. Click any file to read its source, ask about it, or see what would break if you changed it.</p>
-                </li>
-                <li class="mode-cell">
-                    <h3>Code health</h3>
-                    <p>Circular imports, modules everything depends on, code no test covers. Computed from the parsed structure with no model involved, so it is instant and identical every run. Downloadable as a report.</p>
-                </li>
-            </ul>
-        </section>
-
-        <section class="facts">
-            <h2 data-reveal>How it behaves</h2>
-            <dl class="fact-list" data-reveal>
-                <div>
+            <dl class="fact-list">
+                <div data-reveal style="--i: 0">
                     <dt>Three requests per repository</dt>
                     <dd>The whole repository arrives in one archive download, whatever its size, so ingestion does not exhaust an API budget.</dd>
                 </div>
-                <div>
+                <div data-reveal style="--i: 1">
                     <dt>Nine languages in the graph</dt>
-                    <dd>Python, JavaScript, TypeScript, Dart, Go, Rust, Ruby, Java and PHP, including Vue and Svelte single-file components. Each import is resolved to the file it actually points at.</dd>
+                    <dd>Python, JavaScript, TypeScript, Dart, Go, Rust, Ruby, Java and PHP, including Vue and Svelte single&#8209;file components. Each import is resolved to the file it actually points at.</dd>
                 </div>
-                <div>
+                <div data-reveal style="--i: 2">
                     <dt>Embeddings stay on the machine</dt>
                     <dd>Code is embedded locally. Only the question and the retrieved snippets are ever sent to a model.</dd>
                 </div>
-                <div>
-                    <dt>Nothing half-indexed is kept</dt>
+                <div data-reveal style="--i: 3">
+                    <dt>Nothing half&#8209;indexed is kept</dt>
                     <dd>If a file cannot be fetched, the result is reported as incomplete and never cached as though it were whole.</dd>
                 </div>
             </dl>
         </section>
+
+        <section class="closer" data-reveal>
+            <div class="closer-inner">
+                <h2>Point it at something you have never read.</h2>
+                <p>Free, open source, and it works on any public repository.</p>
+                <a href="/app" class="cta-btn">
+                    open repo pilot
+                    <span class="cta-icon" aria-hidden="true">&#8599;</span>
+                </a>
+            </div>
+        </section>
     </main>
 
     <footer class="landing-footer">
-        <p>Repo Pilot, by Rameen Fatima and Dania Imran. Open source under the MIT license.</p>
+        <div class="footer-brand">
+            {% include "_logo.html" %}
+            <span>repo&#8209;pilot</span>
+        </div>
+        <p>Built by Rameen Fatima and Dania Imran. Open source under the MIT license.</p>
         <a href="/app" class="link-btn">open repo pilot</a>
     </footer>
+
     <script src="/static/landing.js?v={{ static_version }}" defer></script>
 </body>
 </html>

@@ -90,30 +90,6 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     text-wrap: balance;
 }
 
-.term-bar {
-    height: 44px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--hairline);
-    display: flex;
-    align-items: center;
-    padding: 0 20px;
-    position: relative;
-}
-.term-dots { display: flex; gap: 8px; }
-.dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
-.dot-red { background: #FF5F56; }
-.dot-yellow { background: #FFBD2E; }
-.dot-green { background: #27C93F; }
-.term-title {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    font-size: 12px;
-    color: var(--ink-faint);
-}
 
 /* Hero: editorial split. Text carries the left, real output the right.
    Deliberately not centred, and deliberately layered: the figure sits in
@@ -306,9 +282,33 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
    never arrives, the class is absent or is removed by the failsafe and
    every section renders plainly. Content is never hidden behind a script. */
 @media (prefers-reduced-motion: no-preference) {
-    .js-reveal [data-reveal] { opacity: 0; }
-    .js-reveal [data-reveal].is-revealed {
-        animation: rp-reveal 0.75s var(--ease-out-expo) calc(var(--i, 0) * 0.09s) both;
+    /* Preferred path: the browser drives the reveal from the scroll
+       position itself, on the compositor, with no script running at all.
+       The (animation-range: entry) half of the test is required to weed
+       out browsers that ship only part of the feature.
+
+       animation-timeline is declared after the `animation` shorthand
+       deliberately: the shorthand resets the timeline, so the order
+       cannot be swapped. The stagger is a shift in the entry range
+       rather than a delay, because a delay means nothing on a timeline
+       that is scrubbed by scroll position. */
+    @supports ((animation-timeline: view()) and (animation-range: entry)) {
+        [data-reveal] {
+            animation: rp-reveal 1s linear backwards;
+            animation-timeline: view();
+            animation-range: entry calc(2% + var(--i, 0) * 4%) entry calc(46% + var(--i, 0) * 4%);
+        }
+    }
+
+    /* Firefox has no scroll-driven animations, so there the observer in
+       landing.js adds .is-revealed. The hidden start state applies only
+       under .js-reveal, which the inline script in the head sets and its
+       failsafe removes: content is never left hidden behind a script. */
+    @supports not ((animation-timeline: view()) and (animation-range: entry)) {
+        .js-reveal [data-reveal] { opacity: 0; }
+        .js-reveal [data-reveal].is-revealed {
+            animation: rp-reveal 0.75s var(--ease-out-expo) calc(var(--i, 0) * 0.09s) both;
+        }
     }
 }
 @keyframes rp-reveal {
@@ -401,23 +401,13 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 }
 .mode-cell:hover { background: var(--surface); }
 .mode-cell-wide { grid-column: 1 / -1; }
-/* The heading takes the page's ink and the marker takes the accent: five
-   green headings would spend the accent budget the CTA needs. */
+/* The heading takes the page's ink and the icon above it takes the accent:
+   five green headings would spend the accent budget the CTA needs. */
 .mode-cell h3 {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
     font-size: 15px;
     font-weight: 600;
     color: var(--ink);
     margin: 0 0 8px 0;
-}
-.mode-cell h3::before {
-    content: "";
-    flex: none;
-    width: 6px;
-    height: 6px;
-    background: var(--accent);
 }
 .mode-cell p { margin: 0; font-size: 13px; line-height: 1.7; color: var(--ink-dim); }
 
@@ -456,6 +446,238 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     .hero-pilot img { max-width: 280px; }
     .step { flex-direction: column; gap: 10px; padding: 22px 20px; }
     .how { padding: 56px 0 48px; }
+}
+
+
+/* ---------- Landing: site nav ---------- */
+
+/* The sprite only defines symbols for <use>; it draws nothing itself. */
+.sprite { display: none; }
+
+/* The nav is the scroll-state container. Per the spec the query styles its
+   descendants, never the container itself, so .nav-inner carries the look.
+   Only paint changes in the stuck state: changing box-model properties
+   while stuck fights scroll anchoring and oscillates. */
+.site-nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    container-type: scroll-state;
+    container-name: sitenav;
+}
+.nav-inner {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    /* Full-bleed background, content still aligned to the page measure. */
+    padding: 13px max(24px, (100% - 1180px) / 2);
+    background: rgba(11, 14, 12, 0.88);
+    border-bottom: 1px solid var(--hairline);
+    transition: background 0.4s var(--ease-out-expo), box-shadow 0.4s var(--ease-out-expo);
+}
+/* Blur only on this fixed-position element, never on scrolling content. */
+@supports (backdrop-filter: blur(4px)) {
+    .nav-inner { backdrop-filter: blur(14px); }
+}
+/* Progressive enhancement: the bar is already legible everywhere, and
+   where scroll-state queries exist it gains depth once it is stuck. */
+@container sitenav scroll-state(stuck: top) {
+    .nav-inner {
+        background: rgba(11, 14, 12, 0.94);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    }
+}
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 13.5px;
+    font-weight: 700;
+}
+.nav-brand .pilot-mark { width: 24px; height: 24px; }
+/* scroll-target-group lets the browser mark the section in view without a
+   scroll listener; landing.js only mirrors it onto aria-current. */
+.nav-links {
+    display: flex;
+    gap: 26px;
+    margin-inline: auto;
+    scroll-target-group: auto;
+}
+.nav-links a {
+    color: var(--ink-dim);
+    text-decoration: none;
+    font-size: 13px;
+    padding-bottom: 4px;
+    border-bottom: 1.5px solid transparent;
+    transition: color 0.35s var(--ease-out-expo), border-color 0.35s var(--ease-out-expo);
+}
+.nav-links a:hover { color: var(--ink); }
+/* Weight and a rule as well as colour, so the active state does not rest
+   on hue alone. */
+.nav-links a:target-current {
+    color: var(--accent);
+    font-weight: 600;
+    border-bottom-color: var(--accent);
+}
+.nav-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 9px 10px 9px 16px;
+    border: 1px solid var(--hairline);
+    background: var(--surface-raised);
+    transition: border-color 0.4s var(--ease-out-expo), background 0.4s var(--ease-out-expo);
+}
+.nav-cta:hover { border-color: var(--accent); background: var(--surface); }
+.nav-cta .cta-icon {
+    width: 22px;
+    height: 22px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--accent);
+}
+
+/* Anchor targets clear the sticky bar instead of landing under it. */
+.landing section[id] { scroll-margin-top: 78px; }
+
+/* ---------- Landing: ambient hero light ---------- */
+
+/* The glow is deliberately larger than the hero and offset past its right
+   edge, so the hero has to clip it. `clip` rather than `hidden`: hidden
+   would make this a scroll container and break the sticky nav's context. */
+.hero-split { position: relative; overflow: clip; }
+.hero-copy, .hero-pilot { position: relative; z-index: 1; }
+.hero-glow {
+    position: absolute;
+    top: -12%;
+    right: -18%;
+    width: min(620px, 80%);
+    aspect-ratio: 1;
+    background: radial-gradient(circle, rgba(110, 231, 168, 0.10), transparent 66%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ---------- Landing: stats band ---------- */
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 1px;
+    background: var(--hairline);
+    border-top: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--hairline);
+}
+.stat {
+    background: var(--surface-raised);
+    padding: 28px 24px;
+    transition: background 0.45s var(--ease-out-expo);
+}
+.stat:hover { background: var(--surface); }
+.stat-num {
+    display: block;
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+}
+.stat-label {
+    display: block;
+    margin-top: 9px;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--ink-dim);
+}
+
+/* ---------- Landing: shared section heading ---------- */
+
+.section-head { max-width: 62ch; margin-bottom: 34px; }
+.section-tag {
+    display: inline-block;
+    margin-bottom: 14px;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+.section-head h2 { margin: 0 0 10px 0; }
+.section-head p { margin: 0; font-size: 14px; line-height: 1.75; color: var(--ink-muted); }
+
+/* ---------- Landing: mode icons ---------- */
+
+.mode-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    margin-bottom: 15px;
+    background: var(--surface-sunken);
+    border: 1px solid var(--edge-soft);
+    color: var(--accent);
+    transition: border-color 0.45s var(--ease-out-expo);
+}
+.mode-cell:hover .mode-icon { border-color: var(--accent); }
+.mode-icon svg {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* ---------- Landing: proof split ---------- */
+
+.proof {
+    display: grid;
+    grid-template-columns: 5fr 6fr;
+    gap: 54px;
+    align-items: center;
+    padding: 76px 0;
+    border-top: 1px solid var(--hairline);
+}
+.proof-copy h2 { margin: 0 0 16px 0; max-width: 18ch; }
+.proof-copy p { margin: 0 0 16px 0; font-size: 14px; line-height: 1.75; color: var(--ink-body); }
+
+/* ---------- Landing: closing call to action ---------- */
+
+.closer { padding: 26px 0 76px; }
+.closer-inner {
+    padding: 54px 40px;
+    text-align: center;
+    background: var(--surface-raised);
+    border: 1px solid var(--edge-bright);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+.closer-inner h2 { margin: 0 0 10px 0; }
+.closer-inner p { margin: 0 0 26px 0; font-size: 14px; color: var(--ink-muted); }
+
+.footer-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+}
+.footer-brand .pilot-mark { width: 22px; height: 22px; }
+
+@media (max-width: 860px) {
+    .nav-links { display: none; }
+    .nav-inner { gap: 16px; justify-content: space-between; }
+    .proof { grid-template-columns: 1fr; gap: 36px; padding: 56px 0; }
+    .closer-inner { padding: 40px 22px; }
+    .stat { padding: 22px 20px; }
+    .stat-num { font-size: 29px; }
 }
 
 
