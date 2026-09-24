@@ -118,7 +118,7 @@
                 <span class="stat-label">languages parsed</span>
             </div>
             <div class="stat">
-                <span class="stat-num" data-count-to="3">3</span>
+                <span class="stat-num" data-count-to="4">4</span>
                 <span class="stat-label">API requests per repository</span>
             </div>
             <div class="stat">
@@ -281,8 +281,8 @@
             </div>
             <dl class="fact-list">
                 <div data-reveal style="--i: 0">
-                    <dt>Three requests per repository</dt>
-                    <dd>The whole repository arrives in one archive download, whatever its size, so ingestion does not exhaust an API budget.</dd>
+                    <dt>Four requests per repository</dt>
+                    <dd>One to check the repository is public, one for the commit, one for the file tree, and one archive download that carries the whole repository whatever its size. Ingestion never exhausts an API budget.</dd>
                 </div>
                 <div data-reveal style="--i: 1">
                     <dt>Nine languages in the graph</dt>

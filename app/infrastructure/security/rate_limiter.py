@@ -19,6 +19,12 @@ from dataclasses import dataclass, field
 from threading import Lock
 
 
+# How many calls between sweeps of the expired-window dict. Small
+# enough that the dict cannot grow far past the active caller count,
+# large enough that the sweep is not on the hot path.
+_PRUNE_EVERY = 256
+
+
 @dataclass
 class _Window:
     """Fixed-window counter: count of events since window_start."""
@@ -37,7 +43,28 @@ class FixedWindowRateLimiter:
         self._max_events = max_events
         self._window_seconds = window_seconds
         self._windows: dict[str, _Window] = defaultdict(_Window)
+        self._since_prune = 0
         self._lock = Lock()
+
+    def _prune_locked(self, now: float) -> None:
+        """
+        Drop windows that have already expired.
+
+        Without this the dict holds one entry per IP address seen, for
+        the life of the process. On a public deployment that is an
+        unbounded memory leak, and a cheap way to push a small container
+        over its limit: every fresh address adds a row nothing removes.
+        Pruning is amortised — only every _PRUNE_EVERY calls — so the
+        common path stays a single dict lookup.
+        """
+        self._since_prune += 1
+        if self._since_prune < _PRUNE_EVERY:
+            return
+        self._since_prune = 0
+        cutoff = now - self._window_seconds
+        stale = [k for k, w in self._windows.items() if w.window_start < cutoff]
+        for k in stale:
+            del self._windows[k]
 
     def check_and_increment(self, key: str) -> tuple[bool, int]:
         """
@@ -47,6 +74,7 @@ class FixedWindowRateLimiter:
         """
         now = time.time()
         with self._lock:
+            self._prune_locked(now)
             window = self._windows[key]
 
             if now - window.window_start > self._window_seconds:
@@ -73,6 +101,10 @@ class DailyQuotaGuard:
     cross `soft_limit`, the app should start returning a friendly
     "at capacity, resets at midnight UTC" message instead of letting
     every remaining request burn through what's left of the free tier.
+
+    This is the ceiling for everyone together. It deliberately does not
+    stop one visitor spending the whole day's budget before anyone else
+    arrives — that is what the per-IP daily limiter beside it is for.
     """
 
     def __init__(self, *, daily_cap: int, soft_limit_percent: int = 80) -> None:

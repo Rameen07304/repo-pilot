@@ -22,12 +22,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sqlite3
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 from app.application.use_cases.ingest_repo import RepoCache
+
+logger = logging.getLogger(__name__)
 from app.domain.entities import FileNode, ParsedRepoIndex, ParsedSymbol, RepoManifest
 from app.domain.value_objects import RepoUrl
 
@@ -51,10 +54,44 @@ CREATE TABLE IF NOT EXISTS parsed_repo_indexes (
 
 
 class SqliteRepoCache(RepoCache):
-    def __init__(self, *, db_path: str) -> None:
+    def __init__(self, *, db_path: str, max_repos: int = 0) -> None:
+        """
+        max_repos caps how many repositories are kept, evicting the least
+        recently cached first. 0 disables the cap.
+
+        Anyone can make a public deployment ingest an arbitrary public
+        repository, so without a cap the store grows until the disk is
+        full and every repo becomes unusable at once. Evicting the oldest
+        costs one re-ingest for that repo and nothing for the rest.
+        """
         self._db_path = db_path
+        self._max_repos = max_repos
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_tables_sync()
+
+    def _evict_oldest_sync(self, conn) -> None:
+        if self._max_repos <= 0:
+            return
+        # Both tables are keyed the same way and written together, so the
+        # manifest table is the one that decides what is still wanted.
+        rows = conn.execute(
+            """
+            SELECT repo_full_name, commit_sha FROM repo_manifests
+            ORDER BY cached_at DESC LIMIT -1 OFFSET ?
+            """,
+            (self._max_repos,),
+        ).fetchall()
+        for repo_full_name, commit_sha in rows:
+            conn.execute(
+                "DELETE FROM repo_manifests WHERE repo_full_name = ? AND commit_sha = ?",
+                (repo_full_name, commit_sha),
+            )
+            conn.execute(
+                "DELETE FROM parsed_repo_indexes WHERE repo_full_name = ? AND commit_sha = ?",
+                (repo_full_name, commit_sha),
+            )
+        if rows:
+            logger.info("Cache full: evicted %d least recently cached repo(s).", len(rows))
 
     def _init_tables_sync(self) -> None:
         conn = sqlite3.connect(self._db_path)
@@ -107,6 +144,7 @@ class SqliteRepoCache(RepoCache):
                     datetime.now(timezone.utc).isoformat(),
                 ),
             )
+            self._evict_oldest_sync(conn)
             conn.commit()
         finally:
             conn.close()

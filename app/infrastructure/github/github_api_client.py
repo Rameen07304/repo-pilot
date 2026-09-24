@@ -32,6 +32,7 @@ from app.application.interfaces.github_client import (
     GitHubRateLimitError,
     GitHubRepoNotFoundError,
     RemoteFileMeta,
+    RepoIsPrivateError,
 )
 from app.domain.value_objects import RepoUrl
 from app.infrastructure.security.secret_scanner import looks_like_env_file, scan_and_redact
@@ -89,6 +90,22 @@ class GitHubApiClient(GitHubClient):
         # per-file fetching rather than hold an arbitrarily large archive.
         self._max_archive_bytes = max_archive_bytes
         self._max_concurrent_fetches = max_concurrent_fetches
+
+    async def assert_public(self, repo: RepoUrl) -> None:
+        url = f"{_GITHUB_API_BASE}/repos/{repo.owner}/{repo.repo}"
+        try:
+            data = await self._get_json_with_retry(url)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise GitHubRepoNotFoundError(repo.full_name) from e
+            raise
+        # GitHub reports both; "private" is the one that has been there
+        # forever, "visibility" adds "internal" for enterprise orgs,
+        # which is also not public. Refuse anything that is not plainly
+        # public rather than listing what to reject.
+        visibility = data.get("visibility")
+        if data.get("private") or (visibility is not None and visibility != "public"):
+            raise RepoIsPrivateError(repo.full_name)
 
     async def get_latest_commit_sha(self, repo: RepoUrl) -> str:
         url = f"{_GITHUB_API_BASE}/repos/{repo.owner}/{repo.repo}/commits"

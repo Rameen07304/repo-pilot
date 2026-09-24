@@ -71,6 +71,7 @@ class Container:
         self.trust_proxy_headers = False
         self.question_limiter = FixedWindowRateLimiter(max_events=limit, window_seconds=3600)
         self.deep_question_limiter = FixedWindowRateLimiter(max_events=limit, window_seconds=3600)
+        self.daily_ip_limiter = FixedWindowRateLimiter(max_events=limit, window_seconds=86400)
         self.onboarding_use_case = GenerateOnboardingUseCase(
             cache=cache, llm_client=None, use_llm_narration=False
         )

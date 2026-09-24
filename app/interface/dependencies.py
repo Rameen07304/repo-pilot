@@ -51,6 +51,7 @@ class AppContainer:
     quota_guard: DailyQuotaGuard
     question_limiter: FixedWindowRateLimiter
     deep_question_limiter: FixedWindowRateLimiter
+    daily_ip_limiter: FixedWindowRateLimiter
 
     # Only true when a proxy we control sits in front of the app (HF
     # Spaces, nginx); otherwise X-Forwarded-For is attacker-controlled.
@@ -79,6 +80,14 @@ def build_container() -> AppContainer:
 
     questions_per_hour = int(os.getenv("RATE_LIMIT_QUESTIONS_PER_HOUR_PER_IP", "10"))
     deep_per_hour = int(os.getenv("RATE_LIMIT_DEEP_INVESTIGATIONS_PER_HOUR_PER_IP", "3"))
+    # One visitor should not be able to spend the whole day's model budget
+    # before anyone else arrives. The global cap above is the ceiling for
+    # everyone together; this is each caller's share of it.
+    daily_per_ip = int(os.getenv("RATE_LIMIT_LLM_CALLS_PER_DAY_PER_IP", "60"))
+    # Anyone can make a public deployment ingest an arbitrary public repo,
+    # so the store needs a lid or the disk fills and every repo breaks at
+    # once. 0 disables the cap for local use.
+    max_cached_repos = int(os.getenv("MAX_CACHED_REPOS", "50"))
     deep_max_steps = int(os.getenv("DEEP_INVESTIGATION_MAX_STEPS", "5"))
     trust_proxy_headers = os.getenv("TRUST_PROXY_HEADERS", "false").strip().lower() in ("1", "true", "yes")
 
@@ -129,10 +138,11 @@ def build_container() -> AppContainer:
 
     vector_store = ChromaVectorStore(persist_dir=chroma_dir)
     code_parser = TreeSitterCodeParser()
-    cache = SqliteRepoCache(db_path=sqlite_path)
+    cache = SqliteRepoCache(db_path=sqlite_path, max_repos=max_cached_repos)
 
     question_limiter = FixedWindowRateLimiter(max_events=questions_per_hour, window_seconds=3600)
     deep_question_limiter = FixedWindowRateLimiter(max_events=deep_per_hour, window_seconds=3600)
+    daily_ip_limiter = FixedWindowRateLimiter(max_events=daily_per_ip, window_seconds=86400)
 
     # --- Use cases, built once, sharing the singletons above ---
     ingest_use_case = IngestRepoUseCase(
@@ -215,5 +225,6 @@ def build_container() -> AppContainer:
         quota_guard=quota_guard,
         question_limiter=question_limiter,
         deep_question_limiter=deep_question_limiter,
+        daily_ip_limiter=daily_ip_limiter,
         trust_proxy_headers=trust_proxy_headers,
     )

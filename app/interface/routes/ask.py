@@ -17,6 +17,7 @@ from app.domain.entities import ConversationTurn, Question
 from app.domain.value_objects import Persona, QuestionMode
 from app.infrastructure.llm.quota_aware_llm_client import DailyQuotaExceededError
 from app.interface.client_ip import get_client_ip
+from app.interface.limits import enforce_daily_budget
 from app.interface.schemas import AskRequest, AskResponse
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,8 @@ router = APIRouter()
 async def ask_question(payload: AskRequest, request: Request) -> AskResponse:
     container = request.app.state.container
     client_ip = get_client_ip(request, trust_proxy_headers=container.trust_proxy_headers)
+
+    enforce_daily_budget(container, client_ip)
 
     mode = QuestionMode.DEEP if payload.deep_mode else QuestionMode.QUICK
 

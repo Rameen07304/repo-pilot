@@ -7,12 +7,20 @@ import asyncio
 import unittest
 
 from app.application.interfaces.github_client import RemoteFileMeta
+from app.application.interfaces.github_client import RepoIsPrivateError
 from app.application.use_cases.ingest_repo import IngestRepoUseCase
 
 
 class FakeGitHub:
-    def __init__(self, contents: dict[str, str]):
+    def __init__(self, contents: dict[str, str], *, private: bool = False):
         self.contents = contents
+        self.private = private
+        self.visibility_checked = False
+
+    async def assert_public(self, repo):
+        self.visibility_checked = True
+        if self.private:
+            raise RepoIsPrivateError(repo.full_name)
 
     async def get_latest_commit_sha(self, repo):
         return "abc123"
@@ -175,3 +183,46 @@ class ChunkCapTest(unittest.TestCase):
         )
         asyncio.run(uc.execute("https://github.com/acme/widgets"))
         self.assertEqual(max(len(t) for t in llm.embedded), 1500)
+
+
+class PrivateRepoGuardTest(unittest.TestCase):
+    """
+    The server carries a GitHub token, so without this guard it would
+    open any private repository it can see for whoever pasted the URL.
+    These are the tests that make hosting it safe.
+    """
+
+    def _use_case(self, github, cache=None):
+        return IngestRepoUseCase(
+            github_client=github, llm_client=FakeLLM(), vector_store=FakeVectors(),
+            code_parser=StubParser(), cache=cache or RecordingCache(),
+        )
+
+    def test_a_private_repo_is_refused(self):
+        uc = self._use_case(FakeGitHub({"app/main.py": "x"}, private=True))
+        with self.assertRaises(RepoIsPrivateError):
+            asyncio.run(uc.execute("https://github.com/acme/secrets"))
+
+    def test_a_private_repo_is_never_fetched_or_cached(self):
+        cache = RecordingCache()
+        github = FakeGitHub({"app/main.py": "x"}, private=True)
+        uc = self._use_case(github, cache=cache)
+        with self.assertRaises(RepoIsPrivateError):
+            asyncio.run(uc.execute("https://github.com/acme/secrets"))
+        # Nothing about it reached disk or the vector store.
+        self.assertIsNone(getattr(cache, "saved_manifest", None))
+
+    def test_visibility_is_checked_before_the_cache(self):
+        # A repo made private after being ingested must stop being served,
+        # so the check cannot sit behind a cache hit.
+        github = FakeGitHub({"app/main.py": "x"}, private=True)
+        uc = self._use_case(github)
+        with self.assertRaises(RepoIsPrivateError):
+            asyncio.run(uc.execute("https://github.com/acme/secrets"))
+        self.assertTrue(github.visibility_checked)
+
+    def test_a_public_repo_still_ingests(self):
+        github = FakeGitHub({"app/main.py": "x", "requirements.txt": "y"})
+        manifest, _cached = asyncio.run(self._use_case(github).execute("https://github.com/acme/widgets"))
+        self.assertTrue(github.visibility_checked)
+        self.assertEqual(manifest.repo_url.full_name, "acme/widgets")

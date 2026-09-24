@@ -19,6 +19,17 @@ class RemoteFileMeta:
 
 @runtime_checkable
 class GitHubClient(Protocol):
+    async def assert_public(self, repo: RepoUrl) -> None:
+        """
+        Raise before any other call if the repo is not public.
+
+        Implementations MUST raise RepoIsPrivateError for a private repo
+        and GitHubRepoNotFoundError when it cannot be seen at all. This
+        runs first, ahead of the cache, so a repository that is made
+        private after being ingested stops being re-ingested.
+        """
+        ...
+
     async def get_latest_commit_sha(self, repo: RepoUrl) -> str:
         """
         Cheap call, used first: if this SHA matches what we already
@@ -57,6 +68,23 @@ class GitHubClient(Protocol):
         The same secret redaction as get_file_content applies.
         """
         ...
+
+
+class RepoIsPrivateError(Exception):
+    """
+    The repository exists and our token can read it, but it is private.
+
+    This is the one case a hosted instance must refuse. The server holds
+    a token so it is not rate-limited; without this check that token
+    would happily open any private repository it can see for whoever
+    pasted the URL, which on a public deployment means handing strangers
+    the owner's own code.
+    """
+    def __init__(self, repo_full_name: str):
+        self.repo_full_name = repo_full_name
+        super().__init__(
+            f"{repo_full_name} is a private repository. Repo Pilot only reads public repositories."
+        )
 
 
 class GitHubRateLimitError(Exception):

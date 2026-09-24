@@ -8,7 +8,11 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 
 from app.application.use_cases.ingest_repo import IngestionLimitExceeded
-from app.application.interfaces.github_client import GitHubRateLimitError, GitHubRepoNotFoundError
+from app.application.interfaces.github_client import (
+    GitHubRateLimitError,
+    GitHubRepoNotFoundError,
+    RepoIsPrivateError,
+)
 from app.infrastructure.llm.quota_aware_llm_client import DailyQuotaExceededError
 from app.interface.schemas import IngestRequest, IngestResponse
 
@@ -28,6 +32,8 @@ async def ingest_repo(payload: IngestRequest, request: Request) -> IngestRespons
         raise HTTPException(status_code=400, detail=str(e)) from e
     except IngestionLimitExceeded as e:
         raise HTTPException(status_code=413, detail=str(e)) from e
+    except RepoIsPrivateError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except GitHubRepoNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except GitHubRateLimitError as e:

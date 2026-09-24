@@ -8,7 +8,14 @@ import io
 import tarfile
 import unittest
 
-from app.application.interfaces.github_client import GitHubRateLimitError, RemoteFileMeta
+import httpx
+
+from app.application.interfaces.github_client import (
+    GitHubRateLimitError,
+    GitHubRepoNotFoundError,
+    RemoteFileMeta,
+    RepoIsPrivateError,
+)
 from app.domain.value_objects import RepoUrl
 from app.infrastructure.github.github_api_client import GitHubApiClient
 
@@ -126,3 +133,45 @@ class NotFoundTest(unittest.TestCase):
         client._get_json_with_retry = fake_get
         with self.assertRaises(httpx.HTTPStatusError):
             asyncio.run(client.get_latest_commit_sha(REPO))
+
+
+class VisibilityGuardTest(unittest.IsolatedAsyncioTestCase):
+    """
+    The guard that makes a hosted instance safe: the server's token must
+    never be used to open a repository the visitor could not open.
+    """
+
+    async def _assert_public(self, payload, *, status=200):
+        client = GitHubApiClient(token="t")
+
+        async def fake_get_json(url, params=None):
+            if status == 404:
+                response = httpx.Response(404, request=httpx.Request("GET", url))
+                raise httpx.HTTPStatusError("not found", request=response.request, response=response)
+            return payload
+
+        client._get_json_with_retry = fake_get_json
+        await client.assert_public(RepoUrl("https://github.com/acme/widgets"))
+
+    async def test_public_repo_passes(self):
+        await self._assert_public({"private": False, "visibility": "public"})
+
+    async def test_private_repo_is_refused(self):
+        with self.assertRaises(RepoIsPrivateError):
+            await self._assert_public({"private": True, "visibility": "private"})
+
+    async def test_internal_repo_is_refused(self):
+        # Enterprise orgs have a third state that is not private but is
+        # also not public; refusing anything not plainly public covers it.
+        with self.assertRaises(RepoIsPrivateError):
+            await self._assert_public({"private": False, "visibility": "internal"})
+
+    async def test_missing_repo_is_not_found_rather_than_private(self):
+        with self.assertRaises(GitHubRepoNotFoundError):
+            await self._assert_public({}, status=404)
+
+    async def test_absent_visibility_field_falls_back_to_private_flag(self):
+        # Older GitHub Enterprise responses omit "visibility".
+        await self._assert_public({"private": False})
+        with self.assertRaises(RepoIsPrivateError):
+            await self._assert_public({"private": True})

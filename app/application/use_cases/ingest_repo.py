@@ -102,6 +102,14 @@ class IngestRepoUseCase:
         # in the domain layer, we just let it raise if invalid.
         repo = RepoUrl(repo_url_raw)
 
+        # Step 0.5: refuse private repositories before anything else,
+        # including the cache. The server carries a token so it is not
+        # rate-limited, and without this that token would open any
+        # private repo it can see for whoever pasted the URL. Running it
+        # ahead of the cache also means a repo that is made private
+        # after being ingested stops being re-ingested.
+        await self._github.assert_public(repo)
+
         # Step 1: cheap call first
         commit_sha = await self._github.get_latest_commit_sha(repo)
 
