@@ -66,10 +66,12 @@
     --on-accent-veil-d: rgba(5, 32, 63, 0.16);
     --on-accent-veil-strong-l: rgba(255, 255, 255, 0.32);
     --on-accent-veil-strong-d: rgba(5, 32, 63, 0.26);
-    --wash-l: rgba(11, 95, 208, 0.07);
-    --wash-d: rgba(90, 169, 255, 0.08);
-    --glow-l: rgba(11, 95, 208, 0.10);
-    --glow-d: rgba(90, 169, 255, 0.13);
+    --wash-l: rgba(11, 95, 208, 0.10);
+    --wash-2-l: rgba(11, 95, 208, 0.055);
+    --wash-2-d: rgba(70, 130, 215, 0.13);
+    --grid-l: rgba(11, 20, 32, 0.045);
+    --grid-d: rgba(255, 255, 255, 0.026);
+    --wash-d: rgba(90, 169, 255, 0.11);
     --scanline-l: rgba(11, 20, 32, 0.022);
     --scanline-d: rgba(255, 255, 255, 0.02);
     --graph-cluster-l: rgba(11, 20, 32, 0.03);
@@ -110,7 +112,8 @@
     --on-accent-veil: var(--on-accent-veil-l);
     --on-accent-veil-strong: var(--on-accent-veil-strong-l);
     --wash: var(--wash-l);
-    --glow: var(--glow-l);
+    --wash-2: var(--wash-2-l);
+    --grid: var(--grid-l);
     --scanline: var(--scanline-l);
     --graph-cluster: var(--graph-cluster-l);
     --mark-shell: var(--mark-shell-l);
@@ -165,7 +168,8 @@
         --on-accent-veil: var(--on-accent-veil-d);
         --on-accent-veil-strong: var(--on-accent-veil-strong-d);
         --wash: var(--wash-d);
-        --glow: var(--glow-d);
+        --wash-2: var(--wash-2-d);
+        --grid: var(--grid-d);
         --scanline: var(--scanline-d);
         --graph-cluster: var(--graph-cluster-d);
         --mark-shell: var(--mark-shell-d);
@@ -221,7 +225,8 @@
     --on-accent-veil: var(--on-accent-veil-d);
     --on-accent-veil-strong: var(--on-accent-veil-strong-d);
     --wash: var(--wash-d);
-    --glow: var(--glow-d);
+    --wash-2: var(--wash-2-d);
+    --grid: var(--grid-d);
     --scanline: var(--scanline-d);
     --graph-cluster: var(--graph-cluster-d);
     --mark-shell: var(--mark-shell-d);
@@ -278,25 +283,70 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     50%, 100% { opacity: 0; }
 }
 
+
+/* Browser surfaces. Selection, the caret and the scrollbar ship with
+   defaults that belong to no design system; theming them is what separates
+   a page that was built from one that was assembled. */
+::selection {
+    background: var(--accent);
+    color: var(--accent-ink);
+}
+:root {
+    caret-color: var(--accent);
+    /* Paired with scrollbar-width, or macOS ignores the colours entirely. */
+    scrollbar-color: var(--edge-bright) transparent;
+    scrollbar-width: thin;
+}
+
 /* ---------- Landing ---------- */
 
+/* The page sits on a drafting field rather than a flat colour: a measured
+   grid, which is what the product actually does to a repository, and two
+   soft lights above it. The lights live on a fixed layer behind everything
+   so they never meet a container edge and turn into a visible seam, which
+   is what happened when they were clipped inside the hero. */
 .landing {
-    background:
-        radial-gradient(ellipse 60% 40% at 15% 8%, var(--wash), transparent 70%),
-        repeating-linear-gradient(0deg, var(--scanline) 0px, var(--scanline) 1px, transparent 1px, transparent 3px),
-        var(--base);
+    background: var(--base);
     min-height: 100dvh;
+}
+/* The edges of the page's own measure, drawn and then faded out. A
+   drafting mark rather than a texture: two rules, where the content
+   actually starts and stops. */
+.landing::after {
+    content: "";
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    z-index: -1;
+    pointer-events: none;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(1280px, 100%);
+    border-left: 1px solid var(--grid);
+    border-right: 1px solid var(--grid);
+    -webkit-mask-image: linear-gradient(180deg, #000 0 52%, transparent 90%);
+    mask-image: linear-gradient(180deg, #000 0 52%, transparent 90%);
+}
+.landing::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+        radial-gradient(64rem 46rem at 8% -10%, var(--wash), transparent 62%),
+        radial-gradient(52rem 42rem at 94% -4%, var(--wash-2), transparent 58%),
+        radial-gradient(80rem 40rem at 50% 108%, var(--wash-2), transparent 60%);
 }
 .landing main { max-width: 1280px; margin: 0 auto; padding: 0 clamp(20px, 4vw, 48px); }
 .landing h2 {
     font-size: clamp(30px, 4vw, 52px);
     font-weight: 600;
-    line-height: 1.02;
+    line-height: 1.07;
     letter-spacing: -0.035em;
     margin: 0 0 20px 0;
     text-wrap: balance;
 }
-
 
 /* Hero: editorial split. Text carries the left, real output the right.
    Deliberately not centred, and deliberately layered: the figure sits in
@@ -306,7 +356,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
     gap: 64px;
     align-items: center;
-    padding: clamp(96px, 11vw, 148px) 0 clamp(88px, 10vw, 136px);
+    padding: clamp(44px, 5vw, 72px) 0 clamp(72px, 8vw, 112px);
 }
 
 .hero-eyebrow {
@@ -365,9 +415,9 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     text-decoration: none;
     font-weight: 600;
     font-size: 14px;
-    padding: 14px 16px 14px 22px;
-    border: 1px solid var(--accent);
-    box-shadow: inset 0 1px 0 var(--sheen-strong), 0 10px 24px var(--elevation);
+    padding: 15px 17px 15px 23px;
+    border: 0;
+    box-shadow: inset 0 1px 0 var(--sheen-strong), 0 8px 18px var(--elevation);
     transition: background-color 0.5s var(--ease-out-expo), box-shadow 0.5s var(--ease-out-expo), transform 0.2s var(--ease-out-expo);
 }
 .cta-btn:hover { background: var(--accent-hover); box-shadow: inset 0 1px 0 var(--sheen-strong), 0 14px 30px var(--elevation-strong); }
@@ -433,8 +483,8 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     align-items: center;
     gap: 8px;
     margin-bottom: 18px;
-    font-size: 11.5px;
-    letter-spacing: 0.08em;
+    font-size: 12.5px;
+    letter-spacing: 0.02em;
     color: var(--ink-dim);
 }
 .figure-rule::after {
@@ -445,7 +495,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 }
 .hero-figure figcaption {
     margin-top: 14px;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--ink-faint);
 }
 
@@ -667,7 +717,6 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     .how { padding: 56px 0 48px; }
 }
 
-
 /* ---------- Landing: site nav ---------- */
 
 /* The sprite only defines symbols for <use>; it draws nothing itself. */
@@ -766,7 +815,6 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 /* Anchor targets clear the sticky bar instead of landing under it. */
 .landing section[id] { scroll-margin-top: 78px; }
 
-
 /* ---------- Theme toggle ---------- */
 
 .visually-hidden {
@@ -826,7 +874,6 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
    enough to neutral that it barely moves. Measured, not guessed: 62deg had
    it landing on cyan. */
 .hero-pilot img { filter: hue-rotate(90deg); }
-
 
 /* ---------- Motion ---------- */
 
@@ -930,16 +977,6 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
    would make this a scroll container and break the sticky nav's context. */
 .hero-split { position: relative; overflow: clip; }
 .hero-copy, .hero-pilot { position: relative; z-index: 1; }
-.hero-glow {
-    position: absolute;
-    top: -12%;
-    right: -18%;
-    width: min(620px, 80%);
-    aspect-ratio: 1;
-    background: radial-gradient(circle, var(--glow), transparent 66%);
-    pointer-events: none;
-    z-index: 0;
-}
 
 /* ---------- Landing: stats band ---------- */
 
@@ -1055,7 +1092,6 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 }
 
 
-
 /* ---------- Brand, nav furniture ---------- */
 
 .brand-mark {
@@ -1143,7 +1179,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 
 /* Blueprint rules: the drafting lines the design runs behind the hero. */
 .blueprint { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
-.bp { position: absolute; border: 1px solid var(--edge-soft); }
+.bp { position: absolute; border: 1px solid var(--grid); }
 .bp-1 { left: -4%; top: 8%; width: 12%; height: 26%; border-right: 0; border-top: 0; }
 .bp-2 { left: 22%; top: -6%; width: 18%; height: 22%; border-left: 0; border-bottom: 0; }
 .bp-3 { right: 8%; top: 54%; width: 22%; height: 30%; border-right: 0; border-bottom: 0; }
@@ -1239,6 +1275,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 .pin-meta { margin-bottom: 12px; }
 .pin-field {
     position: relative;
+    padding: 16px;
     height: calc(100% - 62px);
     border: 1px solid var(--edge-soft);
     background:
@@ -1372,10 +1409,7 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     min-width: 0;
     height: min(62vh, 440px);
     padding: 22px;
-    background:
-        linear-gradient(var(--scanline) 1px, transparent 1px) 0 0 / 28px 28px,
-        linear-gradient(90deg, var(--scanline) 1px, transparent 1px) 0 0 / 28px 28px,
-        var(--surface-sunken);
+    background: var(--surface-sunken);
     border: 1px solid var(--edge-soft);
     overflow: hidden;
 }
@@ -1415,8 +1449,8 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     position: absolute;
     inset: 0;
     font-family: var(--font-mono);
-    font-size: 11.5px;
-    letter-spacing: 0.06em;
+    font-size: 12.5px;
+    letter-spacing: 0.02em;
     color: var(--ink-dim);
 }
 /* Stacked in one place: each fades in over its own slice and holds, and
@@ -1530,7 +1564,6 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     .stat { padding: 22px 20px; }
     .stat-num { font-size: 29px; }
 }
-
 
 /* ---------- App shell (sidebar layout) ---------- */
 
@@ -2007,12 +2040,10 @@ body.has-fullscreen-diagram { overflow: hidden; }
     .app-main { padding: 24px 20px; }
 }
 
-
 /* ==============================================================
    Onboarding guide, live investigation, file drawer, impact.
    Reuses the existing tokens only, no new palette.
    ============================================================== */
-
 
 .guide-block { margin-top: 28px; }
 .guide-block h3 {
