@@ -80,6 +80,10 @@
         try {
             const data = await postJson("/api/onboarding", keys);
             renderOnboarding(data);
+            // Only offered once a reading order exists: the handbook is
+            // built from the same guide, so before this it would be empty.
+            const handbookBtn = el("handbook-btn");
+            if (handbookBtn) handbookBtn.classList.remove("hidden");
             RP.setStatus(
                 onboardingStatus,
                 data.graph_available
@@ -180,7 +184,41 @@
         return li;
     }
 
+    async function downloadHandbook() {
+        const keys = repoKeys();
+        if (!keys) return;
+        const btn = el("handbook-btn");
+        btn.disabled = true;
+        RP.setStatus(onboardingStatus, "gathering the reading order and the health findings into one document...", "loading");
+        try {
+            const res = await fetch("/api/handbook", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(keys),
+            });
+            if (!res.ok) {
+                let detail = "The handbook could not be built.";
+                try { detail = (await res.json()).detail || detail; } catch (e) { /* not JSON */ }
+                throw new Error(detail);
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = keys.repo_full_name.replace(/[^\w-]/g, "-") + "-handbook.md";
+            a.click();
+            URL.revokeObjectURL(url);
+            RP.setStatus(onboardingStatus, "handbook downloaded. Commit it next to the code and regenerate it when the code moves.", "success");
+        } catch (err) {
+            RP.setStatus(onboardingStatus, err.message, "error");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
     if (onboardingBtn) onboardingBtn.addEventListener("click", loadOnboarding);
+    const handbookBtn = el("handbook-btn");
+    if (handbookBtn) handbookBtn.addEventListener("click", downloadHandbook);
 
     // ===============================================================
     // Feature 2 — Live investigation streaming

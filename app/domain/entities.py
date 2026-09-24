@@ -266,3 +266,28 @@ class CodeHealthReport:
     symbol_count: int = 0
     findings: list[CodeHealthFinding] = field(default_factory=list)
     deductions: dict[str, int] = field(default_factory=dict)  # check -> points deducted
+
+
+@dataclass
+class Handbook:
+    """
+    Everything Repo Pilot worked out about a repository, gathered into one
+    document a team can commit next to the code.
+
+    Deliberately a composition rather than a new analysis: the reading
+    order, the maintainability findings and the stack are already decided
+    elsewhere, and re-deriving any of them here would let the handbook and
+    the screens it came from disagree.
+
+    health is optional because the guide is the point. A repository whose
+    parsed index is missing still produces a useful handbook; one without a
+    reading order does not.
+    """
+    repo_full_name: str
+    commit_sha: str
+    guide: OnboardingGuide
+    detected_stack: list[str] = field(default_factory=list)
+    file_count: int = 0
+    skipped_file_count: int = 0  # >0 means the underlying ingest was incomplete
+    health: Optional[CodeHealthReport] = None
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
