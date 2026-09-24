@@ -69,6 +69,10 @@
                     <svg class="nav-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M2 11h4l2-6 3 10 2-6 1.5 2H18"/></svg>
                     <span class="nav-text"><span class="nav-label">code health</span><span class="nav-desc">a maintainability report card</span></span>
                 </button>
+                <button class="tab-btn" data-tab="agents-tab">
+                    <svg class="nav-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M8 7h4M8 10h4M8 13h2"/></svg>
+                    <span class="nav-text"><span class="nav-label">agent skills</span><span class="nav-desc">AI tooling this repo ships</span></span>
+                </button>
             </nav>
 
             <div id="repo-info" class="hidden sidebar-repo-info">
@@ -133,6 +137,19 @@
                             <ul id="suggested-questions" class="chip-list"></ul>
                         </section>
                     </div>
+                </div>
+
+                <div id="agents-tab" class="tab-content">
+                    <header class="mode-header">
+                        <div class="mode-text">
+                            <h2 class="mode-title">Agent skills</h2>
+                            <p class="mode-desc">Repositories increasingly ship configuration for AI coding agents: Claude skills, subagents, project instructions, Cursor rules, MCP servers. This finds them and tells you what each one would do if you used it yourself.</p>
+                            <p class="mode-note">Found by reading file paths and frontmatter, with no AI involved. These files are written to be obeyed by an agent, so everything below is shown as plain text and never acted on.</p>
+                        </div>
+                        <button id="agents-btn" class="cmd-btn cmd-btn-primary">find agent tooling</button>
+                    </header>
+                    <div id="agents-status"></div>
+                    <div id="agents-result" class="hidden"></div>
                 </div>
 
                 <div id="health-tab" class="tab-content">

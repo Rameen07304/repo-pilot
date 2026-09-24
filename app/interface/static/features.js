@@ -901,3 +901,138 @@
     const healthDownloadBtn = el("health-download-btn");
     if (healthDownloadBtn) healthDownloadBtn.addEventListener("click", downloadHealthReport);
 })();
+
+/* --- Agent tooling: what AI configuration this repo ships ---
+ *
+ * Every string rendered here comes from a file written by whoever owns
+ * the repository, and those files exist to steer an agent. They are set
+ * with textContent throughout, never innerHTML: this is the one screen
+ * where the content is actively trying to be instructions.
+ */
+(function () {
+    const RP = window.RepoPilot;
+    if (!RP) return;
+    const el = (id) => document.getElementById(id);
+
+    const btn = el("agents-btn");
+    const status = el("agents-status");
+    const result = el("agents-result");
+    if (!btn || !result) return;
+
+    function repoKeys() {
+        const repo = RP.getCurrentRepo();
+        if (!repo) return null;
+        return { repo_full_name: repo.repoFullName, commit_sha: repo.commitSha };
+    }
+
+    function row(asset) {
+        const item = document.createElement("li");
+        item.className = "agent-asset";
+
+        const head = document.createElement("div");
+        head.className = "agent-asset-head";
+
+        const name = document.createElement("h4");
+        name.textContent = asset.name;
+        head.appendChild(name);
+
+        const kind = document.createElement("span");
+        kind.className = "agent-kind";
+        kind.textContent = asset.kind_label;
+        head.appendChild(kind);
+        item.appendChild(head);
+
+        if (asset.description) {
+            const desc = document.createElement("p");
+            desc.className = "agent-desc";
+            desc.textContent = asset.description;
+            item.appendChild(desc);
+        }
+
+        const use = document.createElement("p");
+        use.className = "agent-use";
+        use.textContent = asset.how_to_use;
+        item.appendChild(use);
+
+        const path = document.createElement("button");
+        path.type = "button";
+        path.className = "agent-path";
+        path.textContent = asset.path;
+        path.title = "Open this file";
+        path.addEventListener("click", () => {
+            if (RP.openFile) RP.openFile(asset.path);
+        });
+        item.appendChild(path);
+
+        return item;
+    }
+
+    function render(assets) {
+        result.textContent = "";
+        if (!assets.length) {
+            const empty = document.createElement("p");
+            empty.className = "dim";
+            empty.textContent =
+                "No agent tooling found. This repository ships no Claude skills, " +
+                "subagents, project instructions, Cursor rules or MCP declarations.";
+            result.appendChild(empty);
+            result.classList.remove("hidden");
+            return;
+        }
+
+        const groups = new Map();
+        assets.forEach((a) => {
+            if (!groups.has(a.kind_label)) groups.set(a.kind_label, []);
+            groups.get(a.kind_label).push(a);
+        });
+
+        groups.forEach((items, label) => {
+            const heading = document.createElement("h3");
+            heading.textContent = "$ " + label.toLowerCase() + " (" + items.length + ")";
+            result.appendChild(heading);
+            const list = document.createElement("ul");
+            list.className = "agent-list";
+            items.forEach((a) => list.appendChild(row(a)));
+            result.appendChild(list);
+        });
+        result.classList.remove("hidden");
+    }
+
+    async function load() {
+        const keys = repoKeys();
+        if (!keys) {
+            RP.setStatus(status, "Ingest a repo first.", "error");
+            return;
+        }
+        btn.disabled = true;
+        RP.setStatus(status, "reading paths and frontmatter...", "loading");
+        result.classList.add("hidden");
+        try {
+            const res = await fetch("/api/agent-tooling", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(keys),
+            });
+            if (!res.ok) {
+                let detail = "Could not inspect agent tooling.";
+                try { detail = (await res.json()).detail || detail; } catch (e) { /* not JSON */ }
+                throw new Error(detail);
+            }
+            const data = await res.json();
+            render(data.assets || []);
+            RP.setStatus(
+                status,
+                data.assets.length
+                    ? "found " + data.assets.length + " file(s), computed without a model"
+                    : "",
+                "success"
+            );
+        } catch (err) {
+            RP.setStatus(status, err.message, "error");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    btn.addEventListener("click", load);
+}());

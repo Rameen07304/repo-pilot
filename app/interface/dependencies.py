@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 from app.application.use_cases.analyze_code_health import AnalyzeCodeHealthUseCase
 from app.application.use_cases.analyze_impact import AnalyzeImpactUseCase
+from app.application.use_cases.detect_agent_tooling import DetectAgentToolingUseCase
 from app.application.use_cases.answer_question import AnswerQuestionUseCase
 from app.application.use_cases.generate_diagram import GenerateDiagramUseCase
 from app.application.use_cases.generate_handbook import GenerateHandbookUseCase
@@ -47,6 +48,7 @@ class AppContainer:
     impact_use_case: AnalyzeImpactUseCase
     code_health_use_case: AnalyzeCodeHealthUseCase
     handbook_use_case: GenerateHandbookUseCase
+    agent_tooling_use_case: DetectAgentToolingUseCase
 
     quota_guard: DailyQuotaGuard
     question_limiter: FixedWindowRateLimiter
@@ -201,6 +203,8 @@ def build_container() -> AppContainer:
     # Reads the cached manifest only — no LLM, no network.
     file_source_use_case = GetFileSourceUseCase(cache=cache)
 
+    agent_tooling_use_case = DetectAgentToolingUseCase(cache=cache)
+
     handbook_use_case = GenerateHandbookUseCase(
 
         onboarding_use_case=onboarding_use_case,
@@ -222,6 +226,7 @@ def build_container() -> AppContainer:
         impact_use_case=impact_use_case,
         code_health_use_case=code_health_use_case,
         handbook_use_case=handbook_use_case,
+        agent_tooling_use_case=agent_tooling_use_case,
         quota_guard=quota_guard,
         question_limiter=question_limiter,
         deep_question_limiter=deep_question_limiter,

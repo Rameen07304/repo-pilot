@@ -175,3 +175,24 @@ class CodeHealthResponse(BaseModel):
     symbol_count: int
     findings: list[CodeHealthFindingResponse] = []
     deductions: dict[str, int] = {}
+
+
+class AgentToolingRequest(BaseModel):
+    repo_full_name: str = Field(..., max_length=200)
+    commit_sha: str = Field(..., max_length=100)
+
+
+class AgentAssetResponse(BaseModel):
+    kind: str
+    kind_label: str
+    how_to_use: str
+    path: str
+    name: str
+    description: str
+    body_excerpt: str
+    has_frontmatter: bool
+    size_bytes: int
+
+
+class AgentToolingResponse(BaseModel):
+    assets: list[AgentAssetResponse]

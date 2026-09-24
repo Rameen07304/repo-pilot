@@ -291,3 +291,51 @@ class Handbook:
     skipped_file_count: int = 0  # >0 means the underlying ingest was incomplete
     health: Optional[CodeHealthReport] = None
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@dataclass
+class AgentAsset:
+    """
+    One file in a repository that configures an AI coding agent: a Claude
+    skill, a subagent, a slash command, project instructions, a Cursor
+    rule, an MCP server declaration.
+
+    name and description come from the file's own YAML frontmatter where
+    it has one, so they are read rather than inferred. Both are written
+    by whoever owns the repository and are therefore untrusted: these
+    files exist specifically to steer an agent, which makes them the one
+    kind of content in this app that is designed to be obeyed. Render
+    them as text, never as instructions, and never hand them to a model
+    without the same delimiting a README gets.
+    """
+    kind: str            # claude_skill | claude_subagent | claude_command | ...
+    path: str
+    name: str            # from frontmatter, else derived from the path
+    description: str = ""
+    body_excerpt: str = ""
+    has_frontmatter: bool = False
+    size_bytes: int = 0
+
+
+@dataclass
+class AgentToolingReport:
+    """
+    Which AI agent tooling a repository ships, and what each piece does.
+
+    Entirely path matching and frontmatter parsing over the manifest the
+    ingest already produced: no model, no extra GitHub call, identical
+    every run.
+    """
+    repo_full_name: str
+    commit_sha: str
+    assets: list[AgentAsset] = field(default_factory=list)
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.assets
+
+    def by_kind(self) -> dict[str, list[AgentAsset]]:
+        grouped: dict[str, list[AgentAsset]] = {}
+        for asset in self.assets:
+            grouped.setdefault(asset.kind, []).append(asset)
+        return grouped

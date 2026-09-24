@@ -2659,3 +2659,26 @@ g.node.selected-node circle {
 /* The badge now names the check, so colour alone carries severity. */
 .health-finding .badge { text-transform: none; letter-spacing: 0; }
 .mode-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: flex-start; }
+
+/* ---------- Agent tooling ---------- */
+
+.agent-list { list-style: none; margin: 0 0 26px 0; padding: 0; display: grid; gap: 1px; background: var(--hairline); border: 1px solid var(--hairline); }
+.agent-asset { background: var(--surface-raised); padding: 16px 18px; }
+.agent-asset-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.agent-asset h4 { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink); }
+.agent-kind { font-size: 11.5px; color: var(--accent); }
+.agent-desc { margin: 8px 0 0 0; font-size: 13px; line-height: 1.6; color: var(--ink-body); white-space: pre-wrap; }
+.agent-use { margin: 10px 0 0 0; font-size: 12.5px; line-height: 1.6; color: var(--ink-dim); }
+.agent-path {
+    margin-top: 10px;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-muted);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.agent-path:hover { color: var(--accent); }
