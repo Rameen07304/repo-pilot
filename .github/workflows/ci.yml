@@ -5,9 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# Pinned rather than ubuntu-latest: that label migrates to Ubuntu 26 in
+# October 2026, and a green build should not turn red on a date.
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  python:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -19,24 +21,17 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install ruff
+          pip install -r requirements.txt ruff
 
       - name: Lint
         run: ruff check .
 
-      # The container build is the deployment artifact, so a build failure
-      # is a release failure and belongs on every push rather than being
-      # discovered at deploy time.
-      - name: Build the container
-        run: docker build -t repo-pilot:ci .
-
-      - name: Python tests
-        # The suite is hermetic: no network, no API keys, fakes throughout.
+      - name: Tests
+        # Hermetic: no network, no API keys, fakes throughout.
         run: python -m unittest discover -s tests -t .
 
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -48,5 +43,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Frontend tests
+      - name: Tests
         run: npm test
+
+  # Its own job, not a step in `python`. Installing the dependencies and
+  # building the image both pull torch, and doing both in one job filled
+  # the runner's disk.
+  docker:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        # The image carries torch and a pre-downloaded embedding model,
+        # which does not fit alongside the runner's preinstalled SDKs.
+        run: |
+          df -h / | tail -1
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          docker image prune -af
+          df -h / | tail -1
+
+      - name: Build the image
+        # The image is the deployment artifact, so a build failure is a
+        # release failure and belongs here rather than at deploy time.
+        run: docker build -t repo-pilot:ci .

@@ -35,9 +35,11 @@ data/*
 chroma_db/
 .chroma/
 
-# Node (frontend tests only — the app itself has no build step)
+# Node (frontend tests only — the app itself has no build step).
+# package-lock.json is committed on purpose: this is an application, not a
+# library, so the exact tested tree should be reproducible, and npm ci
+# refuses to run without it.
 node_modules/
-package-lock.json
 
 # IDE
 .vscode/

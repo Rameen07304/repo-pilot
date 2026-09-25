@@ -39,9 +39,10 @@ USER user
 ENV PORT=7860
 EXPOSE 7860
 
+# Single-quoted inside double: no nested escaping to get wrong, which
+# would otherwise show up only as a container that never reports healthy.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-    CMD python -c "import os,urllib.request; \
-    urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", 7860)}/health').read()"
+    CMD python -c "import os,urllib.request;urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('PORT','7860')+'/health').read()"
 
 # Shell form so $PORT is expanded. One worker on purpose: the rate limiter
 # and the daily quota guard hold their counters in memory, so a second
