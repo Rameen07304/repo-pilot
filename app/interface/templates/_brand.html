@@ -1,0 +1,11 @@
+{# The brand lockup: mark in its bezel, then the wordmark.
+
+   Shared by the landing nav and the app sidebar on purpose. They had
+   drifted into two different things — "Repo Pilot" in sans beside a
+   boxed 22px mark on one page, "repo-pilot_" in mono beside a bare 26px
+   mark on the other — because each was written where it was needed.
+   One partial and one rule means that cannot happen again. #}
+<a class="brand" href="/">
+    <span class="brand-mark">{% include "_logo.html" %}</span>
+    <span class="brand-word">Repo Pilot</span>
+</a>

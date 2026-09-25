@@ -759,16 +759,6 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
         box-shadow: 0 12px 30px var(--elevation);
     }
 }
-.nav-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: var(--ink);
-    text-decoration: none;
-    font-size: 13.5px;
-    font-weight: 700;
-}
-.nav-brand .pilot-mark { width: 24px; height: 24px; }
 /* scroll-target-group lets the browser mark the section in view without a
    scroll listener; landing.js only mirrors it onto aria-current. */
 .nav-links {
@@ -1098,6 +1088,23 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 
 /* ---------- Brand, nav furniture ---------- */
 
+/* One lockup, used by both surfaces through _brand.html. Sizes live here
+   and nowhere else, so the landing nav and the app sidebar cannot drift
+   into two different brands again. */
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ink);
+    text-decoration: none;
+    /* Sans even inside the app shell, which is otherwise mono. The brand
+       is furniture rather than interface, and it should read identically
+       on the page that introduces the product and the page that is it. */
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
 .brand-mark {
     display: inline-flex;
     align-items: center;
@@ -1107,9 +1114,11 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     flex: none;
     background: var(--surface-sunken);
     border: 1px solid var(--edge-bright);
+    transition: border-color 0.4s var(--ease-out-expo);
 }
+.brand:hover .brand-mark { border-color: var(--accent); }
 .brand-mark .pilot-mark { width: 22px; height: 22px; }
-.brand-word { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.brand-word { white-space: nowrap; }
 .nav-end { display: flex; align-items: center; gap: 12px; flex: none; }
 .nav-links a { font-family: var(--font-sans); font-size: 13.5px; letter-spacing: 0; }
 
@@ -1599,17 +1608,6 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     gap: 12px;
 }
 .sidebar-top .theme-toggle { width: 32px; height: 32px; }
-.sidebar-logo {
-    color: var(--ink);
-    text-decoration: none;
-    font-size: 16px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.sidebar-logo .pilot-mark { width: 26px; height: 26px; }
-.sidebar-logo-text { display: inline-flex; align-items: baseline; }
 
 .sidebar-nav {
     display: flex;
