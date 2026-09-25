@@ -29,10 +29,31 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.application.use_cases.ingest_repo import RepoCache
-
-logger = logging.getLogger(__name__)
 from app.domain.entities import FileNode, ParsedRepoIndex, ParsedSymbol, RepoManifest
 from app.domain.value_objects import RepoUrl
+
+logger = logging.getLogger(__name__)
+
+# How long a writer waits for another writer's lock before giving up.
+# Ingest writes a manifest and a parsed index while questions read the
+# same database, so without this a concurrent pair raises "database is
+# locked" immediately instead of waiting the moment out.
+_BUSY_TIMEOUT_SECONDS = 10.0
+
+
+def _connect(db_path: str) -> sqlite3.Connection:
+    """
+    Open a connection configured for concurrent use.
+
+    WAL lets readers continue while a writer holds the lock, which is
+    exactly this app's shape: one ingest writing while several questions
+    read. busy_timeout turns the remaining writer-on-writer collision
+    from an immediate error into a short wait.
+    """
+    conn = sqlite3.connect(db_path, timeout=_BUSY_TIMEOUT_SECONDS)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute(f"PRAGMA busy_timeout={int(_BUSY_TIMEOUT_SECONDS * 1000)}")
+    return conn
 
 _CREATE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS repo_manifests (
@@ -94,7 +115,7 @@ class SqliteRepoCache(RepoCache):
             logger.info("Cache full: evicted %d least recently cached repo(s).", len(rows))
 
     def _init_tables_sync(self) -> None:
-        conn = sqlite3.connect(self._db_path)
+        conn = _connect(self._db_path)
         try:
             conn.executescript(_CREATE_TABLES_SQL)
             conn.commit()
@@ -109,7 +130,7 @@ class SqliteRepoCache(RepoCache):
         return await asyncio.to_thread(self._get_manifest_sync, repo_full_name, commit_sha)
 
     def _get_manifest_sync(self, repo_full_name: str, commit_sha: str) -> RepoManifest | None:
-        conn = sqlite3.connect(self._db_path)
+        conn = _connect(self._db_path)
         try:
             row = conn.execute(
                 "SELECT manifest_json FROM repo_manifests WHERE repo_full_name = ? AND commit_sha = ?",
@@ -127,7 +148,7 @@ class SqliteRepoCache(RepoCache):
 
     def _set_manifest_sync(self, manifest: RepoManifest) -> None:
         payload = self._manifest_to_json(manifest)
-        conn = sqlite3.connect(self._db_path)
+        conn = _connect(self._db_path)
         try:
             conn.execute(
                 """
@@ -157,7 +178,7 @@ class SqliteRepoCache(RepoCache):
         return await asyncio.to_thread(self._get_index_sync, repo_full_name, commit_sha)
 
     def _get_index_sync(self, repo_full_name: str, commit_sha: str) -> ParsedRepoIndex | None:
-        conn = sqlite3.connect(self._db_path)
+        conn = _connect(self._db_path)
         try:
             row = conn.execute(
                 "SELECT index_json FROM parsed_repo_indexes WHERE repo_full_name = ? AND commit_sha = ?",
@@ -175,7 +196,7 @@ class SqliteRepoCache(RepoCache):
 
     def _set_index_sync(self, parsed_index: ParsedRepoIndex) -> None:
         payload = self._index_to_json(parsed_index)
-        conn = sqlite3.connect(self._db_path)
+        conn = _connect(self._db_path)
         try:
             conn.execute(
                 """

@@ -420,7 +420,7 @@ class AnalyzeCodeHealthUseCase:
         for path, text in contents.items():
             if path == own_file:
                 lines = text.split("\n")
-                text = "\n".join(l for i, l in enumerate(lines, 1) if i != def_line)
+                text = "\n".join(ln for i, ln in enumerate(lines, 1) if i != def_line)
             if pattern.search(text):
                 return True
         return False

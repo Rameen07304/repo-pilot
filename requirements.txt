@@ -1,33 +1,49 @@
+# Pinned deliberately. An unpinned install of this set resolved numpy to a
+# version that broke an already-installed scikit-learn with
+# "cannot import name 'ComplexWarning'", which is a confusing failure a long
+# way from its cause. Every version below is one this project has actually
+# been run and tested against.
+#
+# To move a pin: bump it here, run the suite, and commit the two together.
+
 # --- Web framework (interface layer) ---
-fastapi
-uvicorn[standard]
-python-multipart
-jinja2
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+python-multipart==0.0.32
+jinja2==3.1.6
 
 # --- HTTP client (GitHub API) ---
-httpx
+httpx==0.28.1
 
-# --- LLM provider ---
-google-genai
+# --- LLM providers ---
+# Both are required at startup, not just the primary one: the fallback
+# client is constructed eagerly so a provider outage is survivable.
+google-genai==2.23.0
+groq==1.7.0
 
 # --- Vector store ---
-chromadb
+chromadb==1.5.9
+
+# --- Embeddings (local, never sent to a provider) ---
+sentence-transformers==6.0.1
 
 # --- Code parsing ---
-tree-sitter
-tree-sitter-python
-tree-sitter-javascript
-tree-sitter-typescript
+tree-sitter==0.26.0
+tree-sitter-python==0.25.0
+tree-sitter-javascript==0.25.0
+tree-sitter-typescript==0.23.2
+# Supplies the grammars without a dedicated package above (Dart, Go, Rust,
+# Ruby, Java, PHP). Parsing degrades to generic chunking if a grammar will
+# not load, and the ingest response says so rather than failing quietly.
+tree-sitter-language-pack==1.19.0
 
 # --- Config / environment ---
-python-dotenv
+python-dotenv==1.2.3
 
 # --- Rate limiting (route layer) ---
-slowapi
+slowapi==0.1.10
 
-#--- Groq api use if gemini not available ---
-groq
-sentence-transformers
-
-#--- for dart ---
-tree-sitter-language-pack
+# --- Transitive, pinned because they are the ones that actually break ---
+# numpy is shared by chromadb, scikit-learn and torch; leaving it open is
+# what caused the failure described at the top of this file.
+numpy==2.5.3

@@ -23,14 +23,15 @@ download (see GitHubClient.get_file_contents), not a request per file.
 """
 from __future__ import annotations
 
-import logging
 import json
+import logging
 import re
-from app.domain.entities import FileNode, ParsedRepoIndex, RepoManifest
+
 from app.application.interfaces.code_parser import CodeParser
 from app.application.interfaces.github_client import GitHubClient
 from app.application.interfaces.llm_client import LLMClient, LLMProviderError
 from app.application.interfaces.vector_store import VectorStore
+from app.domain.entities import FileNode, ParsedRepoIndex, RepoManifest
 from app.domain.value_objects import RepoUrl
 
 logger = logging.getLogger(__name__)
@@ -242,6 +243,17 @@ class IngestRepoUseCase:
             detected_stack=detected_stack,
         )
 
+        # Only report a missing grammar when this repo actually contains
+        # that language: "Dart is unavailable" on a Python repo is noise.
+        present = {node.language for node in file_nodes if node.language}
+        degraded = sorted(present & self._parser.unavailable_languages)
+        if degraded:
+            logger.warning(
+                "Parsed %s with degraded support for: %s. Those files got generic "
+                "chunking, so they have no symbols and no import edges.",
+                repo.full_name, ", ".join(degraded),
+            )
+
         manifest = RepoManifest(
             repo_url=repo,
             commit_sha=commit_sha,
@@ -251,6 +263,7 @@ class IngestRepoUseCase:
             readme_content=readme,
             summary=summary,
             skipped_file_count=skipped_count,
+            degraded_languages=degraded,
         )
 
         # Step 8: cache it — unless files are missing, in which case the

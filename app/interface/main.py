@@ -10,17 +10,28 @@ import time
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
+
+# Deliberately before the imports below: they pull in the composition
+# root, and every setting it reads must already be in the environment.
 load_dotenv()
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from fastapi.templating import Jinja2Templates  # noqa: E402
 
-from app.interface.dependencies import build_container
-from app.interface.routes import (
-    agent_tooling, ask, code_health, diagram, handbook, impact, ingest, investigate_stream,
-    onboarding, source,
+from app.interface.dependencies import build_container  # noqa: E402
+from app.interface.routes import (  # noqa: E402
+    agent_tooling,
+    ask,
+    code_health,
+    diagram,
+    handbook,
+    impact,
+    ingest,
+    investigate_stream,
+    onboarding,
+    source,
 )
 
 logging.basicConfig(level=logging.INFO)

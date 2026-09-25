@@ -33,8 +33,10 @@ from app.application.interfaces.llm_client import LLMProviderError
 from app.application.interfaces.vector_store import VectorQueryResult
 from app.application.investigation_events import (
     InvestigationEvent,
-    InvestigationEventType as EventType,
     emit,
+)
+from app.application.investigation_events import (
+    InvestigationEventType as EventType,
 )
 from app.application.use_cases.answer_question import AnswerQuestionUseCase, RepoNotIngestedError
 from app.domain.entities import Answer, Question

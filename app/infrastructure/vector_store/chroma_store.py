@@ -25,7 +25,7 @@ import logging
 import chromadb
 from chromadb.config import Settings
 
-from app.application.interfaces.vector_store import VectorStore, VectorQueryResult
+from app.application.interfaces.vector_store import VectorQueryResult, VectorStore
 from app.domain.entities import CodeChunk
 
 logger = logging.getLogger(__name__)
@@ -127,7 +127,11 @@ class ChromaVectorStore(VectorStore):
         distances = raw_result.get("distances", [[]])[0]
 
         out: list[VectorQueryResult] = []
-        for id_, doc, meta, distance in zip(ids, documents, metadatas, distances):
+        # strict: these are parallel arrays from a single response, so a
+        # length mismatch is a Chroma bug. Silently zipping to the
+        # shortest would drop results while leaving every remaining
+        # citation looking correct.
+        for id_, doc, meta, distance in zip(ids, documents, metadatas, distances, strict=True):
             # Chroma returns cosine DISTANCE (lower = more similar).
             # We convert to a 0-1 similarity score to match our
             # VectorQueryResult contract, where higher = more similar.

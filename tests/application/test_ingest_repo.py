@@ -6,16 +6,19 @@ symbols, since call tracing is not what is under test here.
 import asyncio
 import unittest
 
-from app.application.interfaces.github_client import RemoteFileMeta
-from app.application.interfaces.github_client import RepoIsPrivateError
+from app.application.interfaces.github_client import RemoteFileMeta, RepoIsPrivateError
 from app.application.use_cases.ingest_repo import IngestRepoUseCase
 
 
 class FakeGitHub:
-    def __init__(self, contents: dict[str, str], *, private: bool = False):
+    def __init__(self, contents: dict[str, str], *, private: bool = False, tree_paths=None):
         self.contents = contents
         self.private = private
         self.visibility_checked = False
+        # The tree is fixed by default so tests can simulate a partial
+        # fetch by passing fewer contents than paths. Override it when the
+        # test needs different file types in the tree.
+        self.tree_paths = tree_paths
 
     async def assert_public(self, repo):
         self.visibility_checked = True
@@ -26,10 +29,10 @@ class FakeGitHub:
         return "abc123"
 
     async def get_repo_tree(self, repo, *, commit_sha):
+        paths = self.tree_paths or ["app/main.py", "app/util.py", "requirements.txt"]
         return [
-            RemoteFileMeta(path="app/main.py", size_bytes=10, sha="1", is_binary_guess=False),
-            RemoteFileMeta(path="app/util.py", size_bytes=10, sha="2", is_binary_guess=False),
-            RemoteFileMeta(path="requirements.txt", size_bytes=10, sha="3", is_binary_guess=False),
+            RemoteFileMeta(path=p, size_bytes=10, sha=str(i), is_binary_guess=False)
+            for i, p in enumerate(paths, start=1)
         ]
 
     async def get_file_contents(self, repo, *, commit_sha, files):
@@ -50,6 +53,8 @@ class FakeVectors:
 
 
 class StubParser:
+    unavailable_languages: set = set()
+
     def detect_language(self, path):
         return None
 
@@ -226,3 +231,54 @@ class PrivateRepoGuardTest(unittest.TestCase):
         manifest, _cached = asyncio.run(self._use_case(github).execute("https://github.com/acme/widgets"))
         self.assertTrue(github.visibility_checked)
         self.assertEqual(manifest.repo_url.full_name, "acme/widgets")
+
+
+class DegradedParsingTest(unittest.TestCase):
+    """
+    A grammar that will not load means generic chunking, no symbols and no
+    import edges for that language. Ingest still succeeds, so the only way
+    a caller learns the answers got worse is if the response says so.
+    """
+
+    class DartParser(StubParser):
+        unavailable_languages = {"dart"}
+
+        def detect_language(self, path):
+            return "dart" if path.endswith(".dart") else None
+
+    def test_a_missing_grammar_is_reported_when_the_language_is_present(self):
+        uc = IngestRepoUseCase(
+            github_client=FakeGitHub(
+                {"lib/main.dart": "void main() {}", "README.md": "x"},
+                tree_paths=["lib/main.dart", "README.md"],
+            ),
+            llm_client=FakeLLM(), vector_store=FakeVectors(),
+            code_parser=self.DartParser(), cache=RecordingCache(),
+        )
+        manifest, _ = asyncio.run(uc.execute("https://github.com/acme/widgets"))
+        self.assertEqual(manifest.degraded_languages, ["dart"])
+
+    def test_a_missing_grammar_is_not_reported_when_the_language_is_absent(self):
+        # "Dart is unavailable" on a repo with no Dart in it is noise.
+        uc = IngestRepoUseCase(
+            github_client=FakeGitHub(
+                {"app/main.py": "x", "README.md": "y"},
+                tree_paths=["app/main.py", "README.md"],
+            ),
+            llm_client=FakeLLM(), vector_store=FakeVectors(),
+            code_parser=self.DartParser(), cache=RecordingCache(),
+        )
+        manifest, _ = asyncio.run(uc.execute("https://github.com/acme/widgets"))
+        self.assertEqual(manifest.degraded_languages, [])
+
+    def test_a_healthy_parser_reports_nothing(self):
+        uc = IngestRepoUseCase(
+            github_client=FakeGitHub(
+                {"app/main.py": "x", "README.md": "y"},
+                tree_paths=["app/main.py", "README.md"],
+            ),
+            llm_client=FakeLLM(), vector_store=FakeVectors(),
+            code_parser=StubParser(), cache=RecordingCache(),
+        )
+        manifest, _ = asyncio.run(uc.execute("https://github.com/acme/widgets"))
+        self.assertEqual(manifest.degraded_languages, [])

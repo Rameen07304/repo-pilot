@@ -15,8 +15,8 @@ from dataclasses import dataclass
 
 from app.application.use_cases.analyze_code_health import AnalyzeCodeHealthUseCase
 from app.application.use_cases.analyze_impact import AnalyzeImpactUseCase
-from app.application.use_cases.detect_agent_tooling import DetectAgentToolingUseCase
 from app.application.use_cases.answer_question import AnswerQuestionUseCase
+from app.application.use_cases.detect_agent_tooling import DetectAgentToolingUseCase
 from app.application.use_cases.generate_diagram import GenerateDiagramUseCase
 from app.application.use_cases.generate_handbook import GenerateHandbookUseCase
 from app.application.use_cases.generate_onboarding import GenerateOnboardingUseCase
@@ -206,13 +206,9 @@ def build_container() -> AppContainer:
     agent_tooling_use_case = DetectAgentToolingUseCase(cache=cache)
 
     handbook_use_case = GenerateHandbookUseCase(
-
         onboarding_use_case=onboarding_use_case,
-
         code_health_use_case=code_health_use_case,
-
         cache=cache,
-
     )
 
 

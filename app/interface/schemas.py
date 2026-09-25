@@ -18,6 +18,9 @@ class IngestResponse(BaseModel):
     summary: str
     was_cached: bool
     skipped_file_count: int = 0
+    # Languages in this repo whose grammar would not load here. Those
+    # files were chunked generically, so answers about them are weaker.
+    degraded_languages: list[str] = []
 
 
 class ConversationTurnRequest(BaseModel):

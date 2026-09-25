@@ -1,0 +1,24 @@
+# Lint configuration. There was none, which is how a paste with stray
+# blank lines between keyword arguments reached main unnoticed.
+[tool.ruff]
+line-length = 110
+target-version = "py313"
+exclude = ["venv", "data", "node_modules"]
+
+[tool.ruff.lint]
+# Pyflakes and pycodestyle for correctness, isort for import order, and
+# the bugbear rules that catch real mistakes. Deliberately not "UP":
+# rewriting every Optional[X] and timezone.utc across the codebase is
+# modernisation churn, and a lint rule that produces a large diff nobody
+# reads is a lint rule that gets switched off.
+select = ["E", "F", "W", "I", "B"]
+ignore = [
+    # Long lines are already bounded by line-length; E501 on top of that
+    # only fires on URLs and long string literals in comments.
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test fakes deliberately shadow names and keep unused signatures to
+# match the Protocols they stand in for.
+"tests/*" = ["B008", "B006"]

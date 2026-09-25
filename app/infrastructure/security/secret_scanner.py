@@ -60,7 +60,7 @@ def scan_and_redact(content: str) -> ScanResult:
     redacted = content
     total_findings = 0
 
-    for name, pattern in _SECRET_PATTERNS:
+    for _name, pattern in _SECRET_PATTERNS:
         redacted, count = pattern.subn("[REDACTED_SECRET]", redacted)
         if count:
             total_findings += count

@@ -3,10 +3,9 @@ Value objects: small, self-validating, immutable pieces of data.
 No framework imports here — pure Python only. If this file ever needs
 to import FastAPI, Pydantic, or a DB client, it's in the wrong layer.
 """
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 from enum import Enum
-
 
 # Matches https://github.com/owner/repo (optionally with a trailing
 # slash or .git). Anything else gets rejected at construction time —

@@ -6,7 +6,8 @@ these shapes, not the other way around.
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
-from app.domain.value_objects import RepoUrl, Citation, QuestionMode, ConfidenceScore, Persona
+
+from app.domain.value_objects import Citation, ConfidenceScore, Persona, QuestionMode, RepoUrl
 
 
 @dataclass
@@ -33,6 +34,9 @@ class RepoManifest:
     readme_content: Optional[str] = None
     summary: Optional[str] = None
     skipped_file_count: int = 0  # files that could not be fetched; >0 means this manifest is incomplete
+    # Languages present in this repo whose grammar would not load, so those
+    # files were chunked generically with no symbols and no import edges.
+    degraded_languages: list[str] = field(default_factory=list)
     ingested_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property

@@ -14,6 +14,8 @@ from fastapi.testclient import TestClient
 
 from app.application.investigation_events import (
     InvestigationEvent,
+)
+from app.application.investigation_events import (
     InvestigationEventType as EventType,
 )
 from app.application.use_cases.answer_question import RepoNotIngestedError

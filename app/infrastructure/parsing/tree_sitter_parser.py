@@ -26,14 +26,18 @@ Design decisions locked in during discussion:
     adding a new dependency or parsing HTML structurally.
 """
 from __future__ import annotations
+
 import logging
 import re
+
 import tree_sitter_javascript as ts_javascript
 import tree_sitter_python as ts_python
 import tree_sitter_typescript as ts_typescript
 from tree_sitter import Language, Node, Parser
+
 from app.application.interfaces.code_parser import ModuleEdge, TraceStep
 from app.domain.entities import CodeChunk, ParsedRepoIndex, ParsedSymbol
+
 try:
     from tree_sitter_language_pack import get_language as get_ts_language
     _DART_AVAILABLE = True
@@ -126,13 +130,21 @@ class TreeSitterCodeParser:
             "typescript": Language(ts_typescript.language_typescript()),
         }
 
+        # Grammars that were wanted and did not load. A log line is not
+        # enough: a user ingesting a Dart repo would otherwise get generic
+        # chunking, no import graph and no symbols, with nothing in the
+        # response to say why the answers got worse.
+        self._unavailable: set[str] = set()
+
         if _DART_AVAILABLE:
             try:
                 self._languages["dart"] = get_ts_language("dart")
                 logger.info("Dart grammar loaded successfully.")
             except Exception as e:
+                self._unavailable.add("dart")
                 logger.warning("Dart grammar unavailable, Dart files will use fallback chunking: %s", e)
         else:
+            self._unavailable.add("dart")
             logger.warning(
                 "tree-sitter-language-pack not installed — Dart files will use "
                 "fallback chunking, no import graph or symbol extraction for Dart."
@@ -141,6 +153,17 @@ class TreeSitterCodeParser:
         self._parsers: dict[str, Parser] = {
             lang: Parser(grammar) for lang, grammar in self._languages.items()
         }
+
+    @property
+    def unavailable_languages(self) -> set[str]:
+        """
+        Languages whose grammar failed to load in this environment.
+
+        Known to happen: tree-sitter-language-pack moves the Dart grammar
+        across drives while loading it, which throws on a Windows machine
+        whose temp directory and install live on different drives.
+        """
+        return set(self._unavailable)
 
     # ------------------------------------------------------------------
     # Public interface methods

@@ -18,7 +18,6 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from threading import Lock
 
-
 # How many calls between sweeps of the expired-window dict. Small
 # enough that the dict cannot grow far past the active caller count,
 # large enough that the sweep is not on the hot path.

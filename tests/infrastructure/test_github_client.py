@@ -107,6 +107,7 @@ if __name__ == "__main__":
 class NotFoundTest(unittest.TestCase):
     def test_404_on_commit_lookup_is_a_typed_not_found(self):
         import httpx
+
         from app.application.interfaces.github_client import GitHubRepoNotFoundError
 
         client = GitHubApiClient(token=None)

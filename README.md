@@ -33,9 +33,12 @@ Everything is read from `.env` at startup; see `.env.example` for the full list.
 | Variable | Purpose |
 |---|---|
 | `GEMINI_API_KEY`, `GROQ_API_KEY` | Both are required. `LLM_PRIMARY_PROVIDER` (`gemini` or `groq`) picks which one answers first; the other takes over if it fails. Embeddings are always computed locally, regardless. |
-| `GITHUB_TOKEN` | Raises the GitHub API rate limit from 60 to 5000 requests/hour (about 20 vs 1600 ingests per hour). |
+| `GITHUB_TOKEN` | Raises the GitHub API rate limit from 60 to 5000 requests/hour (about 20 vs 1600 ingests per hour). Scope it to **public repositories, read-only**: private repos are refused during ingest, and a token that cannot read them means a missed check could never expose one either. |
 | `MAX_FILES_PER_REPO`, `MAX_TOTAL_REPO_SIZE_BYTES` | Ingestion caps. Repos over these are rejected up front rather than partially indexed. |
 | `RATE_LIMIT_*_PER_HOUR_PER_IP` | Per-IP question limits, enforced before any LLM call is spent. |
+| `RATE_LIMIT_LLM_CALLS_PER_DAY_PER_IP` | Each caller's share of the day's model budget, so the first visitor cannot spend all of it. |
+| `MAX_CACHED_REPOS` | How many repositories the store keeps, oldest evicted first. `0` disables the cap for local use. |
+| `TRUST_PROXY_HEADERS` | Only set this when a proxy you control sits in front of the app. Off, `X-Forwarded-For` is attacker-controlled and would let anyone dodge the rate limit. |
 | `TRUST_PROXY_HEADERS` | Set `true` only behind a reverse proxy you control; otherwise `X-Forwarded-For` is client-supplied and would let anyone bypass the per-IP limits. |
 
 ## How it works
@@ -87,6 +90,29 @@ The frontend tests load the real `app.html`, `app.js` and `features.js` into jsd
 rather than a fixture, so they fail if the page and the scripts drift apart. The app
 itself still has no build step and no runtime JS dependencies.
 
+
+## Deployment
+
+The `Dockerfile` builds a self-contained image. It downloads the embedding
+model at build time rather than on first request, so a cold container does
+not make its first visitor wait out a model download.
+
+```bash
+docker build -t repo-pilot .
+docker run -p 7860:7860 --env-file .env repo-pilot
+```
+
+It targets Hugging Face Spaces, which runs containers as uid 1000 on port
+7860, but nothing is Spaces-specific: `PORT` is read at start, so the same
+image runs on Fly, Render or locally.
+
+Two things worth knowing before you scale it:
+
+- **One worker, deliberately.** The rate limiter and the daily quota guard
+  hold their counters in memory, so a second worker would silently double
+  every limit. Running more than one means moving both behind Redis first.
+- **`data/` must persist** to keep the cache across restarts. Losing it
+  costs a re-ingest and nothing else — it is designed to be rebuildable.
 
 ## Authors
 

@@ -15,9 +15,9 @@ circumstance. Parsing is 100% static analysis.
 """
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
-from app.domain.entities import ParsedRepoIndex
-from app.domain.entities import CodeChunk
-from app.domain.entities import ParsedSymbol
+
+from app.domain.entities import CodeChunk, ParsedRepoIndex, ParsedSymbol
+
 
 @dataclass(frozen=True)
 class TraceStep:
@@ -38,6 +38,16 @@ class ModuleEdge:
 
 @runtime_checkable
 class CodeParser(Protocol):
+    @property
+    def unavailable_languages(self) -> set[str]:
+        """
+        Languages this parser would support but whose grammar did not load
+        here. Files in them still get generic chunking, so ingestion
+        succeeds; callers surface the degradation rather than letting the
+        answers quietly get worse.
+        """
+        ...
+
     def detect_language(self, file_path: str) -> str | None:
         """Extension/heuristic-based detection. No parsing needed for this."""
         ...

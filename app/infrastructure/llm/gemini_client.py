@@ -48,10 +48,24 @@ class GeminiClient(LLMClient):
         if not api_key:
             raise ValueError("Gemini API key is required")
 
-        self._client = genai.Client(api_key=api_key)
+        # The transport gets the timeout, not just the await.
+        #
+        # asyncio.wait_for around asyncio.to_thread only stops WAITING: the
+        # sync SDK call keeps running in its worker thread to completion and
+        # its result is discarded. Those threads come from the default
+        # executor, which SQLite writes also use, so a slow provider could
+        # saturate the pool and stall unrelated work. Giving the client its
+        # own request timeout means the HTTP call is actually aborted and
+        # the thread ends. wait_for stays as a backstop, set slightly
+        # higher so the transport is what normally fires.
+        self._client = genai.Client(
+            api_key=api_key,
+            http_options=genai_types.HttpOptions(timeout=int(request_timeout_seconds * 1000)),
+        )
         self._model_name = model_name
         self._embedding_model_name = embedding_model_name
-        self._timeout = request_timeout_seconds
+        # Backstop only; the transport timeout above should fire first.
+        self._timeout = request_timeout_seconds + 5.0
         # How many texts go into ONE embed_content API call. Higher =
         # fewer total API calls = less quota consumed.
         self._embed_batch_size = embed_batch_size
