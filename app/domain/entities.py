@@ -271,6 +271,20 @@ class CodeHealthReport:
     findings: list[CodeHealthFinding] = field(default_factory=list)
     deductions: dict[str, int] = field(default_factory=dict)  # check -> points deducted
 
+    @property
+    def was_analysable(self) -> bool:
+        """
+        Whether there was any source to grade.
+
+        A repository of documentation, or one whose only code sits in
+        docs/ and scripts/ (which are deliberately not graded), produces
+        no findings, and no findings scores 100. Reporting that as
+        "Grade A, nothing needs attention" is false confidence about a
+        repository nothing was ever checked in. Callers must say which
+        of the two happened.
+        """
+        return self.source_file_count > 0
+
 
 @dataclass
 class Handbook:

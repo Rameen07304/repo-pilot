@@ -34,6 +34,7 @@ async def code_health(payload: CodeHealthRequest, request: Request) -> CodeHealt
         raise HTTPException(status_code=500, detail="Failed to compute code health.") from e
 
     return CodeHealthResponse(
+        was_analysable=report.was_analysable,
         score=report.score,
         grade=report.grade,
         source_file_count=report.source_file_count,

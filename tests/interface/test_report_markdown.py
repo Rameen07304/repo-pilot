@@ -97,3 +97,37 @@ class ReportMarkdownTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NothingToGradeTest(unittest.TestCase):
+    """
+    No findings scores 100. On a repository with no gradable source that
+    is not a clean bill of health, it is an unexamined one, and the two
+    must not read the same.
+    """
+
+    def test_a_repo_with_no_source_is_not_given_a_grade(self):
+        md = render_code_health_markdown(report(source_file_count=0, symbol_count=0), generated_at=WHEN)
+        self.assertIn("Nothing to grade", md)
+        self.assertNotIn("Nothing here needs attention", md)
+
+    def test_it_says_why_rather_than_just_refusing(self):
+        md = render_code_health_markdown(report(source_file_count=0), generated_at=WHEN)
+        self.assertIn("docs/", md)
+        self.assertIn("there was nothing to score", md)
+
+    def test_the_checks_are_still_listed_so_the_reader_knows_what_was_skipped(self):
+        md = render_code_health_markdown(report(source_file_count=0), generated_at=WHEN)
+        self.assertIn("Checks run:", md)
+
+    def test_a_repo_with_source_still_gets_its_grade(self):
+        md = render_code_health_markdown(
+            report(source_file_count=12, symbol_count=40, grade="B", score=88), generated_at=WHEN
+        )
+        self.assertIn("**Grade B — 88/100.**", md)
+        self.assertNotIn("Nothing to grade", md)
+
+    def test_a_genuinely_clean_repo_is_distinct_from_an_unexamined_one(self):
+        clean = render_code_health_markdown(report(source_file_count=9, findings=[]), generated_at=WHEN)
+        self.assertIn("None. Nothing to act on.", clean)
+        self.assertNotIn("Nothing to grade", clean)

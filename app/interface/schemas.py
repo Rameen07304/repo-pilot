@@ -171,6 +171,10 @@ class CodeHealthFindingResponse(BaseModel):
 
 
 class CodeHealthResponse(BaseModel):
+    # False when no source files were gradable. Without it a caller sees
+    # grade A with a score of 100 and reads it as a clean bill of health
+    # for a repository nothing was ever checked in.
+    was_analysable: bool = True
     score: int
     grade: str
     source_file_count: int

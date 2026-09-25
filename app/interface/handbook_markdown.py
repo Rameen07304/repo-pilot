@@ -132,7 +132,17 @@ def render_handbook_markdown(handbook: Handbook, *, generated_at: datetime | Non
         lines.append("")
 
     health = handbook.health
-    if health is not None:
+    if health is not None and not health.was_analysable:
+        lines += [
+            "## Maintainability",
+            "",
+            "**Nothing to grade.** No source files were found to check, so no score is "
+            "given. This repository may be documentation, or its only code may sit in "
+            "directories that are deliberately excluded from grading, such as `docs/` "
+            "and `scripts/`.",
+            "",
+        ]
+    elif health is not None:
         lines += [
             "## Maintainability",
             "",

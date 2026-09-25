@@ -56,7 +56,12 @@ class TarballFetchTest(unittest.TestCase):
             return tarball
 
         self.client._download_tarball = fake_download
-        return asyncio.run(self.client.get_file_contents(REPO, commit_sha="1ea2fdb", files=files))
+        self._last = asyncio.run(
+            self.client.get_file_contents(REPO, commit_sha="1ea2fdb", files=files)
+        )
+        # The existing tests assert on the contents; not_text is reachable
+        # through _last for the ones that care which is which.
+        return self._last.contents
 
     def test_reads_everything_from_one_archive_with_no_blob_calls(self):
         tarball = make_tarball({"app/main.py": b"print(1)\n", "README.md": b"# hi\n", "img.png": b"\x89PNG"})
@@ -92,12 +97,28 @@ class TarballFetchTest(unittest.TestCase):
         with self.assertRaises(GitHubRateLimitError):
             self.run_fetch([meta("app/main.py", 6)], GitHubRateLimitError(retry_after_seconds=30))
 
-    def test_undecodable_member_is_skipped_not_fatal(self):
-        # 3 bytes: invalid UTF-8, and an odd length so UTF-16 fails too
+    def test_undecodable_member_is_reported_as_not_text_not_refetched(self):
+        # 3 bytes: invalid UTF-8, and an odd length so UTF-16 fails too.
+        #
+        # This used to fall through to the per-blob fallback, which
+        # re-downloaded the file over the network only to fail the same
+        # decode again. On a repository shipping 228 audio files that was
+        # 228 wasted requests and about eight minutes. The archive has
+        # already proved the bytes are not text, so it is recorded and
+        # left alone.
         tarball = make_tarball({"a.py": b"ok\n", "b.py": b"\xff\xff\xff"})
         out = self.run_fetch([meta("a.py", 3), meta("b.py", 3)], tarball)
         self.assertEqual(out["a.py"], "ok\n")
-        self.assertEqual(out["b.py"], "# blob b.py")  # the archive skipped it; the per-file fallback picked it up
+        self.assertNotIn("b.py", out)
+        self.assertEqual(self._last.not_text, ["b.py"])
+
+    def test_not_text_is_not_the_same_as_missing(self):
+        # A binary is retrievable and simply not source. Counting it as a
+        # failure is what stopped such a repository ever being cached.
+        tarball = make_tarball({"a.py": b"ok\n", "b.py": b"\xff\xff\xff"})
+        self.run_fetch([meta("a.py", 3), meta("b.py", 3)], tarball)
+        self.assertEqual(self._last.not_text, ["b.py"])
+        self.assertEqual(list(self._last.contents), ["a.py"])
 
 
 if __name__ == "__main__":

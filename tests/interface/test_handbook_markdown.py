@@ -136,3 +136,29 @@ class HandbookMarkdownTest(unittest.TestCase):
         self.assertIn("tree-sitter", md)
         self.assertIn("cannot add a file or an edge", md)
         self.assertIn("Regenerate it rather than editing it by hand", md)
+
+
+class HandbookNothingToGradeTest(unittest.TestCase):
+    """
+    Three states the handbook must keep apart: graded with findings,
+    graded with none, and never graded at all.
+    """
+
+    def test_an_ungradable_repo_is_not_reported_as_healthy(self):
+        h = handbook(health=health(source_file_count=0, symbol_count=0, findings=[]))
+        md = render_handbook_markdown(h, generated_at=WHEN)
+        self.assertIn("Nothing to grade", md)
+        self.assertNotIn("Grade B", md)
+        self.assertNotIn("Nothing to act on", md)
+
+    def test_a_clean_repo_still_says_so(self):
+        h = handbook(health=health(source_file_count=9, findings=[]))
+        md = render_handbook_markdown(h, generated_at=WHEN)
+        self.assertIn("Nothing to act on.", md)
+        self.assertNotIn("Nothing to grade", md)
+
+    def test_missing_health_is_a_third_thing_again(self):
+        md = render_handbook_markdown(handbook(health=None), generated_at=WHEN)
+        self.assertIn("Not available", md)
+        self.assertNotIn("Nothing to grade", md)
+        self.assertNotIn("Nothing to act on", md)

@@ -28,6 +28,7 @@ import tarfile
 import httpx
 
 from app.application.interfaces.github_client import (
+    FetchedFiles,
     GitHubClient,
     GitHubRateLimitError,
     GitHubRepoNotFoundError,
@@ -47,6 +48,11 @@ _BINARY_EXTENSIONS = {
     ".exe", ".dll", ".so", ".dylib", ".bin", ".class", ".jar", ".pyc",
     ".woff", ".woff2", ".ttf", ".eot", ".otf",
     ".mp3", ".mp4", ".mov", ".avi", ".wav",
+    ".ogg", ".oga", ".opus", ".flac", ".m4a", ".aac", ".wma",
+    ".webm", ".mkv", ".flv", ".wmv", ".m4v",
+    ".tiff", ".tif", ".heic", ".avif", ".psd", ".ai", ".sketch",
+    ".bz2", ".xz", ".zst", ".wasm", ".pack", ".idx",
+    ".mo", ".pdb", ".dat", ".dmg", ".iso", ".parquet", ".npy", ".npz",
     ".db", ".sqlite", ".sqlite3",
 }
 
@@ -165,9 +171,10 @@ class GitHubApiClient(GitHubClient):
 
     async def get_file_contents(
         self, repo: RepoUrl, *, commit_sha: str, files: list[RemoteFileMeta]
-    ) -> dict[str, str]:
+    ) -> FetchedFiles:
         wanted = {f.path: f for f in files}
         contents: dict[str, str] = {}
+        not_text: list[str] = []
 
         try:
             archive = await self._download_tarball(repo, commit_sha)
@@ -178,15 +185,24 @@ class GitHubApiClient(GitHubClient):
             archive = None
 
         if archive is not None:
-            contents = self._extract_wanted(archive, wanted)
+            contents, not_text = self._extract_wanted(archive, wanted)
             logger.info(
-                "Read %d/%d files from one tarball download", len(contents), len(wanted)
+                "Read %d/%d files from one tarball download (%d were not text)",
+                len(contents), len(wanted), len(not_text),
             )
 
-        missing = [wanted[p] for p in wanted if p not in contents]
+        # Files that turned out to be binary are deliberately excluded
+        # here. Retrying them one blob at a time re-downloads every one
+        # over the network only to fail the same decode again: on a repo
+        # shipping 228 audio files that was 228 wasted requests and about
+        # eight minutes.
+        already = set(contents) | set(not_text)
+        missing = [wanted[p] for p in wanted if p not in already]
         if missing:
-            contents.update(await self._fetch_individually(repo, missing))
-        return contents
+            fetched, more_not_text = await self._fetch_individually(repo, missing)
+            contents.update(fetched)
+            not_text.extend(more_not_text)
+        return FetchedFiles(contents=contents, not_text=not_text)
 
     async def _download_tarball(self, repo: RepoUrl, commit_sha: str) -> bytes | None:
         """
@@ -235,8 +251,11 @@ class GitHubApiClient(GitHubClient):
                 return None
         return buf.getvalue()
 
-    def _extract_wanted(self, archive: bytes, wanted: dict[str, RemoteFileMeta]) -> dict[str, str]:
+    def _extract_wanted(
+        self, archive: bytes, wanted: dict[str, RemoteFileMeta]
+    ) -> tuple[dict[str, str], list[str]]:
         contents: dict[str, str] = {}
+        not_text: list[str] = []
         with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tar:
             for member in tar:
                 if not member.isfile():
@@ -254,11 +273,15 @@ class GitHubApiClient(GitHubClient):
                     continue
                 try:
                     contents[path] = self._finalize_content(extracted.read(), path)
-                except ValueError as e:
-                    logger.warning("Skipping %s: %s", path, e)
-        return contents
+                except ValueError:
+                    # Not decodable as text. Expected for any binary the
+                    # extension list does not name, and not a failure.
+                    not_text.append(path)
+        return contents, not_text
 
-    async def _fetch_individually(self, repo: RepoUrl, files: list[RemoteFileMeta]) -> dict[str, str]:
+    async def _fetch_individually(
+        self, repo: RepoUrl, files: list[RemoteFileMeta]
+    ) -> tuple[dict[str, str], list[str]]:
         """Per-blob fallback with bounded concurrency; one transient failure never fails the batch."""
         semaphore = asyncio.Semaphore(self._max_concurrent_fetches)
 
@@ -268,15 +291,19 @@ class GitHubApiClient(GitHubClient):
 
         results = await asyncio.gather(*[fetch_one(m) for m in files], return_exceptions=True)
         contents: dict[str, str] = {}
-        for result in results:
+        not_text: list[str] = []
+        for meta, result in zip(files, results, strict=True):
             if isinstance(result, GitHubRateLimitError):
                 raise result
+            if isinstance(result, ValueError):
+                not_text.append(meta.path)
+                continue
             if isinstance(result, Exception):
-                logger.warning("Skipping one file due to fetch error: %s", result)
+                logger.warning("Could not fetch %s: %s", meta.path, result)
                 continue
             path, content = result
             contents[path] = content
-        return contents
+        return contents, not_text
 
     def _finalize_content(self, raw_bytes: bytes, path: str) -> str:
         content = self._decode_text(raw_bytes, path)

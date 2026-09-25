@@ -57,6 +57,26 @@ def render_code_health_markdown(report: CodeHealthReport, *, generated_at: datet
         "",
         "## Result",
         "",
+    ]
+    if not report.was_analysable:
+        lines += [
+            "**Nothing to grade.** No source files were found to check.",
+            "",
+            "Every check here reads the parsed structure of source files. This repository "
+            "has none that are graded: it may be documentation, or its only code may sit in "
+            "directories that are deliberately excluded, such as `docs/` and `scripts/`. "
+            "A score is not withheld because the code is bad; there was nothing to score.",
+            "",
+            "## How this was measured",
+            "",
+            "Checks run: " + ", ".join(
+                f"{label.lower()} ({CHECK_EXPLAINER[key]})" for key, label in CHECK_LABEL.items()
+            ) + ".",
+            "",
+        ]
+        return "\n".join(lines)
+
+    lines += [
         f"**Grade {report.grade} — {report.score}/100.** {GRADE_MEANING.get(report.grade, '')}",
         "",
         f"Analysed {report.source_file_count} source file(s) and {report.symbol_count} symbol(s); "

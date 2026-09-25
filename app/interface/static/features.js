@@ -721,14 +721,27 @@
 
     function renderHealth(data) {
         const grade = el("health-grade");
-        grade.textContent = data.grade;
-        grade.className = "health-grade grade-" + data.grade.toLowerCase();
-        el("health-score-value").textContent = data.score;
-
         const counts = { high: 0, medium: 0, low: 0 };
         data.findings.forEach((f) => { counts[f.severity] += 1; });
-        el("health-verdict").textContent = GRADE_MEANING[data.grade] || "";
-        el("health-next").textContent = nextStepSentence(counts, data.findings);
+
+        if (data.was_analysable === false) {
+            // No findings scores 100, which would otherwise be shown as a
+            // clean bill of health for a repository nothing was checked in.
+            grade.textContent = "—";
+            grade.className = "health-grade";
+            el("health-score-value").textContent = "—";
+            el("health-verdict").textContent = "Nothing to grade: no source files were found to check.";
+            el("health-next").textContent =
+                "This may be documentation, or its only code may sit in directories that are " +
+                "not graded, such as docs/ and scripts/. No score is given because there was " +
+                "nothing to score.";
+        } else {
+            grade.textContent = data.grade;
+            grade.className = "health-grade grade-" + data.grade.toLowerCase();
+            el("health-score-value").textContent = data.score;
+            el("health-verdict").textContent = GRADE_MEANING[data.grade] || "";
+            el("health-next").textContent = nextStepSentence(counts, data.findings);
+        }
 
         const stats = el("health-stats");
         clear(stats);

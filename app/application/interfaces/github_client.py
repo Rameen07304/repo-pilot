@@ -9,6 +9,23 @@ from app.domain.value_objects import RepoUrl
 
 
 @dataclass(frozen=True)
+class FetchedFiles:
+    """
+    What came back from a content fetch.
+
+    not_text is kept apart from what is simply absent because they mean
+    different things. A file that will not decode as text is a binary the
+    extension list did not name — expected, and nothing is lost by
+    ignoring it. A file that is absent could not be retrieved, which
+    makes the ingest incomplete and must stop it being cached. Counting
+    both as failures meant one unrecognised audio format was enough to
+    stop a repository ever being cached.
+    """
+    contents: dict[str, str]
+    not_text: list[str]
+
+
+@dataclass(frozen=True)
 class RemoteFileMeta:
     """One entry from the repo tree — metadata only, no content yet."""
     path: str
@@ -57,7 +74,7 @@ class GitHubClient(Protocol):
 
     async def get_file_contents(
         self, repo: RepoUrl, *, commit_sha: str, files: list[RemoteFileMeta]
-    ) -> dict[str, str]:
+    ) -> FetchedFiles:
         """
         Bulk fetch: path -> content for every file in `files` that could
         be retrieved. Files missing from the result failed; the caller

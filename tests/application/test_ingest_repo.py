@@ -6,7 +6,11 @@ symbols, since call tracing is not what is under test here.
 import asyncio
 import unittest
 
-from app.application.interfaces.github_client import RemoteFileMeta, RepoIsPrivateError
+from app.application.interfaces.github_client import (
+    FetchedFiles,
+    RemoteFileMeta,
+    RepoIsPrivateError,
+)
 from app.application.use_cases.ingest_repo import IngestRepoUseCase
 
 
@@ -19,6 +23,8 @@ class FakeGitHub:
         # fetch by passing fewer contents than paths. Override it when the
         # test needs different file types in the tree.
         self.tree_paths = tree_paths
+        # Paths that were retrieved but are not text; not failures.
+        self.not_text: list[str] = []
 
     async def assert_public(self, repo):
         self.visibility_checked = True
@@ -36,7 +42,10 @@ class FakeGitHub:
         ]
 
     async def get_file_contents(self, repo, *, commit_sha, files):
-        return {f.path: self.contents[f.path] for f in files if f.path in self.contents}
+        return FetchedFiles(
+            contents={f.path: self.contents[f.path] for f in files if f.path in self.contents},
+            not_text=list(self.not_text),
+        )
 
 
 class FakeLLM:
@@ -214,8 +223,9 @@ class PrivateRepoGuardTest(unittest.TestCase):
         uc = self._use_case(github, cache=cache)
         with self.assertRaises(RepoIsPrivateError):
             asyncio.run(uc.execute("https://github.com/acme/secrets"))
-        # Nothing about it reached disk or the vector store.
-        self.assertIsNone(getattr(cache, "saved_manifest", None))
+        # Nothing about it reached the cache.
+        self.assertEqual(cache.manifests, {})
+        self.assertEqual(cache.indexes, {})
 
     def test_visibility_is_checked_before_the_cache(self):
         # A repo made private after being ingested must stop being served,
@@ -282,3 +292,44 @@ class DegradedParsingTest(unittest.TestCase):
         )
         manifest, _ = asyncio.run(uc.execute("https://github.com/acme/widgets"))
         self.assertEqual(manifest.degraded_languages, [])
+
+
+class BinaryFilesDoNotBlockCachingTest(unittest.TestCase):
+    """
+    A repository that ships binaries is still fully ingested.
+
+    Counting "not text" as "could not fetch" marked such a repo incomplete
+    and refused to cache it, so every later question re-ran the whole
+    ingest. Found on a real repo carrying 228 .ogg files.
+    """
+
+    def _run(self, *, not_text):
+        github = FakeGitHub(
+            {"app/main.py": "x", "README.md": "y"},
+            tree_paths=["app/main.py", "README.md", "sound.ogg"],
+        )
+        github.not_text = not_text
+        cache = RecordingCache()
+        uc = IngestRepoUseCase(
+            github_client=github, llm_client=FakeLLM(), vector_store=FakeVectors(),
+            code_parser=StubParser(), cache=cache,
+        )
+        manifest, _ = asyncio.run(uc.execute("https://github.com/acme/widgets"))
+        return manifest, cache
+
+    def test_a_binary_does_not_make_the_ingest_incomplete(self):
+        manifest, _ = self._run(not_text=["sound.ogg"])
+        self.assertEqual(manifest.skipped_file_count, 0)
+
+    def test_a_binary_does_not_stop_the_result_being_cached(self):
+        _manifest, cache = self._run(not_text=["sound.ogg"])
+        self.assertEqual(
+            len(cache.manifests), 1,
+            "a repository shipping binaries must still be cached",
+        )
+
+    def test_a_file_that_really_could_not_be_fetched_still_counts(self):
+        # Nothing reported it as binary, so it is genuinely missing.
+        manifest, cache = self._run(not_text=[])
+        self.assertEqual(manifest.skipped_file_count, 1)
+        self.assertEqual(cache.manifests, {}, "an incomplete ingest must not be cached")

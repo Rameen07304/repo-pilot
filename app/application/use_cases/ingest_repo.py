@@ -154,9 +154,10 @@ class IngestRepoUseCase:
         # download where it can, so a 300-file repo is one request, not
         # 300. Anything it could not retrieve is simply absent from the
         # result; a GitHubRateLimitError propagates as fatal.
-        contents = await self._github.get_file_contents(
+        fetched = await self._github.get_file_contents(
             repo, commit_sha=commit_sha, files=fetchable
         )
+        contents = fetched.contents
 
         file_nodes: list[FileNode] = [
             FileNode(
@@ -169,7 +170,11 @@ class IngestRepoUseCase:
             for meta in fetchable
             if meta.path in contents
         ]
-        skipped_count = len(fetchable) - len(file_nodes)
+        # Binaries the extension list did not name are not failures: they
+        # were retrieved and are simply not text. Only files that could
+        # not be retrieved at all make this ingest incomplete, and only
+        # those may stop it being cached.
+        skipped_count = len(fetchable) - len(file_nodes) - len(fetched.not_text)
 
         if skipped_count:
             logger.warning(
