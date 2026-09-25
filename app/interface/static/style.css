@@ -2680,3 +2680,52 @@ g.node.selected-node circle {
     text-underline-offset: 3px;
 }
 .agent-path:hover { color: var(--accent); }
+
+/* ---------- Example repositories on the empty state ---------- */
+
+.example-list {
+    list-style: none;
+    margin: 22px 0 0 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1px;
+    background: var(--hairline);
+    border: 1px solid var(--hairline);
+}
+.example {
+    display: block;
+    width: 100%;
+    height: 100%;
+    text-align: left;
+    padding: 16px 18px;
+    cursor: pointer;
+    background: var(--surface-raised);
+    border: 0;
+    font: inherit;
+    color: inherit;
+    transition: background-color 0.45s var(--ease-out-expo);
+}
+.example:hover { background: var(--surface); }
+.example-name {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--accent);
+}
+.example-meta {
+    display: block;
+    margin-top: 5px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-dim);
+}
+.example-why {
+    display: block;
+    margin-top: 10px;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--ink-muted);
+}
+.example-note { margin: 14px 0 0 0; font-size: 12.5px; }

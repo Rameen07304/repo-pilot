@@ -157,6 +157,19 @@ function renderRecentRepos() {
 // Render on page load, in case there's already saved history.
 renderRecentRepos();
 
+// Example repositories on the empty state. Delegated from the list so a
+// repo can be added in the template without touching this file, and it
+// goes through the form's own submit rather than a second ingest path,
+// so validation, status and error handling stay in one place.
+document.addEventListener("click", (e) => {
+    const button = e.target.closest(".example");
+    if (!button) return;
+    const url = button.getAttribute("data-repo");
+    if (!url) return;
+    document.getElementById("repo-url").value = url;
+    ingestForm.requestSubmit();
+});
+
 ingestForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const repoUrl = normalizeRepoUrl(document.getElementById("repo-url").value);

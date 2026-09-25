@@ -401,8 +401,34 @@
             <section class="empty-state" aria-label="No repository loaded">
                 <div class="dim">$ repo-pilot status</div>
                 <div>&gt; no repo loaded</div>
-                <div class="dim">&gt; paste a public GitHub URL above and run [ ingest repo ]</div>
-                <div class="dim">&gt; then ask a question, or generate the architecture diagram</div>
+                <div class="dim">&gt; paste a public GitHub URL above, or start with one of these</div>
+
+                {# Real repositories, sizes measured rather than guessed. Each
+                   one is here because it shows a different thing. #}
+                <ul class="example-list">
+                    <li>
+                        <button type="button" class="example" data-repo="https://github.com/gorilla/mux">
+                            <span class="example-name">gorilla/mux</span>
+                            <span class="example-meta">Go &middot; 27 files</span>
+                            <span class="example-why">Small enough to read in one sitting, and quick to ingest. The clearest look at a reading order and an import graph.</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button type="button" class="example" data-repo="https://github.com/psf/requests">
+                            <span class="example-name">psf/requests</span>
+                            <span class="example-meta">Python &middot; 130 files</span>
+                            <span class="example-why">A library almost everyone has used without reading. Good for asking a question and opening the files the answer cites.</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button type="button" class="example" data-repo="https://github.com/anthropics/skills">
+                            <span class="example-name">anthropics/skills</span>
+                            <span class="example-meta">Python &middot; 419 files &middot; slowest to read</span>
+                            <span class="example-why">Ships twenty Claude skills, so it is the one that fills the agent skills tab. Large, so the first read takes a minute.</span>
+                        </button>
+                    </li>
+                </ul>
+                <p class="example-note dim">Whoever opens one first waits while it is read; after that it is cached and instant for everyone.</p>
             </section>
         </main>
     </div>
