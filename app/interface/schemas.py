@@ -54,6 +54,7 @@ class DiagramRequest(BaseModel):
     commit_sha: str = Field(..., max_length=100)
     orientation: str = Field(default="TD", pattern="^(TD|LR)$")
     group_by_folder: bool = True
+    detail: str = Field(default="balanced", pattern="^(overview|balanced|detailed)$")
 
 
 class DiagramResponse(BaseModel):

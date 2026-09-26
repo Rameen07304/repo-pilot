@@ -24,6 +24,7 @@ async def generate_diagram(payload: DiagramRequest, request: Request) -> Diagram
             commit_sha=payload.commit_sha,
             orientation=payload.orientation,
             group_by_folder=payload.group_by_folder,
+            detail=payload.detail,
         )
     except RepoNotIndexedError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

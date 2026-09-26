@@ -47,6 +47,29 @@ class _Cluster:
         return "cluster_" + re.sub(r"[^A-Za-z0-9]", "_", self.path)
 
 
+# How much to draw. The caps are the point: a picture of a large
+# repository is only useful if it is small enough to read, and past
+# roughly fifty arrows a diagram stops being one. "detailed" keeps the
+# old, looser limits for anyone who wants them.
+DETAIL_LEVELS = {
+    # The shallowest folder level that actually shows structure.
+    # Not simply depth 1: everything in a Flutter app lives under lib/,
+    # so depth 1 collapsed a 106-file repo to two boxes and one arrow.
+    "overview": {"max_nodes": 22, "max_edges": 35, "shallowest": True},
+    # The deepest folder level that fits, which is where most repos read
+    # best. The default, because a saturated diagram helps nobody.
+    "balanced": {"max_nodes": 45, "max_edges": 60, "shallowest": False},
+    # File-level where it fits at all.
+    "detailed": {"max_nodes": 80, "max_edges": 120, "shallowest": False},
+}
+
+# Below this an "overview" is not an overview, it is one box. Used to
+# decide how shallow is too shallow.
+_MIN_OVERVIEW_NODES = 5
+
+DEFAULT_DETAIL = "balanced"
+
+
 class RepoNotIndexedError(Exception):
     """Raised when a diagram is requested for a repo+commit with no cached parsed index."""
 
@@ -69,12 +92,31 @@ class GenerateDiagramUseCase:
         self._use_llm_labels = use_llm_labels and llm_client is not None
         self._group_by_folder = group_by_folder
 
-    async def execute(self, *, repo_full_name: str, commit_sha: str, orientation: str = "TD", group_by_folder: bool | None = None) -> DiagramSpec:
+    async def execute(
+        self,
+        *,
+        repo_full_name: str,
+        commit_sha: str,
+        orientation: str = "TD",
+        group_by_folder: bool | None = None,
+        detail: str = DEFAULT_DETAIL,
+    ) -> DiagramSpec:
         parsed_index = await self._cache.get_parsed_index(repo_full_name, commit_sha)
         if parsed_index is None:
             raise RepoNotIndexedError(
                 f"No parsed code index for {repo_full_name}@{commit_sha}. Ingest the repo first."
             )
+
+        level = DETAIL_LEVELS.get(detail, DETAIL_LEVELS[DEFAULT_DETAIL])
+        # Applied per call rather than per instance: the same container
+        # serves every request, so one reader asking for detail must not
+        # change what the next reader sees.
+        # The level narrows the configured caps, never widens them. A
+        # deployment that sets a low ceiling means it; the detail control
+        # is for asking for less, not for overriding the operator.
+        max_nodes = min(self._max_nodes, level["max_nodes"])
+        max_edges = min(self._max_edges, level["max_edges"])
+        shallowest = level["shallowest"]
 
         file_edges = self._dedupe(parsed_index.module_edges)
 
@@ -89,7 +131,9 @@ class GenerateDiagramUseCase:
             )
 
         total_files = len(self._distinct_nodes(file_edges))
-        edges, granularity = self._fit_to_caps(file_edges)
+        edges, granularity = self._fit_to_caps(
+            file_edges, max_nodes=max_nodes, shallowest=shallowest
+        )
         node_ids = self._build_node_id_map(edges)
 
         labels: dict[str, str] = {}  # LLM overrides only; default labels derive from the path
@@ -101,6 +145,7 @@ class GenerateDiagramUseCase:
 
         use_grouping = self._group_by_folder if group_by_folder is None else group_by_folder
         mermaid_syntax = self._build_mermaid(
+            max_edges=max_edges,
             edges=edges,
             node_ids=node_ids,
             labels=labels,
@@ -147,7 +192,11 @@ class GenerateDiagramUseCase:
         return distinct
 
     def _fit_to_caps(
-        self, file_edges: list[tuple[str, str]]
+        self,
+        file_edges: list[tuple[str, str]],
+        *,
+        max_nodes: int | None = None,
+        shallowest: bool = False,
     ) -> tuple[list[tuple[str, str, int]], str]:
         """
         Returns weighted edges (from, to, weight) that fit within the
@@ -160,10 +209,29 @@ class GenerateDiagramUseCase:
         merge into one weighted edge. If even top-level folders exceed
         the cap, keep the most-connected ones.
         """
+        cap = self._max_nodes if max_nodes is None else max_nodes
         files = self._distinct_nodes(file_edges)
         max_depth = max(path.count("/") for path in files)
 
-        if len(files) <= self._max_nodes or max_depth == 0:
+        if shallowest and max_depth > 0:
+            # Walk out from the top until the picture says something.
+            # Stop at the first depth with enough boxes to be worth
+            # drawing, and never go past the cap.
+            best = None
+            for depth in range(1, max_depth + 1):
+                candidate = self._collapse_to_depth(file_edges, depth)
+                if not candidate:
+                    continue
+                count = len(self._distinct_nodes(candidate))
+                if count > cap:
+                    break
+                best = candidate
+                if count >= _MIN_OVERVIEW_NODES:
+                    break
+            if best:
+                return self._rank_and_cap(best, max_nodes=cap), "folder"
+
+        if len(files) <= cap or max_depth == 0:
             weighted = [(f, t, 1) for f, t in file_edges]
             granularity = "file"
         else:
@@ -171,7 +239,7 @@ class GenerateDiagramUseCase:
             weighted = self._collapse_to_depth(file_edges, 1)
             for depth in range(max_depth, 0, -1):
                 candidate = self._collapse_to_depth(file_edges, depth)
-                if len(self._distinct_nodes(candidate)) <= self._max_nodes:
+                if len(self._distinct_nodes(candidate)) <= cap:
                     weighted = candidate
                     break
             if not weighted:
@@ -186,7 +254,7 @@ class GenerateDiagramUseCase:
                     len(files), len(self._distinct_nodes(weighted)),
                 )
 
-        return self._rank_and_cap(weighted), granularity
+        return self._rank_and_cap(weighted, max_nodes=cap), granularity
 
     @staticmethod
     def _collapse_to_depth(
@@ -206,7 +274,7 @@ class GenerateDiagramUseCase:
         return [(f, t, w) for (f, t), w in weights.items()]
 
     def _rank_and_cap(
-        self, edges: list[tuple[str, str, int]]
+        self, edges: list[tuple[str, str, int]], *, max_nodes: int | None = None
     ) -> list[tuple[str, str, int]]:
         """Keep the most-connected nodes when over the node cap."""
         degree: dict[str, int] = {}
@@ -214,12 +282,13 @@ class GenerateDiagramUseCase:
             degree[from_mod] = degree.get(from_mod, 0) + weight
             degree[to_mod] = degree.get(to_mod, 0) + weight
 
+        cap = self._max_nodes if max_nodes is None else max_nodes
         nodes = self._distinct_nodes(edges)
-        if len(nodes) > self._max_nodes:
+        if len(nodes) > cap:
             ranked = sorted(nodes, key=lambda n: (-degree[n], n))
-            kept = set(ranked[: self._max_nodes])
+            kept = set(ranked[:cap])
             edges = [e for e in edges if e[0] in kept and e[1] in kept]
-            logger.info("Capped diagram to %d most-connected nodes (had %d)", self._max_nodes, len(nodes))
+            logger.info("Capped diagram to %d most-connected nodes (had %d)", cap, len(nodes))
 
         # The edge cap is applied at render time, AFTER folder-level
         # collapsing — many file edges become one cluster edge, so
@@ -248,6 +317,7 @@ class GenerateDiagramUseCase:
         orientation: str = "TD",
         group_by_folder: bool = True,
         folder_nodes: bool = False,
+        max_edges: int | None = None,
     ) -> str:
         """
         Renders nodes as a nested folder tree (Mermaid subgraphs inside
@@ -292,7 +362,7 @@ class GenerateDiagramUseCase:
                 lines.append(f'    {node_id}["{label_for(path, "")}"]')
 
         rendered = self._collapse_cluster_edges(edges, placement)
-        rendered = self._cap_rendered_edges(rendered)
+        rendered = self._cap_rendered_edges(rendered, max_edges=max_edges)
 
         for src, dst, weight, partial in rendered:
             label_parts = []
@@ -405,13 +475,14 @@ class GenerateDiagramUseCase:
         return from_clusters + into_clusters + [(s, d, w, "") for s, d, w in rest]
 
     def _cap_rendered_edges(
-        self, edges: list[tuple[str, str, int, str]]
+        self, edges: list[tuple[str, str, int, str]], *, max_edges: int | None = None
     ) -> list[tuple[str, str, int, str]]:
-        if len(edges) <= self._max_edges:
+        cap = self._max_edges if max_edges is None else max_edges
+        if len(edges) <= cap:
             return edges
         ranked = sorted(edges, key=lambda e: (-e[2], e[0], e[1]))
-        keep = set(ranked[: self._max_edges])
-        logger.info("Capped diagram at %d rendered edges for readability", self._max_edges)
+        keep = set(ranked[:cap])
+        logger.info("Capped diagram at %d rendered edges for readability", cap)
         return [e for e in edges if e in keep]
 
     @staticmethod

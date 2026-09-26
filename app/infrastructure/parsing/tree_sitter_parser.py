@@ -97,10 +97,11 @@ _DEFINITION_NODE_TYPES = {
         "class_declaration": "class",
         "method_definition": "method",
     },
-    # Best-effort node type names for Dart — not independently verified
-    # against a real parse tree the way Python/JS/TS were. If symbol
-    # extraction comes back empty on real Dart files, these names are
-    # the first thing to check and adjust.
+    # Verified against a real parse tree. Dart is the odd one here: a
+    # function's signature and its body are SIBLINGS, not parent and
+    # child, so a definition node contains no code at all. See
+    # _dart_body_of, without which every Dart symbol had zero calls and a
+    # line range covering only its signature.
     "dart": {
         "class_definition": "class",
         "mixin_declaration": "class",
@@ -153,7 +154,9 @@ _CALL_NODE_TYPE = {
     "python": ("call",),
     "javascript": ("call_expression",),
     "typescript": ("call_expression",),
-    "dart": ("method_invocation",),  # best-effort, same caveat as above
+    # Dart has no call node at all — see _extract_dart_calls. This entry
+    # exists so the table stays exhaustive; it is never read.
+    "dart": (),
     "go": ("call_expression",),
     "rust": ("call_expression",),
     # Ruby only produces a call node when the call has parentheses;
@@ -171,7 +174,7 @@ _DEFINITION_NODE_TYPES.update(_GRAMMAR_NODE_TYPES)
 # import resolution. Caches carrying an older value are re-parsed.
 #   1 - python, javascript, typescript, dart
 #   2 - go, rust, ruby, java, php fully parsed; .mjs/.cjs on the JS grammar
-PARSER_VERSION = "4"
+PARSER_VERSION = "5"
 
 _NAME_FIELD = "name"  # consistent across these grammars for def/class nodes
 
@@ -313,17 +316,36 @@ class TreeSitterCodeParser:
             # keyword the node type "class", the same name it uses for a
             # class declaration. Without this every Ruby class was
             # extracted twice, once as itself and once as <anonymous>.
-            if node.is_named and node.type in def_types:
-                name_node = node.child_by_field_name(_NAME_FIELD)
-                name = name_node.text.decode("utf-8") if name_node else "<anonymous>"
+            # A Dart function_signature nested inside a method_signature is
+            # the same method twice. The outer node owns the body, so it
+            # is the one kept.
+            nested_dart_signature = (
+                language == "dart"
+                and node.type == "function_signature"
+                and node.parent is not None
+                and node.parent.type == "method_signature"
+            )
+            if node.is_named and node.type in def_types and not nested_dart_signature:
+                if language == "dart":
+                    name = self._dart_symbol_name(node) or "<anonymous>"
+                else:
+                    name_node = node.child_by_field_name(_NAME_FIELD)
+                    name = name_node.text.decode("utf-8") if name_node else "<anonymous>"
                 call_sites = self._extract_calls_within(node, language)
+                # A Dart signature owns no code; its body is the next
+                # sibling. Without this a method reports no calls and a
+                # line range one line long.
+                body = self._dart_body_of(node) if language == "dart" else None
+                if body is not None:
+                    call_sites = call_sites + self._extract_calls_within(body, language)
+                last = body if body is not None else node
                 symbols.append(
                     ParsedSymbol(
                         name=name,
                         kind=def_types[node.type],
                         file_path=file_path,
                         start_line=node.start_point[0] + 1,  # tree-sitter is 0-indexed
-                        end_line=node.end_point[0] + 1,
+                        end_line=last.end_point[0] + 1,
                         # `calls` stays a plain name list: the code-health
                         # checks and trace_calls match on names and have no
                         # use for a position.
@@ -444,6 +466,95 @@ class TreeSitterCodeParser:
     # Internal: call + import extraction
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _dart_callee_name(argument_part: Node) -> str | None:
+        """
+        The name being called, for Dart.
+
+        Dart's grammar has no call node. `f()` parses as an identifier
+        followed by a `selector` holding an `argument_part`, and
+        `obj.m()` as an identifier, a selector carrying `.m`, then the
+        argument_part. So the callee is the nearest preceding named
+        sibling of the selector the parentheses belong to, and a `.m`
+        selector wins over the receiver before it — otherwise every
+        method call would be recorded against the object it was called
+        on.
+        """
+        selector = argument_part.parent
+        parent = selector.parent if selector is not None else None
+        if parent is None:
+            return None
+
+        candidate: str | None = None
+        for child in parent.named_children:
+            if child.id == selector.id:
+                return candidate
+            if child.type == "identifier":
+                candidate = child.text.decode("utf-8")
+            elif child.type == "selector":
+                for part in child.named_children:
+                    if part.type == "unconditional_assignable_selector":
+                        names = [n for n in part.named_children if n.type == "identifier"]
+                        if names:
+                            candidate = names[-1].text.decode("utf-8")
+        return None
+
+    @staticmethod
+    def _dart_symbol_name(node: Node) -> str | None:
+        """
+        A Dart definition's name.
+
+        A class method parses as a method_signature wrapping a
+        function_signature, and only the inner one carries the name — so
+        the node that owns the body has no name and the node with the
+        name owns no body. Reading through the wrapper is what lets one
+        symbol have both.
+
+        The first plain `identifier` child is the name: return types come
+        through as `type_identifier`, so they cannot be mistaken for it.
+        """
+        direct = node.child_by_field_name(_NAME_FIELD)
+        if direct is not None:
+            return direct.text.decode("utf-8")
+        for child in node.named_children:
+            if child.type in ("function_signature", "getter_signature", "setter_signature"):
+                for inner in child.named_children:
+                    if inner.type == "identifier":
+                        return inner.text.decode("utf-8")
+            if child.type == "identifier":
+                return child.text.decode("utf-8")
+        return None
+
+    @staticmethod
+    def _dart_body_of(node: Node) -> Node | None:
+        """
+        The body belonging to a Dart signature node.
+
+        `void f() { ... }` parses as a function_signature followed by a
+        separate function_body, so everything a reader thinks of as being
+        "inside" the function lives in the next sibling.
+        """
+        sibling = node.next_named_sibling
+        while sibling is not None and sibling.type in ("comment",):
+            sibling = sibling.next_named_sibling
+        if sibling is not None and sibling.type in ("function_body", "block"):
+            return sibling
+        return None
+
+    def _extract_dart_calls(self, node: Node) -> list[tuple[str, int]]:
+        calls: list[tuple[str, int]] = []
+
+        def walk(n: Node) -> None:
+            if n.type == "argument_part":
+                name = self._dart_callee_name(n)
+                if name:
+                    calls.append((name, n.start_point[0] + 1))
+            for child in n.children:
+                walk(child)
+
+        walk(node)
+        return calls
+
     def _extract_calls_within(self, node: Node, language: str) -> list[tuple[str, int]]:
         """
         Every call inside a definition, paired with the 1-based line it is
@@ -454,6 +565,9 @@ class TreeSitterCodeParser:
         the call. tree-sitter already knows it, so it is carried rather
         than recovered later.
         """
+        if language == "dart":
+            return self._extract_dart_calls(node)
+
         call_types = _CALL_NODE_TYPE[language]
         calls: list[tuple[str, int]] = []
 

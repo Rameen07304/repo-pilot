@@ -194,8 +194,20 @@ ingestForm.addEventListener("submit", async (e) => {
         }
 
         const switchedRepo = !currentRepo || currentRepo.repoFullName !== data.repo_full_name;
+        const switchedCommit = !currentRepo || currentRepo.commitSha !== data.commit_sha;
         currentRepo = { repoFullName: data.repo_full_name, commitSha: data.commit_sha };
         if (switchedRepo) clearConversation();  // a thread is about one repo
+
+        // Results belong to the commit they were produced from, so a new
+        // commit invalidates them even when the repo is the same. Anything
+        // still on screen would be describing code that is no longer
+        // loaded, under the name of the repo that is.
+        if (switchedRepo || switchedCommit) {
+            resetDiagram();
+            if (typeof RepoPilot.resetForNewRepo === "function") {
+                RepoPilot.resetForNewRepo();
+            }
+        }
 
         if (data.skipped_file_count > 0) {
             setStatus(
@@ -226,7 +238,7 @@ ingestForm.addEventListener("submit", async (e) => {
             timestamp: Date.now(),
         });
     } catch (err) {
-        setStatus(ingestStatus, "Network error: " + err.message, "error");
+        setStatus(ingestStatus, "Ingest failed: " + err.message, "error");
     } finally {
         btn.disabled = false;
     }
@@ -439,6 +451,30 @@ askForm.addEventListener("submit", async (e) => {
 const diagramBtn = document.getElementById("diagram-btn");
 const diagramStatus = document.getElementById("diagram-status");
 const mermaidContainer = document.getElementById("mermaid-container");
+
+/**
+ * Clears a rendered diagram and the buttons that only make sense once one
+ * exists. Called when a new repo or commit is ingested: a diagram of the
+ * previous repo left on screen under the new repo's name is worse than an
+ * empty panel.
+ */
+function resetDiagram() {
+    if (!mermaidContainer) return;
+    // Clear the inner target, never the container: #mermaid-diagram is a
+    // child that the render path looks up by id, so wiping the container
+    // removed the element the next render needed.
+    const target = document.getElementById("mermaid-diagram");
+    if (target) {
+        target.textContent = "";
+        target.removeAttribute("data-processed");
+    }
+    mermaidContainer.classList.add("hidden");
+    mermaidContainer.classList.remove("pan-zoom-active", "impact-active");
+    ["download-png-btn", "download-svg-btn"].forEach((id) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.add("hidden");
+    });
+}
 const folderToggleCheckbox = document.getElementById("folder-toggle-checkbox");
 const downloadPngBtn = document.getElementById("download-png-btn");
 const downloadSvgBtn = document.getElementById("download-svg-btn");
@@ -496,6 +532,7 @@ async function generateDiagram() {
                 commit_sha: currentRepo.commitSha,
                 orientation: orientationCheckbox && orientationCheckbox.checked ? "LR" : "TD",
                 group_by_folder: folderToggleCheckbox.checked,
+                detail: (document.getElementById("diagram-detail") || {}).value || "balanced",
             }),
         });
 
@@ -534,24 +571,17 @@ async function generateDiagram() {
             // Scroll-wheel zoom, drag-to-pan, and our own Reset View
             // button already cover the same functionality without that
             // side effect.
-            panZoomInstance = svgPanZoom(svgEl, {
-                zoomEnabled: true,
-                panEnabled: true,
-                controlIconsEnabled: false,
-                fit: true,
-                center: true,
-                minZoom: 0.2,
-                maxZoom: 10,
-            });
-            showReadable();
+            // Clicking nodes is the point of the diagram, so it is wired
+            // up first and never made to wait on anything.
             makeNodesInteractive(svgEl);
             applyImpactHighlight();
+            enablePanZoom(svgEl);
         }
 
         downloadPngBtn.classList.remove("hidden");
         downloadSvgBtn.classList.remove("hidden");
     } catch (err) {
-        setStatus(diagramStatus, "Network error: " + err.message, "error");
+        setStatus(diagramStatus, "Could not draw the diagram: " + err.message, "error");
     } finally {
         diagramBtn.disabled = false;
     }
@@ -683,6 +713,41 @@ function fitDiagram() {
 // file names stop being readable. A big diagram therefore opens at
 // this zoom from its top-left corner; "fit" still gives the overview.
 const READABLE_ZOOM = 0.6;
+
+/**
+ * Turns on pan and zoom once the SVG has been laid out.
+ *
+ * svg-pan-zoom reads getScreenCTM() on init, and that matrix is not
+ * invertible while the element has no layout — exactly the case when the
+ * diagram tab has only just been shown. So this waits a frame, and it is
+ * deliberately not awaited by the render path: pan and zoom are a
+ * convenience, and a browser that never fires the callback (a background
+ * tab throttling frames) must still leave a diagram you can click.
+ */
+function enablePanZoom(svgEl) {
+    requestAnimationFrame(() => {
+        try {
+            if (svgEl.getBoundingClientRect().width <= 0) return;
+            panZoomInstance = svgPanZoom(svgEl, {
+                zoomEnabled: true,
+                panEnabled: true,
+                controlIconsEnabled: false,
+                fit: true,
+                center: true,
+                minZoom: 0.2,
+                maxZoom: 10,
+            });
+            showReadable();
+        } catch (panErr) {
+            // A diagram that renders but cannot be panned is still a
+            // diagram. This used to reach the outer catch and replace it
+            // with an error message.
+            panZoomInstance = null;
+            mermaidContainer.classList.remove("pan-zoom-active");
+            console.warn("pan/zoom unavailable for this diagram:", panErr);
+        }
+    });
+}
 
 function showReadable() {
     if (!panZoomInstance) return;

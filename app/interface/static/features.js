@@ -267,6 +267,42 @@
         return true;
     }
 
+    /**
+     * Clears everything on screen that belongs to the repo just replaced.
+     *
+     * Ingesting used to leave the previous repo's results sitting there:
+     * its reading order, its health report, its agent skills, and a
+     * "download handbook" button offering a handbook for a repository
+     * nobody was looking at any more. Worse than clutter — the results
+     * looked like they belonged to the repo now named at the top.
+     */
+    function resetRepoScopedUi() {
+        [
+            "onboarding-guide", "handbook-btn",
+            "health-report", "health-download-btn",
+            "agents-result",
+            "impact-result",
+            "delta-picker", "delta-btn",
+            "sequence-picker", "sequence-btn",
+        ].forEach(function (id) {
+            const node = el(id);
+            if (node) node.classList.add("hidden");
+        });
+        ["onboarding-status", "diagram-status", "health-status", "agents-status", "ask-status"]
+            .forEach(function (id) {
+                const node = el(id);
+                if (node) node.textContent = "";
+            });
+        const guide = el("onboarding-guide");
+        if (guide) guide.textContent = "";
+        const agents = el("agents-result");
+        if (agents) agents.textContent = "";
+        closeDocViewer();
+        RP.hideInvestigationTimeline();
+    }
+
+    RP.resetForNewRepo = resetRepoScopedUi;
+
     const docViewerClose = el("doc-viewer-close");
     if (docViewerClose) docViewerClose.addEventListener("click", closeDocViewer);
     document.addEventListener("keydown", function (e) {

@@ -325,6 +325,14 @@
                             <input type="checkbox" id="folder-toggle-checkbox" checked />
                             organize by folder
                         </label>
+                        <label class="orientation-toggle" title="How much to draw. A large repository at full detail produces a picture nobody can read, so the default keeps it to the level that stays legible.">
+                            detail
+                            <select id="diagram-detail" aria-label="How much of the graph to draw">
+                                <option value="overview">overview &mdash; top-level folders</option>
+                                <option value="balanced" selected>balanced &mdash; fits on screen</option>
+                                <option value="detailed">detailed &mdash; everything that fits</option>
+                            </select>
+                        </label>
                         <button id="download-png-btn" class="cmd-btn secondary-btn hidden">download png</button>
                         <button id="download-svg-btn" class="cmd-btn secondary-btn hidden">download svg</button>
                         <button id="export-arch-btn" class="cmd-btn secondary-btn" type="button" title="One self-contained HTML file: the same graph, plus the source line every arrow was resolved from and a note on what the parse could not see. Opens with no internet connection.">export shareable page</button>

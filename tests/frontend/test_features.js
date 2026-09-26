@@ -547,3 +547,66 @@ test("viewer: a second document releases the first one's URL", async () => {
     assert.equal(h.objectUrls.created.length, 2);
     assert.equal(h.objectUrls.revoked.length, 1, "opening another must not leak the first");
 });
+
+// --- Stale results across repos -------------------------------------------
+
+test("ingest: a new repo clears the previous repo's results", async () => {
+    // The handbook button is revealed by onboarding. Left visible after
+    // switching repos it offers a handbook for a repository nobody is
+    // looking at, under the new repository's name.
+    const h = harnessWithRepo({
+        "/api/ingest": async () => ({
+            repo_full_name: "acme/other",
+            commit_sha: "sha2",
+            summary: "A different project.",
+            file_count: 3,
+            detected_stack: ["python"],
+            skipped_file_count: 0,
+            was_cached: false,
+        }),
+    });
+    const doc = h.document;
+
+    doc.getElementById("onboarding-btn").click();
+    await h.flush();
+    assert.ok(!doc.getElementById("handbook-btn").classList.contains("hidden"),
+        "precondition: onboarding reveals the handbook button");
+    assert.ok(doc.getElementById("onboarding-guide").textContent.length > 0);
+
+    doc.getElementById("repo-url").value = "https://github.com/acme/other";
+    doc.getElementById("ingest-form").dispatchEvent(
+        new h.window.Event("submit", { bubbles: true, cancelable: true }));
+    await h.flush(30);
+
+    assert.ok(doc.getElementById("handbook-btn").classList.contains("hidden"),
+        "the previous repo's handbook button should be gone");
+    assert.equal(doc.getElementById("onboarding-guide").textContent, "",
+        "the previous repo's reading order should be gone");
+});
+
+test("ingest: re-ingesting the same repo at a new commit also clears results", async () => {
+    // Results belong to a commit, not just a repo.
+    const h = harnessWithRepo({
+        "/api/ingest": async () => ({
+            repo_full_name: "acme/app",
+            commit_sha: "sha-NEW",
+            summary: "Same project, new commit.",
+            file_count: 3,
+            detected_stack: ["python"],
+            skipped_file_count: 0,
+            was_cached: false,
+        }),
+    });
+    const doc = h.document;
+
+    doc.getElementById("onboarding-btn").click();
+    await h.flush();
+    assert.ok(!doc.getElementById("handbook-btn").classList.contains("hidden"));
+
+    doc.getElementById("repo-url").value = "https://github.com/acme/app";
+    doc.getElementById("ingest-form").dispatchEvent(
+        new h.window.Event("submit", { bubbles: true, cancelable: true }));
+    await h.flush(30);
+
+    assert.ok(doc.getElementById("handbook-btn").classList.contains("hidden"));
+});
