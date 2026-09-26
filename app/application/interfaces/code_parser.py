@@ -39,6 +39,19 @@ class ModuleEdge:
 @runtime_checkable
 class CodeParser(Protocol):
     @property
+    def version(self) -> str:
+        """
+        Identifies this parser's output.
+
+        A cached index outlives the code that built it. Adding grammars
+        gave several languages symbols for the first time, but anything
+        already cached kept its empty index and looked unchanged. Callers
+        compare this against what a cached index was built with and
+        re-parse when they differ.
+        """
+        ...
+
+    @property
     def unavailable_languages(self) -> set[str]:
         """
         Languages this parser would support but whose grammar did not load

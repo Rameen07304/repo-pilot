@@ -282,8 +282,8 @@
                     <dd>One to check the repository is public, one for the commit, one for the file tree, and one archive download that carries the whole repository whatever its size. Ingestion never exhausts an API budget.</dd>
                 </div>
                 <div data-reveal style="--i: 1">
-                    <dt>Nine languages in the graph</dt>
-                    <dd>Python, JavaScript, TypeScript, Dart, Go, Rust, Ruby, Java and PHP, including Vue and Svelte single&#8209;file components. Each import is resolved to the file it actually points at.</dd>
+                    <dt>Nine languages, parsed not scanned</dt>
+                    <dd>Python, JavaScript, TypeScript, Dart, Go, Rust, Ruby, Java and PHP all get a real grammar: every function, class and method is extracted, not just the imports. Vue and Svelte single&#8209;file components are read for their imports, since the file is a template rather than a script. Each import is resolved to the file it actually points at.</dd>
                 </div>
                 <div data-reveal style="--i: 2">
                     <dt>Embeddings stay on the machine</dt>

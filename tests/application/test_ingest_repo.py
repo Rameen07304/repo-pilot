@@ -62,6 +62,7 @@ class FakeVectors:
 
 
 class StubParser:
+    version = "test"
     unavailable_languages: set = set()
 
     def detect_language(self, path):
@@ -333,3 +334,56 @@ class BinaryFilesDoNotBlockCachingTest(unittest.TestCase):
         manifest, cache = self._run(not_text=[])
         self.assertEqual(manifest.skipped_file_count, 1)
         self.assertEqual(cache.manifests, {}, "an incomplete ingest must not be cached")
+
+
+class StaleParsedIndexTest(unittest.TestCase):
+    """
+    A cached index outlives the parser that built it. Adding grammars
+    gave several languages symbols for the first time, and without this
+    every already-ingested repository kept its empty index and looked
+    exactly as it had before.
+    """
+
+    def _cache_with_index(self, *, version):
+        from app.domain.entities import ParsedRepoIndex, RepoManifest
+        from app.domain.value_objects import RepoUrl
+
+        cache = RecordingCache()
+        key = ("acme/widgets", "abc123")
+        cache.manifests[key] = RepoManifest(
+            repo_url=RepoUrl("https://github.com/acme/widgets"), commit_sha="abc123",
+        )
+        cache.indexes[key] = ParsedRepoIndex(
+            repo_full_name="acme/widgets", commit_sha="abc123", parser_version=version,
+        )
+        return cache
+
+    def _ingest(self, cache):
+        uc = IngestRepoUseCase(
+            github_client=FakeGitHub(
+                {"app/main.py": "x", "requirements.txt": "y"},
+                tree_paths=["app/main.py", "requirements.txt"],
+            ),
+            llm_client=FakeLLM(), vector_store=FakeVectors(),
+            code_parser=StubParser(), cache=cache,
+        )
+        return asyncio.run(uc.execute("https://github.com/acme/widgets"))
+
+    def test_an_index_from_the_current_parser_is_served_from_cache(self):
+        _manifest, was_cached = self._ingest(self._cache_with_index(version=StubParser.version))
+        self.assertTrue(was_cached)
+
+    def test_an_index_from_an_older_parser_is_re_parsed(self):
+        _manifest, was_cached = self._ingest(self._cache_with_index(version="1"))
+        self.assertFalse(was_cached, "a stale index must not be served")
+
+    def test_an_index_with_no_recorded_version_is_re_parsed(self):
+        # Everything cached before the version existed.
+        _manifest, was_cached = self._ingest(self._cache_with_index(version=""))
+        self.assertFalse(was_cached)
+
+    def test_a_fresh_ingest_stamps_the_current_parser(self):
+        cache = RecordingCache()
+        self._ingest(cache)
+        index = cache.indexes[("acme/widgets", "abc123")]
+        self.assertEqual(index.parser_version, StubParser.version)

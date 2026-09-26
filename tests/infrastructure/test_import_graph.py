@@ -137,13 +137,110 @@ class ImportGraphPerLanguageTest(unittest.TestCase):
         self.assertIn(("pkg/api/views.py", "pkg/core/models.py"), edges)
         self.assertIn(("pkg/api/views.py", "pkg/api/__init__.py"), edges)
 
-    def test_import_only_languages_still_chunk_via_fallback(self):
-        # No tree-sitter grammar for Go, so detect_language stays None
-        # (fallback chunking) while the import graph above still works.
-        self.assertIsNone(self.parser.detect_language("cmd/main.go"))
-        chunks = self.parser.chunk_file(file_path="cmd/main.go", content="package main\n\nfunc main() {}\n")
+    def test_go_is_fully_parsed_not_import_only(self):
+        # Go used to have no grammar, so it produced module edges and
+        # nothing else: no symbols, and the two code-health checks that
+        # need symbols silently found nothing. The grammar ships in the
+        # language pack this project already depends on.
+        self.assertEqual(self.parser.detect_language("cmd/main.go"), "go")
+        symbols = self.parser.extract_symbols(
+            file_path="cmd/main.go",
+            content="package main\ntype Server struct{}\nfunc (s *Server) Run() {}\nfunc main() {}\n",
+            language="go",
+        )
+        self.assertEqual(
+            {(s.name, s.kind) for s in symbols},
+            {("Server", "type"), ("Run", "method"), ("main", "function")},
+        )
+
+    def test_single_file_components_stay_import_only(self):
+        # A .vue file is a template wrapping a <script> block, not a
+        # JavaScript file, so the JS grammar cannot parse the whole thing.
+        # The import regex still reads the script block.
+        self.assertIsNone(self.parser.detect_language("src/App.vue"))
+        chunks = self.parser.chunk_file(
+            file_path="src/App.vue",
+            content="<template><div/></template>\n<script>export default {}</script>\n",
+        )
         self.assertEqual(len(chunks), 1)
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FullySupportedLanguagesTest(unittest.TestCase):
+    """
+    The five the product advertises used to be import-only: module edges
+    and nothing else, so search fell back to window chunks and the two
+    code-health checks that need symbols silently found nothing. Each
+    node type below was read off the grammar rather than assumed.
+    """
+
+    def setUp(self):
+        self.parser = TreeSitterCodeParser()
+
+    CASES = {
+        "srv.go": (
+            "go",
+            'package main\ntype Server struct{}\nfunc (s *Server) Run() { helper() }\nfunc helper() {}\n',
+            {("Server", "type"), ("Run", "method"), ("helper", "function")},
+        ),
+        "srv.rs": (
+            "rust",
+            "struct Server {}\ntrait Runner { fn go(&self); }\nfn helper() {}\n",
+            {("Server", "struct"), ("Runner", "trait"), ("go", "function"), ("helper", "function")},
+        ),
+        "srv.rb": (
+            "ruby",
+            "class Server\n  def run\n  end\nend\nmodule Util\nend\n",
+            {("Server", "class"), ("run", "method"), ("Util", "module")},
+        ),
+        "Srv.java": (
+            "java",
+            "public class Server {\n  public void run() {}\n}\ninterface I { void go(); }\n",
+            {("Server", "class"), ("run", "method"), ("I", "interface"), ("go", "method")},
+        ),
+        "srv.php": (
+            "php",
+            "<?php\nclass Server {\n  public function run() {}\n}\nfunction helper() {}\n",
+            {("Server", "class"), ("run", "method"), ("helper", "function")},
+        ),
+        "srv.mjs": (
+            "javascript",
+            "export class Server { run() {} }\nexport function helper() {}\n",
+            {("Server", "class"), ("run", "method"), ("helper", "function")},
+        ),
+    }
+
+    def test_each_language_is_detected(self):
+        for path, (lang, _src, _want) in self.CASES.items():
+            with self.subTest(path=path):
+                self.assertEqual(self.parser.detect_language(path), lang)
+
+    def test_each_language_yields_symbols(self):
+        for path, (lang, src, want) in self.CASES.items():
+            with self.subTest(path=path):
+                symbols = self.parser.extract_symbols(file_path=path, content=src, language=lang)
+                self.assertEqual({(s.name, s.kind) for s in symbols}, want)
+
+    def test_no_symbol_is_anonymous(self):
+        # Ruby's grammar types the literal `class` keyword "class", the
+        # same as a class declaration, so every class came back twice
+        # until unnamed tokens were excluded.
+        for path, (lang, src, _want) in self.CASES.items():
+            with self.subTest(path=path):
+                symbols = self.parser.extract_symbols(file_path=path, content=src, language=lang)
+                self.assertNotIn("<anonymous>", [s.name for s in symbols])
+
+    def test_calls_are_traced_where_the_grammar_allows(self):
+        # PHP splits free functions and method calls across two node
+        # types; a single-type lookup would have missed one of them.
+        symbols = self.parser.extract_symbols(
+            file_path="srv.php",
+            content="<?php\nclass S { public function run() { helper(); $this->other(); } }\n",
+            language="php",
+        )
+        calls = {c for s in symbols for c in s.calls}
+        self.assertIn("helper", calls)
+        self.assertIn("other", calls)

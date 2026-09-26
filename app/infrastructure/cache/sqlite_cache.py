@@ -267,4 +267,5 @@ class SqliteRepoCache(RepoCache):
             commit_sha=data["commit_sha"],
             symbols=[ParsedSymbol(**s) for s in data["symbols"]],
             module_edges=[tuple(edge) for edge in data["module_edges"]],
+            parser_version=data.get("parser_version", ""),
         )

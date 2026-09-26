@@ -165,6 +165,13 @@ class ParsedRepoIndex:
     commit_sha: str
     symbols: list[ParsedSymbol] = field(default_factory=list)
     module_edges: list[tuple[str, str]] = field(default_factory=list)  # (from_module, to_module)
+    # Which parser produced this. A cached index outlives the code that
+    # built it: adding grammars for Go, Rust, Ruby, Java and PHP gave
+    # those repositories symbols for the first time, but anything already
+    # cached kept its empty one and looked unchanged. Bump the constant
+    # in tree_sitter_parser when parsing changes and stale indexes are
+    # re-parsed on next use instead of being served forever.
+    parser_version: str = ""
 
     def symbols_in_file(self, file_path: str) -> list[ParsedSymbol]:
         return [s for s in self.symbols if s.file_path == file_path]

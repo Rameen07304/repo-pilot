@@ -118,6 +118,16 @@ class IngestRepoUseCase:
         # same commit" free. No GitHub/LLM calls at all on a cache hit.
         cached_manifest = await self._cache.get(repo.full_name, commit_sha)
         cached_index = await self._cache.get_parsed_index(repo.full_name, commit_sha)
+        # An index built by an older parser may be missing symbols this
+        # one would find, so it is treated as absent rather than served.
+        # Without this, adding grammars changed nothing for any
+        # repository that had already been ingested.
+        if cached_index is not None and cached_index.parser_version != self._parser.version:
+            logger.info(
+                "Re-parsing %s: cached index was built by parser %r, current is %r.",
+                repo.full_name, cached_index.parser_version or "unknown", self._parser.version,
+            )
+            cached_index = None
         if cached_manifest is not None and cached_index is not None:
             logger.info("Cache hit for %s@%s", repo.full_name, commit_sha)
             return cached_manifest, True
@@ -229,6 +239,7 @@ class IngestRepoUseCase:
             commit_sha=commit_sha,
             symbols=symbols,
             module_edges=module_edges,
+            parser_version=self._parser.version,
         )
         if not skipped_count:
             await self._cache.set_parsed_index(parsed_index)

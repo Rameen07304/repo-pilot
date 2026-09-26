@@ -50,9 +50,19 @@ _EXTENSION_TO_LANGUAGE = {
     ".py": "python",
     ".js": "javascript",
     ".jsx": "javascript",
+    # .mjs and .cjs are plain JavaScript with a module flag, so the JS
+    # grammar parses them. They were import-only, which meant a repo of
+    # ES modules produced module edges and no symbols at all.
+    ".mjs": "javascript",
+    ".cjs": "javascript",
     ".ts": "typescript",
     ".tsx": "typescript",
     ".dart": "dart",
+    ".go": "go",
+    ".rs": "rust",
+    ".rb": "ruby",
+    ".java": "java",
+    ".php": "php",
 }
 
 # Languages we can build an import graph for WITHOUT a tree-sitter
@@ -62,15 +72,11 @@ _EXTENSION_TO_LANGUAGE = {
 # components carry plain ES imports in their <script> block, so the
 # JS import regex works on them as-is.
 _IMPORT_ONLY_EXTENSION_TO_LANGUAGE = {
-    ".mjs": "javascript",
-    ".cjs": "javascript",
+    # Single-file components: the file is a template with a <script>
+    # block inside, not a JavaScript file, so the JS grammar cannot parse
+    # the whole thing. The import regex still reads the script block.
     ".vue": "javascript",
     ".svelte": "javascript",
-    ".go": "go",
-    ".rs": "rust",
-    ".rb": "ruby",
-    ".java": "java",
-    ".php": "php",
 }
 
 # Tree-sitter node types that count as a "symbol" worth extracting,
@@ -99,12 +105,69 @@ _DEFINITION_NODE_TYPES = {
     },
 }
 
-_CALL_NODE_TYPE = {
-    "python": "call",
-    "javascript": "call_expression",
-    "typescript": "call_expression",
-    "dart": "method_invocation",  # best-effort, same caveat as above
+# Node types verified by parsing a sample of each language rather than
+# assumed: Go keeps a type's name on the nested type_spec, not on the
+# type_declaration above it, and Ruby names its class node "class".
+_GRAMMAR_NODE_TYPES = {
+    "go": {
+        "function_declaration": "function",
+        "method_declaration": "method",
+        "type_spec": "type",
+        "type_alias": "type",
+    },
+    "rust": {
+        "function_item": "function",
+        # A trait method signature is part of the API surface, the same
+        # as an interface method in Java or PHP, which are both captured.
+        "function_signature_item": "function",
+        "struct_item": "struct",
+        "trait_item": "trait",
+        "enum_item": "enum",
+    },
+    "ruby": {
+        "class": "class",
+        "module": "module",
+        "method": "method",
+        "singleton_method": "method",
+    },
+    "java": {
+        "class_declaration": "class",
+        "interface_declaration": "interface",
+        "enum_declaration": "enum",
+        "method_declaration": "method",
+    },
+    "php": {
+        "class_declaration": "class",
+        "interface_declaration": "interface",
+        "trait_declaration": "trait",
+        "function_definition": "function",
+        "method_declaration": "method",
+    },
 }
+
+_CALL_NODE_TYPE = {
+    "python": ("call",),
+    "javascript": ("call_expression",),
+    "typescript": ("call_expression",),
+    "dart": ("method_invocation",),  # best-effort, same caveat as above
+    "go": ("call_expression",),
+    "rust": ("call_expression",),
+    # Ruby only produces a call node when the call has parentheses;
+    # bare `do_thing` parses as an identifier. Best-effort, like Dart.
+    "ruby": ("call",),
+    "java": ("method_invocation",),
+    # PHP splits free functions from method calls across two node types.
+    "php": ("function_call_expression", "member_call_expression"),
+}
+
+_DEFINITION_NODE_TYPES.update(_GRAMMAR_NODE_TYPES)
+
+# Bump when parsing changes in a way that makes an already-cached index
+# wrong or incomplete: a new grammar, different node types, changed
+# import resolution. Caches carrying an older value are re-parsed.
+#   1 - python, javascript, typescript, dart
+#   2 - go, rust, ruby, java, php fully parsed; .mjs/.cjs on the JS grammar
+PARSER_VERSION = "2"
 
 _NAME_FIELD = "name"  # consistent across these grammars for def/class nodes
 
@@ -136,23 +199,40 @@ class TreeSitterCodeParser:
         # response to say why the answers got worse.
         self._unavailable: set[str] = set()
 
+        # Everything else comes from the language pack. Each is loaded
+        # independently so one grammar failing on one platform costs only
+        # that language: Dart's loader moves a file across drives while
+        # loading, which throws on a Windows machine whose temp directory
+        # and install sit on different drives.
+        _PACK_LANGUAGES = ("dart", "go", "rust", "ruby", "java", "php")
+
         if _DART_AVAILABLE:
-            try:
-                self._languages["dart"] = get_ts_language("dart")
-                logger.info("Dart grammar loaded successfully.")
-            except Exception as e:
-                self._unavailable.add("dart")
-                logger.warning("Dart grammar unavailable, Dart files will use fallback chunking: %s", e)
+            for lang in _PACK_LANGUAGES:
+                try:
+                    self._languages[lang] = get_ts_language(lang)
+                except Exception as e:
+                    self._unavailable.add(lang)
+                    logger.warning(
+                        "%s grammar unavailable; those files fall back to generic "
+                        "chunking with no symbols and no import graph: %s", lang, e,
+                    )
+            loaded = sorted(set(_PACK_LANGUAGES) - self._unavailable)
+            logger.info("Grammars loaded from the language pack: %s", ", ".join(loaded))
         else:
-            self._unavailable.add("dart")
+            self._unavailable.update(_PACK_LANGUAGES)
             logger.warning(
-                "tree-sitter-language-pack not installed — Dart files will use "
-                "fallback chunking, no import graph or symbol extraction for Dart."
+                "tree-sitter-language-pack not installed — %s files will use "
+                "fallback chunking, no import graph or symbol extraction.",
+                ", ".join(_PACK_LANGUAGES),
             )
 
         self._parsers: dict[str, Parser] = {
             lang: Parser(grammar) for lang, grammar in self._languages.items()
         }
+
+    @property
+    def version(self) -> str:
+        return PARSER_VERSION
 
     @property
     def unavailable_languages(self) -> set[str]:
@@ -225,7 +305,11 @@ class TreeSitterCodeParser:
         symbols: list[ParsedSymbol] = []
 
         def walk(node: Node) -> None:
-            if node.type in def_types:
+            # is_named matters: Ruby's grammar gives the literal `class`
+            # keyword the node type "class", the same name it uses for a
+            # class declaration. Without this every Ruby class was
+            # extracted twice, once as itself and once as <anonymous>.
+            if node.is_named and node.type in def_types:
                 name_node = node.child_by_field_name(_NAME_FIELD)
                 name = name_node.text.decode("utf-8") if name_node else "<anonymous>"
                 calls = self._extract_calls_within(node, language)
@@ -339,15 +423,22 @@ class TreeSitterCodeParser:
     # ------------------------------------------------------------------
 
     def _extract_calls_within(self, node: Node, language: str) -> list[str]:
-        call_type = _CALL_NODE_TYPE[language]
+        call_types = _CALL_NODE_TYPE[language]
         calls: list[str] = []
 
         def walk(n: Node) -> None:
-            if n.type == call_type:
+            if n.type in call_types:
                 # The callee is usually the first named child (the
                 # function/identifier being called before the parens).
-                callee = n.child_by_field_name("function") or (
-                    n.named_children[0] if n.named_children else None
+                # Grammars disagree on which field holds the callee:
+                # "function" for most, "name" in Java, "method" in Ruby
+                # and PHP. Falling straight to the first named child would
+                # return the receiver of obj.method() rather than method.
+                callee = (
+                    n.child_by_field_name("function")
+                    or n.child_by_field_name("name")
+                    or n.child_by_field_name("method")
+                    or (n.named_children[0] if n.named_children else None)
                 )
                 if callee is not None:
                     text = callee.text.decode("utf-8")
