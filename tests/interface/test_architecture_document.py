@@ -261,3 +261,53 @@ class DeltaDocumentTest(unittest.TestCase):
 
     def test_it_states_that_neither_side_came_from_a_model(self):
         self.assertIn("No language model took part in either one", self.render())
+
+
+class ToolbarTest(unittest.TestCase):
+    """
+    The filter and the image exports.
+
+    They exist because Archify's own stated weakness is that a large
+    repository draws a diagram too dense to read, and because a diagram
+    people cannot paste into a review does not get looked at. They are
+    also the only part of either document that does nothing without
+    JavaScript, so the rule is that they must not be visible until the
+    script that drives them has run.
+    """
+
+    def both_documents(self):
+        from app.interface.architecture_delta_html import render_architecture_delta_html
+
+        yield "export", render_architecture_html(export())
+        yield "delta", render_architecture_delta_html(DeltaDocumentTest.delta())
+
+    def test_controls_ship_hidden_so_nothing_inert_is_offered(self):
+        for name, html in self.both_documents():
+            with self.subTest(document=name):
+                for control in ('id="rp-filter"', 'id="rp-png"', 'id="rp-card"'):
+                    self.assertIn(control, html)
+                # Each control carries both the hidden attribute and the
+                # marker the script uses to reveal it.
+                self.assertEqual(html.count("data-needs-js hidden"), 3)
+
+    def test_both_documents_carry_the_script(self):
+        for name, html in self.both_documents():
+            with self.subTest(document=name):
+                self.assertIn("<script>", html)
+                self.assertIn("rp-edge-hit", html)
+
+    def test_the_delta_detail_panel_is_actually_wired(self):
+        # It had a panel and no script, so clicking an arrow did nothing.
+        from app.interface.architecture_delta_html import render_architecture_delta_html
+
+        html = render_architecture_delta_html(DeltaDocumentTest.delta())
+        self.assertIn('id="detail"', html)
+        self.assertLess(html.index('id="detail"'), html.index("<script>"))
+
+    def test_image_export_stays_offline(self):
+        # Rasterising must not reach for a font or a library: the whole
+        # point is a document that works with no network.
+        for name, html in self.both_documents():
+            with self.subTest(document=name):
+                for host in ("cdnjs", "jsdelivr", "unpkg", "fonts.googleapis"):
+                    self.assertNotIn(host, html)

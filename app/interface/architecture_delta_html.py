@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from html import escape
 
 from app.domain.entities import ArchitectureDelta, ArchitectureExport, ExportedEdge
-from app.interface.architecture_html import _STYLE
+from app.interface.architecture_html import _SCRIPT, _STYLE, _TOOLBAR
 from app.interface.architecture_svg import render_architecture_svg
 
 _DELTA_STYLE = """
@@ -242,6 +242,7 @@ def render_architecture_delta_html(
 
     out += [
         "<h2>The graph at head</h2>",
+        _TOOLBAR,
         '<div class="panel figure">',
         svg,
         "</div>",
@@ -267,6 +268,8 @@ def render_architecture_delta_html(
         f"<code>{escape(_short(head_sha))}</code>. Structure only: this says nothing about "
         "what changed inside a file that kept the same dependencies.</p>",
         "</footer>",
-        "</main></body></html>",
+        "</main>",
+        f"<script>{_SCRIPT}</script>",
+        "</body></html>",
     ]
     return "\n".join(out)
