@@ -5,10 +5,11 @@ Call sequence: what runs when one function runs.
   POST /api/sequence         — the trace, as one standalone page
   POST /api/sequence/flow    — the same page, from a question
 
-No model runs behind the first two, so they do not touch the daily LLM
-budget. /flow does: it embeds the question and makes one bounded call to
-choose a starting point, so it is on the budget as well as the hourly
-limiter. The trace itself is parse-driven either way.
+The first two read the cached parse and run no model, so they are on
+the generous document limiter and not on the daily LLM budget. /flow
+makes one bounded call to choose a starting point, so it is on the
+question limiter and the budget like any other question. The trace itself
+is parse-driven either way.
 """
 from __future__ import annotations
 
@@ -50,11 +51,11 @@ async def sequence(payload: CallSequenceRequest, request: Request) -> HTMLRespon
     container = request.app.state.container
     client_ip = get_client_ip(request, trust_proxy_headers=container.trust_proxy_headers)
 
-    allowed, _remaining = container.question_limiter.check_and_increment(client_ip)
+    allowed, _remaining = container.document_limiter.check_and_increment(client_ip)
     if not allowed:
         raise HTTPException(
             status_code=429,
-            detail="Rate limit reached for your IP this hour. Try again later.",
+            detail="Too many documents generated from your IP this hour. Try again shortly.",
         )
 
     try:

@@ -2729,3 +2729,46 @@ g.node.selected-node circle {
     color: var(--ink-muted);
 }
 .example-note { margin: 14px 0 0 0; font-size: 12.5px; }
+
+
+/* ------------------------------------------------------------------
+   Document viewer — shows a generated page instead of downloading it
+   ------------------------------------------------------------------ */
+.doc-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    display: flex;
+    flex-direction: column;
+    background: var(--base);
+}
+.doc-viewer.hidden { display: none; }
+body.has-doc-viewer { overflow: hidden; }
+
+.doc-viewer-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--surface);
+    flex-wrap: wrap;
+}
+.doc-viewer-title {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--ink);
+    font-weight: 600;
+}
+.doc-viewer-bar .dim { font-size: 0.82rem; }
+.doc-viewer-bar #doc-viewer-download { margin-left: auto; text-decoration: none; }
+.doc-viewer-frame {
+    flex: 1 1 auto;
+    width: 100%;
+    border: 0;
+    background: var(--surface);
+}
+@media (max-width: 640px) {
+    .doc-viewer-bar { gap: 8px; padding: 8px 10px; }
+    .doc-viewer-bar .dim { width: 100%; order: 3; }
+}

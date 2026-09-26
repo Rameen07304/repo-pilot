@@ -328,9 +328,9 @@
                         <button id="download-png-btn" class="cmd-btn secondary-btn hidden">download png</button>
                         <button id="download-svg-btn" class="cmd-btn secondary-btn hidden">download svg</button>
                         <button id="export-arch-btn" class="cmd-btn secondary-btn" type="button" title="One self-contained HTML file: the same graph, plus the source line every arrow was resolved from and a note on what the parse could not see. Opens with no internet connection.">export shareable page</button>
-                        <label id="delta-picker" class="orientation-toggle hidden" title="Compare this commit's structure against an earlier one. Both sides are parsed, so a difference means the code differs.">
-                            compare against
-                            <select id="delta-base-select" aria-label="Earlier commit to compare against"></select>
+                        <label id="delta-picker" class="orientation-toggle hidden" title="This repository was ingested here more than once, at different commits. Compare the structure then against the structure now — both sides are parsed, so a difference means the code differs.">
+                            <span id="delta-picker-label">compare with an earlier ingest of this repo</span>
+                            <select id="delta-base-select" aria-label="Earlier ingest of this repository to compare against"></select>
                         </label>
                         <button id="delta-btn" class="cmd-btn secondary-btn hidden" type="button">architecture delta</button>
                         <label id="sequence-picker" class="orientation-toggle hidden" title="Trace what runs when one function runs. Every step is a call tree-sitter found, with the line it is written on.">
@@ -352,6 +352,28 @@
                     </div>
                 </div>
             </section>
+
+            <!-- Document viewer: the architecture export, the delta, a call
+                 sequence and a question flow are all complete HTML pages.
+                 They are shown here rather than downloaded, because a file
+                 in the downloads folder is not a result you can look at.
+
+                 The frame is sandboxed WITHOUT allow-same-origin on purpose.
+                 A blob: URL inherits the origin of the page that made it, so
+                 without this the document's inline script would run with full
+                 access to this app. It needs scripts (filtering, route
+                 tracing, image export) and popups (its GitHub links), and
+                 nothing else. -->
+            <div id="doc-viewer" class="doc-viewer hidden" role="dialog" aria-modal="true" aria-labelledby="doc-viewer-title" hidden>
+                <header class="doc-viewer-bar">
+                    <h3 id="doc-viewer-title" class="doc-viewer-title"></h3>
+                    <span id="doc-viewer-note" class="dim"></span>
+                    <a id="doc-viewer-download" class="cmd-btn secondary-btn" download>download</a>
+                    <button type="button" id="doc-viewer-close" class="tool-btn" title="Close (Esc)">&times;</button>
+                </header>
+                <iframe id="doc-viewer-frame" class="doc-viewer-frame" title="Generated document"
+                        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe>
+            </div>
 
             <!-- File detail drawer: opened by clicking a diagram node or a
                  reading-order file. Connects source -> ask -> impact. -->

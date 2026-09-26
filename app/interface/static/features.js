@@ -221,6 +221,95 @@
     if (handbookBtn) handbookBtn.addEventListener("click", downloadHandbook);
 
     // ===============================================================
+    // Document viewer
+    // ===============================================================
+
+    // The four generated documents are complete HTML pages. They used to
+    // download, which meant the result of clicking a button was a file in
+    // a folder somewhere — the one place you cannot look at it. They open
+    // here instead, and downloading is a button inside the viewer for
+    // when someone actually wants the file.
+    let viewerUrl = null;
+
+    function closeDocViewer() {
+        const viewer = el("doc-viewer");
+        if (!viewer) return;
+        viewer.classList.add("hidden");
+        viewer.hidden = true;
+        document.body.classList.remove("has-doc-viewer");
+        const frame = el("doc-viewer-frame");
+        if (frame) frame.src = "about:blank";
+        if (viewerUrl) {
+            URL.revokeObjectURL(viewerUrl);
+            viewerUrl = null;
+        }
+    }
+
+    function showDocument(blob, filename, title, note) {
+        const viewer = el("doc-viewer");
+        const frame = el("doc-viewer-frame");
+        if (!viewer || !frame) return false;
+
+        if (viewerUrl) URL.revokeObjectURL(viewerUrl);
+        viewerUrl = URL.createObjectURL(blob);
+
+        el("doc-viewer-title").textContent = title;
+        el("doc-viewer-note").textContent = note || "";
+        const download = el("doc-viewer-download");
+        download.href = viewerUrl;
+        download.download = filename;
+
+        frame.src = viewerUrl;
+        viewer.hidden = false;
+        viewer.classList.remove("hidden");
+        document.body.classList.add("has-doc-viewer");
+        el("doc-viewer-close").focus();
+        return true;
+    }
+
+    const docViewerClose = el("doc-viewer-close");
+    if (docViewerClose) docViewerClose.addEventListener("click", closeDocViewer);
+    document.addEventListener("keydown", function (e) {
+        const viewer = el("doc-viewer");
+        if (e.key === "Escape" && viewer && !viewer.classList.contains("hidden")) {
+            closeDocViewer();
+        }
+    });
+
+    /**
+     * POSTs to an endpoint that returns a whole HTML document and shows it.
+     * Every one of these calls looked the same, down to the error handling,
+     * so they share one path: a failure message from the server is shown
+     * as-is, because "rate limit reached" is the thing the reader needs to
+     * see rather than a generic failure.
+     */
+    async function openGeneratedDocument(options) {
+        const btn = el(options.buttonId);
+        const status = el(options.statusId);
+        if (btn) btn.disabled = true;
+        RP.setStatus(status, options.working, "loading");
+        try {
+            const res = await fetch(options.url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(options.body),
+            });
+            if (!res.ok) {
+                let detail = options.failure;
+                try { detail = (await res.json()).detail || detail; } catch (e) { /* not JSON */ }
+                throw new Error(detail);
+            }
+            const blob = await res.blob();
+            showDocument(blob, options.filename, options.title, options.note);
+            RP.setStatus(status, options.done, "success");
+        } catch (err) {
+            RP.setStatus(status, err.message, "error");
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    // ===============================================================
     // Shareable architecture page
     // ===============================================================
 
@@ -230,39 +319,23 @@
     // cached parse, written out.
     async function exportArchitecture() {
         const keys = repoKeys();
-        const status = el("diagram-status");
         if (!keys) {
-            RP.setStatus(status, "ingest a repository first.", "error");
+            RP.setStatus(el("diagram-status"), "ingest a repository first.", "error");
             return;
         }
-        const btn = el("export-arch-btn");
-        btn.disabled = true;
-        RP.setStatus(status, "writing the graph, its source lines and its blind spots into one page...", "loading");
-        try {
-            const res = await fetch("/api/architecture", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(keys),
-            });
-            if (!res.ok) {
-                let detail = "The architecture page could not be built.";
-                try { detail = (await res.json()).detail || detail; } catch (e) { /* not JSON */ }
-                throw new Error(detail);
-            }
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = keys.repo_full_name.replace(/[^\w-]/g, "-")
-                + "-architecture-" + keys.commit_sha.slice(0, 7) + ".html";
-            a.click();
-            URL.revokeObjectURL(url);
-            RP.setStatus(status, "downloaded. It opens offline, and every arrow links to the line it came from.", "success");
-        } catch (err) {
-            RP.setStatus(status, err.message, "error");
-        } finally {
-            btn.disabled = false;
-        }
+        await openGeneratedDocument({
+            url: "/api/architecture",
+            body: keys,
+            buttonId: "export-arch-btn",
+            statusId: "diagram-status",
+            working: "writing the graph, its source lines and its blind spots into one page...",
+            failure: "The architecture page could not be built.",
+            done: "every arrow links to the line it came from. Filter, trace a route, or export an image inside the page.",
+            filename: keys.repo_full_name.replace(/[^\w-]/g, "-")
+                + "-architecture-" + keys.commit_sha.slice(0, 7) + ".html",
+            title: keys.repo_full_name + " — architecture",
+            note: "self-contained: this page works with no internet connection",
+        });
     }
 
     const exportArchBtn = el("export-arch-btn");
@@ -276,6 +349,12 @@
     // new HEAD, so the picker lists what is actually comparable rather
     // than asking for a SHA nobody has parsed. With nothing to compare
     // against, the control stays hidden instead of offering a dead end.
+    function humanDate(iso) {
+        const d = new Date(iso);
+        if (isNaN(d)) return iso.slice(0, 10);
+        return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    }
+
     async function refreshDeltaPicker() {
         const picker = el("delta-picker");
         const select = el("delta-base-select");
@@ -306,9 +385,18 @@
         others.forEach(function (c) {
             const opt = document.createElement("option");
             opt.value = c.commit_sha;
-            opt.textContent = c.short_sha + " · " + c.cached_at.slice(0, 10);
+            // A bare sha says nothing about why it is on offer. What a
+            // reader needs to know is that this is the same repository,
+            // read here on an earlier day.
+            opt.textContent = "read on " + humanDate(c.cached_at) + "  ·  " + c.short_sha;
             select.appendChild(opt);
         });
+        const label = el("delta-picker-label");
+        if (label) {
+            label.textContent = others.length === 1
+                ? "compare with the earlier ingest of this repo"
+                : "compare with an earlier ingest of this repo";
+        }
         picker.classList.remove("hidden");
         btn.classList.remove("hidden");
     }
@@ -316,41 +404,24 @@
     async function downloadDelta() {
         const repo = RP.getCurrentRepo();
         const select = el("delta-base-select");
-        const status = el("diagram-status");
         if (!repo || !select || !select.value) return;
-
-        const btn = el("delta-btn");
-        btn.disabled = true;
-        RP.setStatus(status, "comparing the two parses, resolving renames before dependencies...", "loading");
-        try {
-            const res = await fetch("/api/architecture/delta", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    repo_full_name: repo.repoFullName,
-                    base_sha: select.value,
-                    head_sha: repo.commitSha,
-                }),
-            });
-            if (!res.ok) {
-                let detail = "The architecture delta could not be built.";
-                try { detail = (await res.json()).detail || detail; } catch (e) { /* not JSON */ }
-                throw new Error(detail);
-            }
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = repo.repoFullName.replace(/[^\w-]/g, "-") + "-delta-"
-                + select.value.slice(0, 7) + "-" + repo.commitSha.slice(0, 7) + ".html";
-            a.click();
-            URL.revokeObjectURL(url);
-            RP.setStatus(status, "downloaded. Added and removed dependencies are marked, and renames are resolved first.", "success");
-        } catch (err) {
-            RP.setStatus(status, err.message, "error");
-        } finally {
-            btn.disabled = false;
-        }
+        await openGeneratedDocument({
+            url: "/api/architecture/delta",
+            body: {
+                repo_full_name: repo.repoFullName,
+                base_sha: select.value,
+                head_sha: repo.commitSha,
+            },
+            buttonId: "delta-btn",
+            statusId: "diagram-status",
+            working: "comparing the two parses, resolving renames before dependencies...",
+            failure: "The architecture delta could not be built.",
+            done: "added and removed dependencies are marked, and renames are resolved first.",
+            filename: repo.repoFullName.replace(/[^\w-]/g, "-") + "-delta-"
+                + select.value.slice(0, 7) + "-" + repo.commitSha.slice(0, 7) + ".html",
+            title: repo.repoFullName + " — what changed since " + select.value.slice(0, 7),
+            note: "both sides parsed, so a difference here is a difference in the code",
+        });
     }
 
     const deltaBtn = el("delta-btn");
@@ -403,46 +474,30 @@
     async function downloadSequence() {
         const repo = RP.getCurrentRepo();
         const select = el("sequence-select");
-        const status = el("diagram-status");
         if (!repo || !select || !select.value) return;
 
         const cut = select.value.lastIndexOf("::");
         const entryFile = select.value.slice(0, cut);
         const entrySymbol = select.value.slice(cut + 2);
 
-        const btn = el("sequence-btn");
-        btn.disabled = true;
-        RP.setStatus(status, "following the calls, resolving each one to a symbol in this repo...", "loading");
-        try {
-            const res = await fetch("/api/sequence", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    repo_full_name: repo.repoFullName,
-                    commit_sha: repo.commitSha,
-                    entry_file: entryFile,
-                    entry_symbol: entrySymbol,
-                }),
-            });
-            if (!res.ok) {
-                let detail = "The call sequence could not be traced.";
-                try { detail = (await res.json()).detail || detail; } catch (e) { /* not JSON */ }
-                throw new Error(detail);
-            }
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = repo.repoFullName.replace(/[^\w-]/g, "-") + "-"
-                + entrySymbol.replace(/[^\w-]/g, "-") + "-sequence.html";
-            a.click();
-            URL.revokeObjectURL(url);
-            RP.setStatus(status, "downloaded. Every step cites the line the call is written on.", "success");
-        } catch (err) {
-            RP.setStatus(status, err.message, "error");
-        } finally {
-            btn.disabled = false;
-        }
+        await openGeneratedDocument({
+            url: "/api/sequence",
+            body: {
+                repo_full_name: repo.repoFullName,
+                commit_sha: repo.commitSha,
+                entry_file: entryFile,
+                entry_symbol: entrySymbol,
+            },
+            buttonId: "sequence-btn",
+            statusId: "diagram-status",
+            working: "following the calls, resolving each one to a symbol in this repo...",
+            failure: "The call sequence could not be traced.",
+            done: "every step cites the line the call is written on.",
+            filename: repo.repoFullName.replace(/[^\w-]/g, "-") + "-"
+                + entrySymbol.replace(/[^\w-]/g, "-") + "-sequence.html",
+            title: entrySymbol + "() — call sequence",
+            note: entryFile,
+        });
     }
 
     const sequenceBtn = el("sequence-btn");
@@ -473,37 +528,22 @@
             return;
         }
 
-        const btn = el("flow-btn");
-        btn.disabled = true;
-        RP.setStatus(status, "finding where this happens, then tracing the calls from there...", "loading");
-        try {
-            const res = await fetch("/api/sequence/flow", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    repo_full_name: repo.repoFullName,
-                    commit_sha: repo.commitSha,
-                    question: question,
-                }),
-            });
-            if (!res.ok) {
-                let detail = "That question could not be traced as a flow.";
-                try { detail = (await res.json()).detail || detail; } catch (e) { /* not JSON */ }
-                throw new Error(detail);
-            }
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = repo.repoFullName.replace(/[^\w-]/g, "-") + "-flow.html";
-            a.click();
-            URL.revokeObjectURL(url);
-            RP.setStatus(status, "downloaded. The page names the starting point it chose and why.", "success");
-        } catch (err) {
-            RP.setStatus(status, err.message, "error");
-        } finally {
-            btn.disabled = false;
-        }
+        await openGeneratedDocument({
+            url: "/api/sequence/flow",
+            body: {
+                repo_full_name: repo.repoFullName,
+                commit_sha: repo.commitSha,
+                question: question,
+            },
+            buttonId: "flow-btn",
+            statusId: "ask-status",
+            working: "finding where this happens, then tracing the calls from there...",
+            failure: "That question could not be traced as a flow.",
+            done: "the page names the starting point it chose, and why.",
+            filename: repo.repoFullName.replace(/[^\w-]/g, "-") + "-flow.html",
+            title: question,
+            note: "a model chose only where to start; the steps are traced from the code",
+        });
     }
 
     const flowBtn = el("flow-btn");

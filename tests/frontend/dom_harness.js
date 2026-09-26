@@ -46,6 +46,17 @@ function makeFetch(routes) {
                 json: async () => ({ detail: result.detail || "failed" }),
             };
         }
+        // Some endpoints return a whole HTML document rather than JSON.
+        // A route can say so with { __html: "..." } and the caller gets a
+        // response whose blob() resolves, the way the real one does.
+        if (result && result.__html !== undefined) {
+            return {
+                ok: true,
+                status: 200,
+                blob: async () => ({ __html: result.__html, type: "text/html" }),
+                json: async () => ({}),
+            };
+        }
         return { ok: true, status: 200, json: async () => result };
     };
     fetchImpl.calls = calls;
@@ -131,10 +142,22 @@ function createHarness({ routes = {} } = {}) {
     runScript("app.js");
     runScript("features.js");
 
+    // jsdom has no object-URL support, and the document viewer is built
+    // on it. Minimal stand-ins, with every created URL recorded so a test
+    // can check the viewer releases them.
+    const objectUrls = { created: [], revoked: [] };
+    window.URL.createObjectURL = (blob) => {
+        const url = "blob:test/" + objectUrls.created.length;
+        objectUrls.created.push({ url, blob });
+        return url;
+    };
+    window.URL.revokeObjectURL = (url) => objectUrls.revoked.push(url);
+
     return {
         dom,
         window,
         document: window.document,
+        objectUrls,
         fetch: fetchImpl,
         streams,
         routes,

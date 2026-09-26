@@ -64,6 +64,11 @@ class AppContainer:
 
     quota_guard: DailyQuotaGuard
     question_limiter: FixedWindowRateLimiter
+    # Parse-only documents cost no model call, so they get their own,
+    # much larger allowance. Sharing the question budget meant clicking
+    # through the export, the delta and a couple of sequences used up
+    # an hour's questions without asking one.
+    document_limiter: FixedWindowRateLimiter
     deep_question_limiter: FixedWindowRateLimiter
     daily_ip_limiter: FixedWindowRateLimiter
 
@@ -93,6 +98,7 @@ def build_container() -> AppContainer:
     soft_limit_percent = int(os.getenv("DAILY_QUOTA_SOFT_LIMIT_PERCENT", "80"))
 
     questions_per_hour = int(os.getenv("RATE_LIMIT_QUESTIONS_PER_HOUR_PER_IP", "10"))
+    documents_per_hour = int(os.getenv("RATE_LIMIT_DOCUMENTS_PER_HOUR_PER_IP", "60"))
     deep_per_hour = int(os.getenv("RATE_LIMIT_DEEP_INVESTIGATIONS_PER_HOUR_PER_IP", "3"))
     # One visitor should not be able to spend the whole day's model budget
     # before anyone else arrives. The global cap above is the ceiling for
@@ -155,6 +161,7 @@ def build_container() -> AppContainer:
     cache = SqliteRepoCache(db_path=sqlite_path, max_repos=max_cached_repos)
 
     question_limiter = FixedWindowRateLimiter(max_events=questions_per_hour, window_seconds=3600)
+    document_limiter = FixedWindowRateLimiter(max_events=documents_per_hour, window_seconds=3600)
     deep_question_limiter = FixedWindowRateLimiter(max_events=deep_per_hour, window_seconds=3600)
     daily_ip_limiter = FixedWindowRateLimiter(max_events=daily_per_ip, window_seconds=86400)
 
@@ -273,6 +280,7 @@ def build_container() -> AppContainer:
         cache=cache,
         quota_guard=quota_guard,
         question_limiter=question_limiter,
+        document_limiter=document_limiter,
         deep_question_limiter=deep_question_limiter,
         daily_ip_limiter=daily_ip_limiter,
         trust_proxy_headers=trust_proxy_headers,

@@ -52,6 +52,37 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Repo Pilot", lifespan=lifespan)
 
+@app.middleware("http")
+async def security_headers(request, call_next):
+    """
+    Baseline response headers.
+
+    This app ingests arbitrary public repositories and renders their file
+    names and symbols, so it is worth being strict about the cheap things
+    before it is hosted anywhere.
+
+    No Content-Security-Policy yet, deliberately rather than by oversight.
+    A blob: document can inherit the creating page's CSP, and the four
+    generated documents depend on inline <script> and inline <style> to
+    stay self-contained with no network. A policy strict enough to be
+    worth having would break them in the viewer, so it needs its own pass
+    with nonces threaded through both renderers.
+    """
+    response = await call_next(request)
+    # The generated documents are served as text/html on purpose; never
+    # let a browser second-guess a content type it was given.
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    # Nothing here is meant to be framed by another site. The document
+    # viewer frames a blob: URL, not this app, so this costs nothing.
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    # No feature here needs a camera, a microphone or a location.
+    response.headers.setdefault(
+        "Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+    )
+    return response
+
+
 app.include_router(ingest.router)
 app.include_router(ask.router)
 app.include_router(investigate_stream.router)

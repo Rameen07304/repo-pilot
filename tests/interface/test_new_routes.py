@@ -70,6 +70,9 @@ class Container:
     def __init__(self, cache, *, limit=100):
         self.trust_proxy_headers = False
         self.question_limiter = FixedWindowRateLimiter(max_events=limit, window_seconds=3600)
+        # Parse-only documents have their own, larger allowance so that
+        # browsing the exports never spends an hour's questions.
+        self.document_limiter = FixedWindowRateLimiter(max_events=limit, window_seconds=3600)
         self.deep_question_limiter = FixedWindowRateLimiter(max_events=limit, window_seconds=3600)
         self.daily_ip_limiter = FixedWindowRateLimiter(max_events=limit, window_seconds=86400)
         self.onboarding_use_case = GenerateOnboardingUseCase(
@@ -263,10 +266,17 @@ class ArchitectureRouteTest(unittest.TestCase):
         res = self.arch_client(empty=True).post("/api/architecture", json=keys())
         self.assertEqual(res.status_code, 404)
 
-    def test_the_hourly_limiter_applies(self):
+    def test_the_document_limiter_applies_not_the_question_budget(self):
+        # This endpoint runs no model. Putting it on the question limiter
+        # meant a few clicks through the exports used up an hour of asking.
         c = self.arch_client(limit=1)
         self.assertEqual(c.post("/api/architecture", json=keys()).status_code, 200)
-        self.assertEqual(c.post("/api/architecture", json=keys()).status_code, 429)
+        res = c.post("/api/architecture", json=keys())
+        self.assertEqual(res.status_code, 429)
+        self.assertIn("documents", res.json()["detail"])
+
+        questions_left, _ = c.app.state.container.question_limiter.check_and_increment("testclient")
+        self.assertTrue(questions_left, "generating a document must not spend a question")
 
 
 class SequenceRouteTest(unittest.TestCase):
@@ -327,7 +337,35 @@ class SequenceRouteTest(unittest.TestCase):
             404,
         )
 
-    def test_the_hourly_limiter_applies(self):
+    def test_the_document_limiter_applies_not_the_question_budget(self):
         c = self.seq_client(limit=1)
         self.assertEqual(c.post("/api/sequence", json=self.body()).status_code, 200)
         self.assertEqual(c.post("/api/sequence", json=self.body()).status_code, 429)
+
+        questions_left, _ = c.app.state.container.question_limiter.check_and_increment("testclient")
+        self.assertTrue(questions_left, "tracing a sequence must not spend a question")
+
+
+class SecurityHeaderTest(unittest.TestCase):
+    """
+    Baseline headers on every response.
+
+    This app renders file names and symbols from arbitrary public
+    repositories, and it is about to be hosted, so the cheap protections
+    should be on before it is.
+    """
+
+    @staticmethod
+    def app_client():
+        from app.interface.main import app as real_app
+
+        return TestClient(real_app)
+
+    def test_every_response_carries_the_baseline_headers(self):
+        res = self.app_client().get("/health")
+        self.assertEqual(res.headers.get("X-Content-Type-Options"), "nosniff")
+        self.assertEqual(res.headers.get("X-Frame-Options"), "DENY")
+        self.assertEqual(
+            res.headers.get("Referrer-Policy"), "strict-origin-when-cross-origin"
+        )
+        self.assertIn("camera=()", res.headers.get("Permissions-Policy", ""))

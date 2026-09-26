@@ -458,3 +458,92 @@ test("impact: opening another file resets the previous result", async () => {
 });
 
 module.exports = {};
+
+// --- Document viewer ------------------------------------------------------
+
+test("viewer: the frame is sandboxed without same-origin access", () => {
+    // A blob: URL inherits the origin of the page that created it, so an
+    // un-sandboxed frame would run the generated document's inline script
+    // with full access to this app. allow-same-origin must never appear.
+    const fs = require("fs");
+    const path = require("path");
+    const html = fs.readFileSync(
+        path.resolve(__dirname, "..", "..", "app", "interface", "templates", "app.html"),
+        "utf8",
+    );
+    const frame = html.match(/<iframe id="doc-viewer-frame"[\s\S]*?>/)[0];
+    assert.match(frame, /sandbox="/);
+    assert.ok(!/allow-same-origin/.test(frame), "allow-same-origin would defeat the sandbox");
+    // It still needs scripts, and popups for its own GitHub links.
+    assert.match(frame, /allow-scripts/);
+    assert.match(frame, /allow-popups/);
+});
+
+test("viewer: opens the generated page instead of downloading it", async () => {
+    const h = harnessWithRepo({
+        "/api/architecture": async () => ({ __html: "<html><body>graph</body></html>" }),
+    });
+    const doc = h.document;
+
+    doc.getElementById("export-arch-btn").click();
+    await h.flush();
+
+    const viewer = doc.getElementById("doc-viewer");
+    assert.ok(!viewer.classList.contains("hidden"), "viewer should be open");
+    assert.equal(h.objectUrls.created.length, 1);
+    assert.equal(doc.getElementById("doc-viewer-frame").src, h.objectUrls.created[0].url);
+    // Downloading is still offered, as a button inside the viewer.
+    assert.match(doc.getElementById("doc-viewer-download").download, /architecture/);
+});
+
+test("viewer: a rate-limit message is shown rather than swallowed", async () => {
+    // The whole reason this was hard to diagnose in the real app: a 429
+    // looked like nothing happening.
+    const h = harnessWithRepo({
+        "/api/architecture": async () => ({
+            __error: true,
+            status: 429,
+            detail: "Too many documents generated from your IP this hour.",
+        }),
+    });
+    const doc = h.document;
+
+    doc.getElementById("export-arch-btn").click();
+    await h.flush();
+
+    assert.ok(doc.getElementById("doc-viewer").classList.contains("hidden"));
+    assert.match(doc.getElementById("diagram-status").textContent, /Too many documents/);
+});
+
+test("viewer: closes on Escape and releases the object URL", async () => {
+    const h = harnessWithRepo({
+        "/api/architecture": async () => ({ __html: "<html><body>graph</body></html>" }),
+    });
+    const doc = h.document;
+
+    doc.getElementById("export-arch-btn").click();
+    await h.flush();
+    assert.equal(h.objectUrls.revoked.length, 0);
+
+    doc.dispatchEvent(new h.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await h.flush();
+
+    assert.ok(doc.getElementById("doc-viewer").classList.contains("hidden"));
+    assert.equal(h.objectUrls.revoked.length, 1, "the blob URL should be released on close");
+    assert.match(doc.getElementById("doc-viewer-frame").src, /about:blank/);
+});
+
+test("viewer: a second document releases the first one's URL", async () => {
+    const h = harnessWithRepo({
+        "/api/architecture": async () => ({ __html: "<html><body>graph</body></html>" }),
+    });
+    const doc = h.document;
+
+    doc.getElementById("export-arch-btn").click();
+    await h.flush();
+    doc.getElementById("export-arch-btn").click();
+    await h.flush();
+
+    assert.equal(h.objectUrls.created.length, 2);
+    assert.equal(h.objectUrls.revoked.length, 1, "opening another must not leak the first");
+});

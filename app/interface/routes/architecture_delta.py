@@ -51,11 +51,11 @@ async def architecture_delta(
     container = request.app.state.container
     client_ip = get_client_ip(request, trust_proxy_headers=container.trust_proxy_headers)
 
-    allowed, _remaining = container.question_limiter.check_and_increment(client_ip)
+    allowed, _remaining = container.document_limiter.check_and_increment(client_ip)
     if not allowed:
         raise HTTPException(
             status_code=429,
-            detail="Rate limit reached for your IP this hour. Try again later.",
+            detail="Too many documents generated from your IP this hour. Try again shortly.",
         )
 
     try:
