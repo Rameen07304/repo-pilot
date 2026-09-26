@@ -65,6 +65,10 @@
                     <svg class="nav-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="7" y="2.5" width="6" height="4"/><rect x="2" y="13.5" width="6" height="4"/><rect x="12" y="13.5" width="6" height="4"/><path d="M10 6.5v3.5M10 10H5v3.5M10 10h5v3.5"/></svg>
                     <span class="nav-text"><span class="nav-label">architecture diagram</span><span class="nav-desc">the import graph, drawn from code</span></span>
                 </button>
+                <button class="tab-btn" data-tab="flow-tab">
+                    <svg class="nav-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3v14M10 3v14M16 3v14"/><path d="M4 7h6M10 12h6"/><path d="M8 5.5 10 7l-2 1.5M14 10.5l2 1.5-2 1.5"/></svg>
+                    <span class="nav-text"><span class="nav-label">call flow</span><span class="nav-desc">what runs, step by step</span></span>
+                </button>
                 <button class="tab-btn" data-tab="health-tab">
                     <svg class="nav-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M2 11h4l2-6 3 10 2-6 1.5 2H18"/></svg>
                     <span class="nav-text"><span class="nav-label">code health</span><span class="nav-desc">a maintainability report card</span></span>
@@ -150,6 +154,43 @@
                     </header>
                     <div id="agents-status"></div>
                     <div id="agents-result" class="hidden"></div>
+                </div>
+
+                <div id="flow-tab" class="tab-content">
+                    <header class="mode-header">
+                        <div class="mode-text">
+                            <h2 class="mode-title">Call flow</h2>
+                            <p class="mode-desc">What actually runs when something happens. Ask in plain words, or pick a function — either way you get a sequence diagram where every arrow cites the line the call is written on.</p>
+                            <p class="mode-note">The steps are the calls found in the code, in the order they appear. A model only ever chooses where to start.</p>
+                        </div>
+                    </header>
+
+                    <div class="flow-entry">
+                        <h3 class="flow-entry-title">Ask what you want to understand</h3>
+                        <form id="flow-form" class="ask-form">
+                            <div class="ask-row">
+                                <div class="cmd-line">
+                                    <span class="cmd-prompt">$</span>
+                                    <input type="text" id="flow-question" placeholder="how does login work?" />
+                                </div>
+                                <button type="submit" id="flow-tab-btn" class="cmd-btn cmd-btn-primary">trace it</button>
+                            </div>
+                        </form>
+                        <p class="flow-hint dim">search finds where it happens, then the calls are traced from the parsed code.</p>
+                    </div>
+
+                    <div class="flow-entry">
+                        <h3 class="flow-entry-title">Or start from a function you already know</h3>
+                        <div class="diagram-controls">
+                            <label id="sequence-picker" class="orientation-toggle hidden" title="Ranked by how many calls resolve inside this repository, so the ones at the top have the most to show.">
+                                <select id="sequence-select" aria-label="Function to trace"></select>
+                            </label>
+                            <button id="sequence-btn" class="cmd-btn secondary-btn hidden" type="button">trace this function</button>
+                            <span id="sequence-empty" class="dim hidden">Nothing in this repository calls anything else in it, so there is no sequence to draw.</span>
+                        </div>
+                    </div>
+
+                    <div id="flow-status"></div>
                 </div>
 
                 <div id="health-tab" class="tab-content">
@@ -341,11 +382,6 @@
                             <select id="delta-base-select" aria-label="Earlier ingest of this repository to compare against"></select>
                         </label>
                         <button id="delta-btn" class="cmd-btn secondary-btn hidden" type="button">architecture delta</button>
-                        <label id="sequence-picker" class="orientation-toggle hidden" title="Trace what runs when one function runs. Every step is a call tree-sitter found, with the line it is written on.">
-                            call sequence from
-                            <select id="sequence-select" aria-label="Function to trace"></select>
-                        </label>
-                        <button id="sequence-btn" class="cmd-btn secondary-btn hidden" type="button">trace sequence</button>
                     </div>
                     <div id="diagram-status"></div>
                     <div id="mermaid-container" class="hidden">

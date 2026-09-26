@@ -283,12 +283,12 @@
             "agents-result",
             "impact-result",
             "delta-picker", "delta-btn",
-            "sequence-picker", "sequence-btn",
+            "sequence-picker", "sequence-btn", "sequence-empty",
         ].forEach(function (id) {
             const node = el(id);
             if (node) node.classList.add("hidden");
         });
-        ["onboarding-status", "diagram-status", "health-status", "agents-status", "ask-status"]
+        ["onboarding-status", "diagram-status", "health-status", "agents-status", "ask-status", "flow-status"]
             .forEach(function (id) {
                 const node = el(id);
                 if (node) node.textContent = "";
@@ -491,11 +491,16 @@
         } catch (e) {
             entries = [];  // a listing that fails just hides the control
         }
+        const empty = el("sequence-empty");
         if (!entries.length) {
             picker.classList.add("hidden");
             btn.classList.add("hidden");
+            // A control that silently fails to appear reads as a broken
+            // page. Say why there is nothing to pick.
+            if (empty) empty.classList.remove("hidden");
             return;
         }
+        if (empty) empty.classList.add("hidden");
         select.textContent = "";
         entries.forEach(function (entry) {
             const opt = document.createElement("option");
@@ -525,7 +530,7 @@
                 entry_symbol: entrySymbol,
             },
             buttonId: "sequence-btn",
-            statusId: "diagram-status",
+            statusId: "flow-status",
             working: "following the calls, resolving each one to a symbol in this repo...",
             failure: "The call sequence could not be traced.",
             done: "every step cites the line the call is written on.",
@@ -547,10 +552,10 @@
     // picks ONE starting function from a shortlist the search produced.
     // Everything after that is traced from the parse, so a bad pick
     // means a less useful diagram, never an invented one.
-    async function diagramFlow() {
+    async function diagramFlow(inputId, statusId, buttonId) {
         const repo = RP.getCurrentRepo();
-        const status = el("ask-status");
-        const input = el("question-input");
+        const status = el(statusId);
+        const input = el(inputId);
         if (!input) return;
         const question = input.value.trim();
 
@@ -571,8 +576,8 @@
                 commit_sha: repo.commitSha,
                 question: question,
             },
-            buttonId: "flow-btn",
-            statusId: "ask-status",
+            buttonId: buttonId,
+            statusId: statusId,
             working: "finding where this happens, then tracing the calls from there...",
             failure: "That question could not be traced as a flow.",
             done: "the page names the starting point it chose, and why.",
@@ -582,10 +587,26 @@
         });
     }
 
+    // Two ways in, one implementation: the shortcut beside the ask box,
+    // and the flow tab's own question, which is where someone looking
+    // for this feature will actually go.
     const flowBtn = el("flow-btn");
-    if (flowBtn) flowBtn.addEventListener("click", diagramFlow);
+    if (flowBtn) {
+        flowBtn.addEventListener("click", function () {
+            diagramFlow("question-input", "ask-status", "flow-btn");
+        });
+    }
+    const flowForm = el("flow-form");
+    if (flowForm) {
+        flowForm.addEventListener("submit", function (e) {
+            e.preventDefault();
+            diagramFlow("flow-question", "flow-status", "flow-tab-btn");
+        });
+    }
     document.querySelectorAll('.tab-btn[data-tab="diagram-tab"]').forEach(function (tab) {
         tab.addEventListener("click", refreshDeltaPicker);
+    });
+    document.querySelectorAll('.tab-btn[data-tab="flow-tab"]').forEach(function (tab) {
         tab.addEventListener("click", refreshSequencePicker);
     });
 

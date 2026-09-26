@@ -2772,3 +2772,21 @@ body.has-doc-viewer { overflow: hidden; }
     .doc-viewer-bar { gap: 8px; padding: 8px 10px; }
     .doc-viewer-bar .dim { width: 100%; order: 3; }
 }
+
+/* ------------------------------------------------------------------
+   Call flow tab — two ways to the same trace
+   ------------------------------------------------------------------ */
+.flow-entry {
+    padding: 18px 0 4px;
+    border-top: 1px solid var(--hairline);
+}
+.flow-entry:first-of-type { border-top: 0; padding-top: 6px; }
+.flow-entry-title {
+    margin: 0 0 12px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--ink);
+}
+.flow-hint { margin: 8px 0 0; font-size: 0.84rem; }
+#sequence-picker select { max-width: min(520px, 100%); }
+#sequence-empty { font-size: 0.88rem; }
