@@ -244,3 +244,137 @@ class FullySupportedLanguagesTest(unittest.TestCase):
         calls = {c for s in symbols for c in s.calls}
         self.assertIn("helper", calls)
         self.assertIn("other", calls)
+
+
+class ImportProvenanceTest(unittest.TestCase):
+    """
+    Every edge records the line its import was written on.
+
+    This is what the architecture export stakes its credibility on: a
+    reader who does not believe an arrow can open that file at that line
+    and read the import. A line that is merely close is worse than none,
+    so each case below is checked against the exact statement.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.parser = TreeSitterCodeParser()
+
+    def lines_for(self, files, frm, to):
+        return sorted(
+            e.line
+            for e in self.parser.build_module_graph(files)
+            if e.from_module == frm and e.to_module == to
+        )
+
+    def assert_line_says(self, files, frm, to, expected_line, expected_text):
+        lines = self.lines_for(files, frm, to)
+        self.assertIn(expected_line, lines, f"{frm} -> {to}: got lines {lines}")
+        source = files[frm].splitlines()[expected_line - 1]
+        self.assertIn(expected_text, source)
+
+    def test_python_reports_the_import_statement_line(self):
+        files = {
+            "app/main.py": "import os\n\n\nfrom app.db import Pool\n",
+            "app/db.py": "",
+        }
+        self.assert_line_says(files, "app/main.py", "app/db.py", 4, "from app.db import Pool")
+
+    def test_the_same_import_twice_yields_both_lines(self):
+        files = {
+            "app/main.py": "from app.db import Pool\nx = 1\nfrom app.db import Session\n",
+            "app/db.py": "",
+        }
+        self.assertEqual(self.lines_for(files, "app/main.py", "app/db.py"), [1, 3])
+
+    def test_a_grouped_go_import_reports_its_own_line_not_the_blocks(self):
+        # `import (` opens on line 3; the path that resolves is on line 5.
+        # Reporting the block would send a reader to the wrong statement.
+        files = {
+            "go.mod": "module github.com/acme/svc\n",
+            "cmd/main.go": (
+                'package main\n\nimport (\n\t"fmt"\n\t"github.com/acme/svc/store"\n)\n'
+            ),
+            "store/store.go": "package store\n",
+        }
+        self.assert_line_says(
+            files, "cmd/main.go", "store/store.go", 5, "github.com/acme/svc/store"
+        )
+
+    def test_every_fully_parsed_language_records_a_line(self):
+        cases = {
+            "rust": (
+                {"Cargo.toml": "", "src/main.rs": "// head\nmod db;\n", "src/db.rs": ""},
+                "src/main.rs", "src/db.rs", 2, "mod db;",
+            ),
+            "ruby": (
+                {
+                    "Gemfile": "",
+                    "lib/shop.rb": "# comment\n\nrequire_relative 'cart'\n",
+                    "lib/cart.rb": "",
+                },
+                "lib/shop.rb", "lib/cart.rb", 3, "require_relative 'cart'",
+            ),
+            "java": (
+                {
+                    "pom.xml": "",
+                    "src/main/java/com/acme/App.java": (
+                        "package com.acme;\n\nimport com.acme.svc.Order;\n"
+                    ),
+                    "src/main/java/com/acme/svc/Order.java": "package com.acme.svc;\n",
+                },
+                "src/main/java/com/acme/App.java",
+                "src/main/java/com/acme/svc/Order.java",
+                3, "import com.acme.svc.Order;",
+            ),
+            "php": (
+                {
+                    "composer.json": "{}",
+                    "public/index.php": "<?php\n// boot\nrequire 'src/boot.php';\n",
+                    "src/boot.php": "<?php\n",
+                },
+                "public/index.php", "src/boot.php", 3, "require 'src/boot.php';",
+            ),
+            "javascript": (
+                {
+                    "package.json": "{}",
+                    "src/app.js": "// header\n\nimport {x} from './util.js';\n",
+                    "src/util.js": "",
+                },
+                "src/app.js", "src/util.js", 3, "import {x} from './util.js';",
+            ),
+            "dart": (
+                {
+                    "pubspec.yaml": "name: x\n",
+                    "lib/main.dart": "// head\nimport 'core/db.dart';\n",
+                    "lib/core/db.dart": "",
+                },
+                "lib/main.dart", "lib/core/db.dart", 2, "import 'core/db.dart';",
+            ),
+        }
+        for language, (files, frm, to, line, text) in cases.items():
+            with self.subTest(language=language):
+                self.assert_line_says(files, frm, to, line, text)
+
+    def test_template_and_asset_edges_are_line_attributed_too(self):
+        files = {
+            "app/views.py": "def home():\n    return render_template('home.html')\n",
+            "app/templates/home.html": '<html>\n<body>\n<script src="/static/app.js"></script>\n',
+            "app/static/app.js": "",
+        }
+        self.assert_line_says(
+            files, "app/views.py", "app/templates/home.html", 2, "render_template"
+        )
+        self.assert_line_says(
+            files, "app/templates/home.html", "app/static/app.js", 3, "app.js"
+        )
+
+    def test_the_parser_reports_whether_it_reads_a_file_at_all(self):
+        # The export's coverage section is built from this, so a wrong
+        # answer here becomes a false claim in the document.
+        for path in ("a.py", "a.go", "a.vue", "a.html", "a.HTML"):
+            with self.subTest(path=path):
+                self.assertTrue(self.parser.reads_dependencies_from(path))
+        for path in ("a.kt", "a.css", "a.swift", "README.md"):
+            with self.subTest(path=path):
+                self.assertFalse(self.parser.reads_dependencies_from(path))

@@ -159,6 +159,11 @@ class HandbookRequest(BaseModel):
     commit_sha: str = Field(..., max_length=100)
 
 
+class ArchitectureExportRequest(BaseModel):
+    repo_full_name: str = Field(..., max_length=200)
+    commit_sha: str = Field(..., max_length=100)
+
+
 class CodeHealthFindingResponse(BaseModel):
     check: str
     severity: str

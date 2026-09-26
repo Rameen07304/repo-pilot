@@ -223,3 +223,47 @@ class StreamHistoryParsingTest(unittest.TestCase):
         turns = self.parse('[{"question": "q", "answer": 42, "cited_files": "not-a-list"}]')
         self.assertEqual(turns[0].answer, "")
         self.assertEqual(turns[0].cited_files, [])
+
+
+class ArchitectureRouteTest(unittest.TestCase):
+    """
+    The export route. It runs no model, so it is not on the daily budget;
+    it does build a whole document per call, so it is on the hourly one.
+    """
+
+    @staticmethod
+    def arch_client(*, empty=False, limit=100):
+        from app.application.use_cases.export_architecture import ExportArchitectureUseCase
+        from app.infrastructure.parsing.tree_sitter_parser import TreeSitterCodeParser
+        from app.interface.routes import architecture
+
+        app = FastAPI()
+        app.include_router(architecture.router)
+        cache = StubCache(empty=empty)
+        container = Container(cache, limit=limit)
+        container.architecture_export_use_case = ExportArchitectureUseCase(
+            cache=cache, parser=TreeSitterCodeParser()
+        )
+        app.state.container = container
+        return TestClient(app)
+
+    def test_it_serves_a_downloadable_self_contained_page(self):
+        res = self.arch_client().post("/api/architecture", json=keys())
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("text/html", res.headers["content-type"])
+        self.assertIn("attachment", res.headers["content-disposition"])
+        self.assertIn("acme-app-architecture-sha1", res.headers["content-disposition"])
+
+        body = res.text
+        self.assertIn("app/main.py", body)
+        self.assertIn("core/db.py", body)
+        self.assertNotIn("<script src", body)
+
+    def test_uningested_repo_is_a_404_not_an_empty_diagram(self):
+        res = self.arch_client(empty=True).post("/api/architecture", json=keys())
+        self.assertEqual(res.status_code, 404)
+
+    def test_the_hourly_limiter_applies(self):
+        c = self.arch_client(limit=1)
+        self.assertEqual(c.post("/api/architecture", json=keys()).status_code, 200)
+        self.assertEqual(c.post("/api/architecture", json=keys()).status_code, 429)

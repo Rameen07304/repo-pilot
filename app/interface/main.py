@@ -23,6 +23,7 @@ from fastapi.templating import Jinja2Templates  # noqa: E402
 from app.interface.dependencies import build_container  # noqa: E402
 from app.interface.routes import (  # noqa: E402
     agent_tooling,
+    architecture,
     ask,
     code_health,
     diagram,
@@ -59,6 +60,7 @@ app.include_router(impact.router)
 app.include_router(code_health.router)
 app.include_router(handbook.router)
 app.include_router(agent_tooling.router)
+app.include_router(architecture.router)
 
 templates = Jinja2Templates(directory="app/interface/templates")
 app.mount("/static", StaticFiles(directory="app/interface/static"), name="static")

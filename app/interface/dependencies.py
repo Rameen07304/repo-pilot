@@ -17,6 +17,7 @@ from app.application.use_cases.analyze_code_health import AnalyzeCodeHealthUseCa
 from app.application.use_cases.analyze_impact import AnalyzeImpactUseCase
 from app.application.use_cases.answer_question import AnswerQuestionUseCase
 from app.application.use_cases.detect_agent_tooling import DetectAgentToolingUseCase
+from app.application.use_cases.export_architecture import ExportArchitectureUseCase
 from app.application.use_cases.generate_diagram import GenerateDiagramUseCase
 from app.application.use_cases.generate_handbook import GenerateHandbookUseCase
 from app.application.use_cases.generate_onboarding import GenerateOnboardingUseCase
@@ -49,6 +50,7 @@ class AppContainer:
     code_health_use_case: AnalyzeCodeHealthUseCase
     handbook_use_case: GenerateHandbookUseCase
     agent_tooling_use_case: DetectAgentToolingUseCase
+    architecture_export_use_case: ExportArchitectureUseCase
 
     quota_guard: DailyQuotaGuard
     question_limiter: FixedWindowRateLimiter
@@ -205,6 +207,16 @@ def build_container() -> AppContainer:
 
     agent_tooling_use_case = DetectAgentToolingUseCase(cache=cache)
 
+    # Reads the cached manifest and parse only. The parser is passed in
+    # so the export can state which files it cannot read imports from,
+    # rather than quietly leaving them out of the picture.
+    architecture_export_use_case = ExportArchitectureUseCase(
+        cache=cache,
+        parser=code_parser,
+        max_nodes=int(os.getenv("ARCH_EXPORT_MAX_NODES", "120")),
+        max_edges=int(os.getenv("ARCH_EXPORT_MAX_EDGES", "400")),
+    )
+
     handbook_use_case = GenerateHandbookUseCase(
         onboarding_use_case=onboarding_use_case,
         code_health_use_case=code_health_use_case,
@@ -223,6 +235,7 @@ def build_container() -> AppContainer:
         code_health_use_case=code_health_use_case,
         handbook_use_case=handbook_use_case,
         agent_tooling_use_case=agent_tooling_use_case,
+        architecture_export_use_case=architecture_export_use_case,
         quota_guard=quota_guard,
         question_limiter=question_limiter,
         deep_question_limiter=deep_question_limiter,

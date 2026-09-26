@@ -71,6 +71,10 @@ _EXTENSION_TO_LANGUAGE = {
 # fall back to window chunking for search. Vue/Svelte single-file
 # components carry plain ES imports in their <script> block, so the
 # JS import regex works on them as-is.
+# Not a language: these contribute their asset links to the graph by
+# regex, with no grammar and no import statements.
+_LINK_ONLY_EXTENSIONS = (".html", ".htm")
+
 _IMPORT_ONLY_EXTENSION_TO_LANGUAGE = {
     # Single-file components: the file is a template with a <script>
     # block inside, not a JavaScript file, so the JS grammar cannot parse
@@ -167,7 +171,7 @@ _DEFINITION_NODE_TYPES.update(_GRAMMAR_NODE_TYPES)
 # import resolution. Caches carrying an older value are re-parsed.
 #   1 - python, javascript, typescript, dart
 #   2 - go, rust, ruby, java, php fully parsed; .mjs/.cjs on the JS grammar
-PARSER_VERSION = "2"
+PARSER_VERSION = "3"
 
 _NAME_FIELD = "name"  # consistent across these grammars for def/class nodes
 
@@ -357,6 +361,18 @@ class TreeSitterCodeParser:
             )
         return chunks
 
+    def reads_dependencies_from(self, file_path: str) -> bool:
+        """
+        True when build_module_graph would read a dependency out of this
+        file. Kept next to that method so the two cannot drift: an
+        extension added to one and not the other would make the
+        architecture export's coverage section say something false.
+        """
+        return (
+            self._detect_import_language(file_path) is not None
+            or file_path.lower().endswith(_LINK_ONLY_EXTENSIONS)
+        )
+
     def build_module_graph(self, all_files: dict[str, str]) -> list[ModuleEdge]:
         edges: list[ModuleEdge] = []
         go_module = self._read_go_module_path(all_files)
@@ -365,7 +381,7 @@ class TreeSitterCodeParser:
 
             if language is not None:
                 imports = self._extract_imports(content=content, language=language)
-                for imported in imports:
+                for imported, lineno in imports:
                     resolved = self._resolve_import_to_path(
                         importing_file=path,
                         import_name=imported,
@@ -374,7 +390,9 @@ class TreeSitterCodeParser:
                         go_module=go_module,
                     )
                     if resolved:
-                        edges.append(ModuleEdge(from_module=path, to_module=resolved))
+                        edges.append(
+                            ModuleEdge(from_module=path, to_module=resolved, line=lineno)
+                        )
 
             # UI-file relations — deliberately regex-based, not a real
             # HTML parser (see class docstring). Covers the two
@@ -384,7 +402,7 @@ class TreeSitterCodeParser:
                 edges.extend(
                     self._extract_template_edges(path=path, content=content, all_files=all_files)
                 )
-            if path.lower().endswith(".html"):
+            if path.lower().endswith(_LINK_ONLY_EXTENSIONS):
                 edges.extend(
                     self._extract_html_asset_edges(path=path, content=content, all_files=all_files)
                 )
@@ -452,67 +470,97 @@ class TreeSitterCodeParser:
         walk(node)
         return calls
 
-    def _extract_imports(self, *, content: str, language: str) -> list[str]:
-        imports: list[str] = []
+    @staticmethod
+    def _line_at(content: str, offset: int) -> int:
+        """
+        1-based line number of a character offset, for import provenance.
+
+        Callers pass the offset of the captured path, never match.start().
+        A pattern beginning with a multiline caret and optional whitespace
+        can anchor on an earlier blank line and let the whitespace swallow
+        the newlines, which reported an import one or two lines above
+        where it is actually written.
+        """
+        return content.count("\n", 0, offset) + 1
+
+    def _extract_imports(self, *, content: str, language: str) -> list[tuple[str, int]]:
+        """
+        Every import paired with the 1-based line it was written on.
+
+        The line is what makes an edge checkable: a reader who does not
+        trust the diagram can open the file at that line and read the
+        import the edge was drawn from. Extraction already knows it —
+        every branch below either walks lines or holds a match offset —
+        so it is carried through rather than recovered afterwards by
+        re-scanning the file.
+        """
+        imports: list[tuple[str, int]] = []
         if language == "python":
-            for line in content.splitlines():
+            for lineno, line in enumerate(content.splitlines(), start=1):
                 stripped = line.strip()
                 from_match = re.match(r"^from\s+([\w.]+)\s+import\s+\(?([\w.,\s]+)", stripped)
                 if from_match:
                     base = from_match.group(1)
-                    imports.append(base)
+                    imports.append((base, lineno))
                     # `from pkg import a, b` — a/b are often submodules, so
                     # also try pkg.a / pkg.b; resolution simply finds no
                     # file when they turn out to be plain symbols.
                     for name in from_match.group(2).split(","):
                         name = name.strip().split(" as ")[0].strip()
                         if name and name != "*":
-                            imports.append(f"{base}.{name}" if not base.endswith(".") else f"{base}{name}")
+                            imports.append(
+                                (f"{base}.{name}" if not base.endswith(".") else f"{base}{name}", lineno)
+                            )
                     continue
                 import_match = re.match(r"^import\s+([\w.]+)", stripped)
                 if import_match:
-                    imports.append(import_match.group(1))
+                    imports.append((import_match.group(1), lineno))
         elif language == "dart":
             # Covers both: import 'package:craftore/core/x.dart';
             # and relative: import '../domain/entities/x.dart';
             for match in re.finditer(r"""import\s+['"]([^'"]+)['"]""", content):
-                imports.append(match.group(1))
+                imports.append((match.group(1), self._line_at(content, match.start(1))))
         elif language == "go":
             # Single `import "x"` and grouped `import ( "x"\n alias "y" )`
             for block in re.finditer(r"import\s*\(([^)]*)\)", content):
-                imports.extend(re.findall(r'"([^"]+)"', block.group(1)))
+                # Each path inside the block keeps its own line rather than
+                # the line the block opened on.
+                for inner in re.finditer(r'"([^"]+)"', block.group(1)):
+                    imports.append(
+                        (inner.group(1), self._line_at(content, block.start(1) + inner.start()))
+                    )
             for match in re.finditer(r'^\s*import\s+(?:\w+\s+)?"([^"]+)"', content, re.MULTILINE):
-                imports.append(match.group(1))
+                imports.append((match.group(1), self._line_at(content, match.start(1))))
         elif language == "rust":
             # `mod x;` declares a child module file; `use crate::a::b` /
             # `use super::x` reference other modules in this crate. Tagged
             # so resolution knows which rule to apply.
             for match in re.finditer(r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*;", content, re.MULTILINE):
-                imports.append(f"mod:{match.group(1)}")
+                imports.append((f"mod:{match.group(1)}", self._line_at(content, match.start(1))))
             for match in re.finditer(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+((?:crate|super|self)(?:::[\w]+)*)", content, re.MULTILINE):
-                imports.append(f"use:{match.group(1)}")
+                imports.append((f"use:{match.group(1)}", self._line_at(content, match.start(1))))
         elif language == "ruby":
             for match in re.finditer(r"""^\s*require_relative\s+['"]([^'"]+)['"]""", content, re.MULTILINE):
-                imports.append(f"rel:{match.group(1)}")
+                imports.append((f"rel:{match.group(1)}", self._line_at(content, match.start(1))))
             for match in re.finditer(r"""^\s*require\s+['"]([^'"]+)['"]""", content, re.MULTILINE):
-                imports.append(f"abs:{match.group(1)}")
+                imports.append((f"abs:{match.group(1)}", self._line_at(content, match.start(1))))
         elif language == "java":
             for match in re.finditer(r"^\s*import\s+(?!static\s)([\w.]+)\s*;", content, re.MULTILINE):
                 name = match.group(1)
                 if not name.startswith(("java.", "javax.")) and not name.endswith(".*"):
-                    imports.append(name)
+                    imports.append((name, self._line_at(content, match.start(1))))
         elif language == "php":
             for match in re.finditer(
                 r"""(?:require|include)(?:_once)?\s*\(?\s*(?:__DIR__\s*\.\s*)?['"]([^'"]+\.php)['"]""", content
             ):
-                imports.append(f"file:{match.group(1)}")
+                imports.append((f"file:{match.group(1)}", self._line_at(content, match.start(1))))
             for match in re.finditer(r"^\s*use\s+([\w\\]+)\s*;", content, re.MULTILINE):
-                imports.append(f"ns:{match.group(1)}")
+                imports.append((f"ns:{match.group(1)}", self._line_at(content, match.start(1))))
         else:  # javascript / typescript (also .vue / .svelte / .mjs / .cjs)
-            for line in content.splitlines():
+            for lineno, line in enumerate(content.splitlines(), start=1):
                 match = re.search(r"""(?:from|require\()\s*['"]([^'"]+)['"]""", line)
                 if match:
-                    imports.append(match.group(1))
+                    imports.append((match.group(1), lineno))
         return imports
 
     @staticmethod
@@ -607,6 +655,15 @@ class TreeSitterCodeParser:
                 if candidate in all_files:
                     return candidate
             return None
+
+        # Dart resolves any schemeless URI against the importing file's own
+        # directory, so `import 'core/db.dart';` is relative even without a
+        # leading "./". Without this it fell through to the bare-specifier
+        # rules below, which know nothing about .dart, and the edge was
+        # silently dropped.
+        if language == "dart" and import_name.endswith(".dart"):
+            candidate = self._join_relative(importing_file, "./" + import_name.lstrip("/"))
+            return candidate if candidate in all_files else None
 
         # Relative imports — Dart, JS, TS all use "./x" / "../y/z" — resolve
         # against the importing file's OWN directory.
@@ -733,7 +790,13 @@ class TreeSitterCodeParser:
         for match in _RENDER_TEMPLATE_PATTERN.finditer(content):
             resolved = self._resolve_static_path(match.group(1), all_files)
             if resolved:
-                edges.append(ModuleEdge(from_module=path, to_module=resolved))
+                edges.append(
+                    ModuleEdge(
+                        from_module=path,
+                        to_module=resolved,
+                        line=self._line_at(content, match.start(1)),
+                    )
+                )
         return edges
 
     def _extract_html_asset_edges(
@@ -743,7 +806,13 @@ class TreeSitterCodeParser:
         for match in _HTML_ASSET_PATTERN.finditer(content):
             resolved = self._resolve_static_path(match.group(1), all_files)
             if resolved:
-                edges.append(ModuleEdge(from_module=path, to_module=resolved))
+                edges.append(
+                    ModuleEdge(
+                        from_module=path,
+                        to_module=resolved,
+                        line=self._line_at(content, match.start(1)),
+                    )
+                )
         return edges
 
     @staticmethod

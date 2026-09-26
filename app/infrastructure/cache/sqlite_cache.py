@@ -256,6 +256,10 @@ class SqliteRepoCache(RepoCache):
             "commit_sha": index.commit_sha,
             "symbols": [asdict(s) for s in index.symbols],
             "module_edges": [list(edge) for edge in index.module_edges],
+            "edge_provenance": [list(edge) for edge in index.edge_provenance],
+            # Without this the staleness check on load always saw "" and
+            # discarded every cached index, so nothing was ever re-used.
+            "parser_version": index.parser_version,
         }
         return json.dumps(data)
 
@@ -267,5 +271,6 @@ class SqliteRepoCache(RepoCache):
             commit_sha=data["commit_sha"],
             symbols=[ParsedSymbol(**s) for s in data["symbols"]],
             module_edges=[tuple(edge) for edge in data["module_edges"]],
+            edge_provenance=[tuple(edge) for edge in data.get("edge_provenance", [])],
             parser_version=data.get("parser_version", ""),
         )

@@ -165,6 +165,11 @@ class ParsedRepoIndex:
     commit_sha: str
     symbols: list[ParsedSymbol] = field(default_factory=list)
     module_edges: list[tuple[str, str]] = field(default_factory=list)  # (from_module, to_module)
+    # The import line each edge was resolved from: (from_module, to_module,
+    # line). Kept beside module_edges rather than widening it, because every
+    # consumer of the graph wants the pair and only the export wants the
+    # line. An edge missing here is an edge no single line accounts for.
+    edge_provenance: list[tuple[str, str, int]] = field(default_factory=list)
     # Which parser produced this. A cached index outlives the code that
     # built it: adding grammars for Go, Rust, Ruby, Java and PHP gave
     # those repositories symbols for the first time, but anything already
@@ -179,6 +184,19 @@ class ParsedRepoIndex:
     def find_by_name(self, name: str) -> list[ParsedSymbol]:
         """May return multiple matches across files — disambiguation happens in trace_calls."""
         return [s for s in self.symbols if s.name == name]
+
+    def provenance_for(self, from_module: str, to_module: str) -> list[int]:
+        """
+        Every line in from_module that imports to_module, ascending.
+
+        A file can import the same module twice — two `from x import`
+        lines, or a require beside an ES import — so this is a list, and
+        an empty one means the edge has no line recorded rather than that
+        the edge is unsupported.
+        """
+        return sorted(
+            line for f, t, line in self.edge_provenance if f == from_module and t == to_module
+        )
 
 @dataclass
 class ReadingStep:
@@ -364,3 +382,89 @@ class AgentToolingReport:
         for asset in self.assets:
             grouped.setdefault(asset.kind, []).append(asset)
         return grouped
+
+
+@dataclass(frozen=True)
+class ExportedEdge:
+    """
+    One dependency in the exported architecture, with the lines it came from.
+
+    `lines` holds every line in `from_path` that imports `to_path`,
+    ascending. It is empty only when no single line accounts for the
+    edge — never as a shorthand for "we did not check".
+    """
+    from_path: str
+    to_path: str
+    lines: list[int] = field(default_factory=list)
+
+    @property
+    def is_evidenced(self) -> bool:
+        return bool(self.lines)
+
+
+@dataclass
+class ArchitectureCoverage:
+    """
+    What the export could see, and what it could not.
+
+    An architecture picture is only worth trusting if it says where it
+    stops. Every field here is counted from the ingest and the parse, so
+    the exported document can state its own blind spots rather than
+    presenting a partial graph as a complete one.
+    """
+    files_in_repo: int = 0
+    files_skipped: int = 0
+    # Extension -> number of files with that extension that no grammar
+    # could parse, so none of their imports are in the graph.
+    unparsed_extensions: dict[str, int] = field(default_factory=dict)
+    # Languages this build would parse but whose grammar did not load here.
+    degraded_languages: list[str] = field(default_factory=list)
+    nodes_drawn: int = 0
+    nodes_total: int = 0
+    edges_drawn: int = 0
+    edges_total: int = 0
+    granularity: str = "file"
+
+    @property
+    def is_complete(self) -> bool:
+        return (
+            self.files_skipped == 0
+            and not self.unparsed_extensions
+            and not self.degraded_languages
+            and self.nodes_drawn == self.nodes_total
+            and self.edges_drawn == self.edges_total
+        )
+
+    @property
+    def unparsed_file_count(self) -> int:
+        return sum(self.unparsed_extensions.values())
+
+
+@dataclass
+class ArchitectureExport:
+    """
+    A standalone architecture document for one commit.
+
+    Rendered to a single HTML file with no network dependency, so it can
+    be committed, attached to a review, or opened offline years later and
+    still say exactly which commit it describes.
+    """
+    repo_full_name: str
+    commit_sha: str
+    repo_url: str
+    edges: list[ExportedEdge] = field(default_factory=list)
+    detected_stack: list[str] = field(default_factory=list)
+    coverage: ArchitectureCoverage = field(default_factory=ArchitectureCoverage)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @property
+    def nodes(self) -> list[str]:
+        seen: dict[str, None] = {}
+        for edge in self.edges:
+            seen.setdefault(edge.from_path, None)
+            seen.setdefault(edge.to_path, None)
+        return list(seen)
+
+    @property
+    def evidenced_edge_count(self) -> int:
+        return sum(1 for e in self.edges if e.is_evidenced)

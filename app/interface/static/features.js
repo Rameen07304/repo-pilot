@@ -221,6 +221,54 @@
     if (handbookBtn) handbookBtn.addEventListener("click", downloadHandbook);
 
     // ===============================================================
+    // Shareable architecture page
+    // ===============================================================
+
+    // Unlike the diagram tab's PNG and SVG, this leaves with its own
+    // evidence: the line behind every arrow, and a statement of what the
+    // parse could not read. It needs no ingest of its own — it is the
+    // cached parse, written out.
+    async function exportArchitecture() {
+        const keys = repoKeys();
+        const status = el("diagram-status");
+        if (!keys) {
+            RP.setStatus(status, "ingest a repository first.", "error");
+            return;
+        }
+        const btn = el("export-arch-btn");
+        btn.disabled = true;
+        RP.setStatus(status, "writing the graph, its source lines and its blind spots into one page...", "loading");
+        try {
+            const res = await fetch("/api/architecture", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(keys),
+            });
+            if (!res.ok) {
+                let detail = "The architecture page could not be built.";
+                try { detail = (await res.json()).detail || detail; } catch (e) { /* not JSON */ }
+                throw new Error(detail);
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = keys.repo_full_name.replace(/[^\w-]/g, "-")
+                + "-architecture-" + keys.commit_sha.slice(0, 7) + ".html";
+            a.click();
+            URL.revokeObjectURL(url);
+            RP.setStatus(status, "downloaded. It opens offline, and every arrow links to the line it came from.", "success");
+        } catch (err) {
+            RP.setStatus(status, err.message, "error");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    const exportArchBtn = el("export-arch-btn");
+    if (exportArchBtn) exportArchBtn.addEventListener("click", exportArchitecture);
+
+    // ===============================================================
     // Feature 2 — Live investigation streaming
     // ===============================================================
 

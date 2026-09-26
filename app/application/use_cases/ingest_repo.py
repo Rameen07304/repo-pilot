@@ -233,12 +233,16 @@ class IngestRepoUseCase:
 
         module_edges_raw = self._parser.build_module_graph(all_files_map)
         module_edges = [(e.from_module, e.to_module) for e in module_edges_raw]
+        edge_provenance = [
+            (e.from_module, e.to_module, e.line) for e in module_edges_raw if e.line is not None
+        ]
 
         parsed_index = ParsedRepoIndex(
             repo_full_name=repo.full_name,
             commit_sha=commit_sha,
             symbols=symbols,
             module_edges=module_edges,
+            edge_provenance=edge_provenance,
             parser_version=self._parser.version,
         )
         if not skipped_count:

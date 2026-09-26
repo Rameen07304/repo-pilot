@@ -31,9 +31,17 @@ class TraceStep:
 
 @dataclass(frozen=True)
 class ModuleEdge:
-    """One edge in the dependency graph, used by the Diagram Agent."""
+    """
+    One edge in the dependency graph, used by the Diagram Agent.
+
+    `line` is the 1-based line in `from_module` holding the import this
+    edge was resolved from, so a reader can check any edge against the
+    source instead of taking the diagram on trust. It is None only for an
+    edge no single line accounts for.
+    """
     from_module: str
     to_module: str
+    line: int | None = None
 
 
 @runtime_checkable
@@ -63,6 +71,21 @@ class CodeParser(Protocol):
 
     def detect_language(self, file_path: str) -> str | None:
         """Extension/heuristic-based detection. No parsing needed for this."""
+        ...
+
+    def reads_dependencies_from(self, file_path: str) -> bool:
+        """
+        Whether build_module_graph reads any outgoing dependency from this
+        file. Broader than detect_language: a language can contribute
+        edges without a grammar, and an HTML file contributes its asset
+        links without being a language at all.
+
+        False means the graph contains nothing leaving this file, whatever
+        the file actually depends on. That is a blind spot rather than a
+        detail, so it is on the interface: the architecture export states
+        it instead of presenting a graph that silently omits whole parts
+        of a repository.
+        """
         ...
 
     def chunk_file(self, *, file_path: str, content: str) -> list[CodeChunk]:

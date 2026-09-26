@@ -68,6 +68,9 @@ class StubParser:
     def detect_language(self, path):
         return None
 
+    def reads_dependencies_from(self, path):
+        return False
+
     def chunk_file(self, *, file_path, content):
         return []
 
