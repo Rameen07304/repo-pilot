@@ -327,6 +327,11 @@
                         <button id="download-png-btn" class="cmd-btn secondary-btn hidden">download png</button>
                         <button id="download-svg-btn" class="cmd-btn secondary-btn hidden">download svg</button>
                         <button id="export-arch-btn" class="cmd-btn secondary-btn" type="button" title="One self-contained HTML file: the same graph, plus the source line every arrow was resolved from and a note on what the parse could not see. Opens with no internet connection.">export shareable page</button>
+                        <label id="delta-picker" class="orientation-toggle hidden" title="Compare this commit's structure against an earlier one. Both sides are parsed, so a difference means the code differs.">
+                            compare against
+                            <select id="delta-base-select" aria-label="Earlier commit to compare against"></select>
+                        </label>
+                        <button id="delta-btn" class="cmd-btn secondary-btn hidden" type="button">architecture delta</button>
                     </div>
                     <div id="diagram-status"></div>
                     <div id="mermaid-container" class="hidden">

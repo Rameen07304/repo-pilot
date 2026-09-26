@@ -164,6 +164,12 @@ class ArchitectureExportRequest(BaseModel):
     commit_sha: str = Field(..., max_length=100)
 
 
+class ArchitectureDeltaRequest(BaseModel):
+    repo_full_name: str = Field(..., max_length=200)
+    base_sha: str = Field(..., max_length=100)
+    head_sha: str = Field(..., max_length=100)
+
+
 class CodeHealthFindingResponse(BaseModel):
     check: str
     severity: str

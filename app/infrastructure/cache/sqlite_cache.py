@@ -29,7 +29,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.application.use_cases.ingest_repo import RepoCache
-from app.domain.entities import FileNode, ParsedRepoIndex, ParsedSymbol, RepoManifest
+from app.domain.entities import (
+    CachedCommit,
+    FileNode,
+    ParsedRepoIndex,
+    ParsedSymbol,
+    RepoManifest,
+)
 from app.domain.value_objects import RepoUrl
 
 logger = logging.getLogger(__name__)
@@ -248,6 +254,41 @@ class SqliteRepoCache(RepoCache):
             summary=data["summary"],
             ingested_at=datetime.fromisoformat(data["ingested_at"]),
         )
+
+    async def list_commits(self, repo_full_name: str) -> list[CachedCommit]:
+        """
+        Only commits with BOTH a manifest and a parsed index: a delta
+        compares two parses, and a manifest whose parse was evicted or
+        never written cannot be one side of it.
+        """
+        return await asyncio.to_thread(self._list_commits_sync, repo_full_name)
+
+    def _list_commits_sync(self, repo_full_name: str) -> list[CachedCommit]:
+        conn = _connect(self._db_path)
+        try:
+            rows = conn.execute(
+                """
+                SELECT m.commit_sha, m.cached_at
+                  FROM repo_manifests m
+                  JOIN parsed_repo_indexes p
+                    ON p.repo_full_name = m.repo_full_name
+                   AND p.commit_sha = m.commit_sha
+                 WHERE m.repo_full_name = ?
+                 ORDER BY m.cached_at DESC
+                """,
+                (repo_full_name,),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        commits: list[CachedCommit] = []
+        for sha, cached_at in rows:
+            try:
+                when = datetime.fromisoformat(cached_at)
+            except (TypeError, ValueError):
+                continue  # a row we cannot date is a row we cannot order
+            commits.append(CachedCommit(commit_sha=sha, cached_at=when))
+        return commits
 
     @staticmethod
     def _index_to_json(index: ParsedRepoIndex) -> str:

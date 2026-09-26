@@ -31,7 +31,7 @@ from app.application.interfaces.code_parser import CodeParser
 from app.application.interfaces.github_client import GitHubClient
 from app.application.interfaces.llm_client import LLMClient, LLMProviderError
 from app.application.interfaces.vector_store import VectorStore
-from app.domain.entities import FileNode, ParsedRepoIndex, RepoManifest
+from app.domain.entities import CachedCommit, FileNode, ParsedRepoIndex, RepoManifest
 from app.domain.value_objects import RepoUrl
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,15 @@ class RepoCache:
         raise NotImplementedError
 
     async def set_parsed_index(self, parsed_index: "ParsedRepoIndex") -> None:
+        raise NotImplementedError
+
+    async def list_commits(self, repo_full_name: str) -> list["CachedCommit"]:
+        """
+        Commits of this repository that are ready to compare, newest
+        first: ingested AND parsed, since a delta needs both sides
+        parsed. Returns an empty list for a repository nobody has
+        ingested, never an error.
+        """
         raise NotImplementedError
 
 

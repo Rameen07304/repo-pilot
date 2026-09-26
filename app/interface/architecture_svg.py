@@ -311,7 +311,12 @@ def _edge_path(src: PlacedNode, dst: PlacedNode) -> str:
     return f"M{x1},{y1} C{x1},{y1 + lift * direction} {x2},{y2 - lift * direction} {x2},{y2}"
 
 
-def render_architecture_svg(export) -> str:
+def render_architecture_svg(
+    export,
+    *,
+    edge_status: dict[tuple[str, str], str] | None = None,
+    node_status: dict[str, str] | None = None,
+) -> str:
     """
     The graph as SVG. Colours come from CSS custom properties so the host
     page themes it; the geometry does not depend on the host at all.
@@ -319,7 +324,15 @@ def render_architecture_svg(export) -> str:
     Every edge carries data-from, data-to and data-lines. That is the
     export's whole argument: the picture is checkable, edge by edge,
     without the tool that drew it.
+
+    `edge_status` and `node_status` tag parts of the graph with a word
+    such as "added" or "removed". They add a class and a data attribute
+    and change nothing else: the delta view is the same drawing with the
+    changed parts marked, so the two documents cannot disagree about a
+    repository's shape.
     """
+    edge_status = edge_status or {}
+    node_status = node_status or {}
     layout = build_layout(export)
     if not layout.nodes:
         return (
@@ -351,11 +364,15 @@ def render_architecture_svg(export) -> str:
             continue
         d = _edge_path(src, dst)
         lines = ",".join(str(n) for n in edge.lines)
+        status = edge_status.get((edge.from_path, edge.to_path), "")
         classes = "rp-edge" + (" rp-edge-cycle" if edge.is_cycle else "")
+        if status:
+            classes += f" rp-edge-{status}"
         common = (
             f'data-from="{escape(edge.from_path, quote=True)}" '
             f'data-to="{escape(edge.to_path, quote=True)}" '
             f'data-lines="{lines}"'
+            + (f' data-status="{escape(status, quote=True)}"' if status else "")
         )
         parts.append(
             f'<path class="{classes}" d="{d}" stroke="var(--rp-edge, #94a3b8)" '
@@ -373,9 +390,12 @@ def render_architecture_svg(export) -> str:
     parts.append("</g>")
     parts.append('<g class="rp-nodes">')
     for node in layout.nodes:
+        status = node_status.get(node.path, "")
         parts.append(
-            f'<g class="rp-node" data-path="{escape(node.path, quote=True)}" '
-            f'tabindex="0" role="button">'
+            f'<g class="rp-node{f" rp-node-{status}" if status else ""}" '
+            f'data-path="{escape(node.path, quote=True)}" '
+            + (f'data-status="{escape(status, quote=True)}" ' if status else "")
+            + f'tabindex="0" role="button">'
             f'<rect x="{node.x}" y="{node.y}" width="{node.width}" height="{NODE_HEIGHT}" '
             f'rx="8" fill="var(--rp-node-bg, #ffffff)" stroke="var(--rp-node-line, #cbd5e1)" '
             f'stroke-width="1"></rect>'

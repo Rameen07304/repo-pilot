@@ -16,13 +16,14 @@ from dataclasses import dataclass
 from app.application.use_cases.analyze_code_health import AnalyzeCodeHealthUseCase
 from app.application.use_cases.analyze_impact import AnalyzeImpactUseCase
 from app.application.use_cases.answer_question import AnswerQuestionUseCase
+from app.application.use_cases.compare_architecture import CompareArchitectureUseCase
 from app.application.use_cases.detect_agent_tooling import DetectAgentToolingUseCase
 from app.application.use_cases.export_architecture import ExportArchitectureUseCase
 from app.application.use_cases.generate_diagram import GenerateDiagramUseCase
 from app.application.use_cases.generate_handbook import GenerateHandbookUseCase
 from app.application.use_cases.generate_onboarding import GenerateOnboardingUseCase
 from app.application.use_cases.get_file_source import GetFileSourceUseCase
-from app.application.use_cases.ingest_repo import IngestRepoUseCase
+from app.application.use_cases.ingest_repo import IngestRepoUseCase, RepoCache
 from app.application.use_cases.investigate_question import DeepInvestigationUseCase
 from app.infrastructure.cache.sqlite_cache import SqliteRepoCache
 from app.infrastructure.github.github_api_client import GitHubApiClient
@@ -51,6 +52,11 @@ class AppContainer:
     handbook_use_case: GenerateHandbookUseCase
     agent_tooling_use_case: DetectAgentToolingUseCase
     architecture_export_use_case: ExportArchitectureUseCase
+    architecture_compare_use_case: CompareArchitectureUseCase
+    # The delta screen asks which commits of a repo are comparable,
+    # which is a question about the cache itself rather than about any
+    # one use case.
+    cache: RepoCache
 
     quota_guard: DailyQuotaGuard
     question_limiter: FixedWindowRateLimiter
@@ -224,6 +230,10 @@ def build_container() -> AppContainer:
     )
 
 
+    architecture_compare_use_case = CompareArchitectureUseCase(
+        export_use_case=architecture_export_use_case,
+    )
+
     return AppContainer(
         ingest_use_case=ingest_use_case,
         ask_use_case=ask_use_case,
@@ -236,6 +246,8 @@ def build_container() -> AppContainer:
         handbook_use_case=handbook_use_case,
         agent_tooling_use_case=agent_tooling_use_case,
         architecture_export_use_case=architecture_export_use_case,
+        architecture_compare_use_case=architecture_compare_use_case,
+        cache=cache,
         quota_guard=quota_guard,
         question_limiter=question_limiter,
         deep_question_limiter=deep_question_limiter,

@@ -269,6 +269,97 @@
     if (exportArchBtn) exportArchBtn.addEventListener("click", exportArchitecture);
 
     // ===============================================================
+    // Architecture delta — this commit against an earlier ingest
+    // ===============================================================
+
+    // The cache accumulates a commit each time a repo is ingested at a
+    // new HEAD, so the picker lists what is actually comparable rather
+    // than asking for a SHA nobody has parsed. With nothing to compare
+    // against, the control stays hidden instead of offering a dead end.
+    async function refreshDeltaPicker() {
+        const picker = el("delta-picker");
+        const select = el("delta-base-select");
+        const btn = el("delta-btn");
+        if (!picker || !select || !btn) return;
+
+        const repo = RP.getCurrentRepo();
+        if (!repo) {
+            picker.classList.add("hidden");
+            btn.classList.add("hidden");
+            return;
+        }
+        let commits = [];
+        try {
+            const res = await fetch("/api/architecture/commits?repo_full_name="
+                + encodeURIComponent(repo.repoFullName));
+            if (res.ok) commits = (await res.json()).commits || [];
+        } catch (e) {
+            commits = [];  // a listing that fails just hides the control
+        }
+        const others = commits.filter(function (c) { return c.commit_sha !== repo.commitSha; });
+        if (!others.length) {
+            picker.classList.add("hidden");
+            btn.classList.add("hidden");
+            return;
+        }
+        select.textContent = "";
+        others.forEach(function (c) {
+            const opt = document.createElement("option");
+            opt.value = c.commit_sha;
+            opt.textContent = c.short_sha + " · " + c.cached_at.slice(0, 10);
+            select.appendChild(opt);
+        });
+        picker.classList.remove("hidden");
+        btn.classList.remove("hidden");
+    }
+
+    async function downloadDelta() {
+        const repo = RP.getCurrentRepo();
+        const select = el("delta-base-select");
+        const status = el("diagram-status");
+        if (!repo || !select || !select.value) return;
+
+        const btn = el("delta-btn");
+        btn.disabled = true;
+        RP.setStatus(status, "comparing the two parses, resolving renames before dependencies...", "loading");
+        try {
+            const res = await fetch("/api/architecture/delta", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    repo_full_name: repo.repoFullName,
+                    base_sha: select.value,
+                    head_sha: repo.commitSha,
+                }),
+            });
+            if (!res.ok) {
+                let detail = "The architecture delta could not be built.";
+                try { detail = (await res.json()).detail || detail; } catch (e) { /* not JSON */ }
+                throw new Error(detail);
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = repo.repoFullName.replace(/[^\w-]/g, "-") + "-delta-"
+                + select.value.slice(0, 7) + "-" + repo.commitSha.slice(0, 7) + ".html";
+            a.click();
+            URL.revokeObjectURL(url);
+            RP.setStatus(status, "downloaded. Added and removed dependencies are marked, and renames are resolved first.", "success");
+        } catch (err) {
+            RP.setStatus(status, err.message, "error");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    const deltaBtn = el("delta-btn");
+    if (deltaBtn) deltaBtn.addEventListener("click", downloadDelta);
+    document.querySelectorAll('.tab-btn[data-tab="diagram-tab"]').forEach(function (tab) {
+        tab.addEventListener("click", refreshDeltaPicker);
+    });
+
+    // ===============================================================
     // Feature 2 — Live investigation streaming
     // ===============================================================
 

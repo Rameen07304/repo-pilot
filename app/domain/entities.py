@@ -468,3 +468,88 @@ class ArchitectureExport:
     @property
     def evidenced_edge_count(self) -> int:
         return sum(1 for e in self.edges if e.is_evidenced)
+
+
+@dataclass(frozen=True)
+class MovedNode:
+    """A file that changed path between two commits, matched by name."""
+    from_path: str
+    to_path: str
+
+
+@dataclass(frozen=True)
+class ChangedEdge:
+    """
+    A dependency that exists in one commit and not the other.
+
+    `lines` are the import lines in whichever commit holds it, so a
+    reviewer can open the change and read the statement that appeared or
+    disappeared rather than taking the delta's word for it.
+    """
+    from_path: str
+    to_path: str
+    lines: list[int] = field(default_factory=list)
+
+
+@dataclass
+class ArchitectureDelta:
+    """
+    What changed structurally between two commits of one repository.
+
+    Both sides are parses, not proposals, so a difference here means the
+    code differs. Nothing in this object can move because a model
+    described the same architecture two ways on two days.
+
+    Renames are resolved before edges are compared: a file that only
+    moved produces one MovedNode and no edge churn, instead of every
+    dependency it touches appearing once as removed and once as added.
+    """
+    repo_full_name: str
+    base: "ArchitectureExport"
+    head: "ArchitectureExport"
+    added_nodes: list[str] = field(default_factory=list)
+    removed_nodes: list[str] = field(default_factory=list)
+    moved_nodes: list[MovedNode] = field(default_factory=list)
+    added_edges: list[ChangedEdge] = field(default_factory=list)
+    removed_edges: list[ChangedEdge] = field(default_factory=list)
+    # Files present in both commits whose own set of dependencies changed.
+    # Derived from the edge lists, and the most useful single column in a
+    # review: it names the files whose role in the repository moved.
+    rerouted_nodes: list[str] = field(default_factory=list)
+    unchanged_edge_count: int = 0
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @property
+    def base_sha(self) -> str:
+        return self.base.commit_sha
+
+    @property
+    def head_sha(self) -> str:
+        return self.head.commit_sha
+
+    @property
+    def is_unchanged(self) -> bool:
+        return not (
+            self.added_nodes
+            or self.removed_nodes
+            or self.moved_nodes
+            or self.added_edges
+            or self.removed_edges
+        )
+
+    @property
+    def change_count(self) -> int:
+        return (
+            len(self.added_nodes)
+            + len(self.removed_nodes)
+            + len(self.moved_nodes)
+            + len(self.added_edges)
+            + len(self.removed_edges)
+        )
+
+
+@dataclass(frozen=True)
+class CachedCommit:
+    """One commit of a repository that is already ingested and parsed."""
+    commit_sha: str
+    cached_at: datetime

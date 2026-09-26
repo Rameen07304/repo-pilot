@@ -180,3 +180,84 @@ class HtmlDocumentTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeltaDocumentTest(unittest.TestCase):
+    """
+    The delta page. Same rules as the export — no network, readable with
+    scripts off — plus one it owns: a dependency that was removed has to
+    be visible, which means drawing something that no longer exists and
+    labelling it clearly enough that nobody mistakes it for current.
+    """
+
+    @staticmethod
+    def delta(**kwargs):
+        import asyncio
+
+        from app.application.use_cases.compare_architecture import (
+            CompareArchitectureUseCase,
+        )
+
+        base_edges = kwargs.pop("base_edges", [("app/main.py", "app/db.py", [1])])
+        head_edges = kwargs.pop("head_edges", [("app/main.py", "app/cache.py", [2])])
+
+        def side(sha, edges):
+            return export(
+                commit_sha=sha,
+                edges=[ExportedEdge(f, t, list(ls)) for f, t, ls in edges],
+            )
+
+        class Fake:
+            async def execute(self, *, repo_full_name, commit_sha):
+                return {"base1234567": side("base1234567", base_edges),
+                        "head1234567": side("head1234567", head_edges)}[commit_sha]
+
+        return asyncio.run(
+            CompareArchitectureUseCase(export_use_case=Fake()).execute(
+                repo_full_name="acme/widgets", base_sha="base1234567", head_sha="head1234567"
+            )
+        )
+
+    def render(self, **kwargs):
+        from app.interface.architecture_delta_html import render_architecture_delta_html
+
+        return render_architecture_delta_html(self.delta(**kwargs))
+
+    def test_it_asks_the_network_for_nothing(self):
+        html = self.render()
+        self.assertNotIn("<script src", html)
+        for host in ("cdnjs", "jsdelivr", "unpkg", "fonts.googleapis", "mermaid"):
+            self.assertNotIn(host, html)
+
+    def test_both_commits_are_named(self):
+        html = self.render()
+        self.assertIn("base123", html)
+        self.assertIn("head123", html)
+
+    def test_a_removed_dependency_is_drawn_and_labelled(self):
+        html = self.render()
+        self.assertIn('rp-edge-removed', html)
+        self.assertIn("do not exist at the head commit", html)
+
+    def test_an_added_line_links_to_head_and_a_removed_line_to_base(self):
+        html = self.render()
+        self.assertIn("/blob/head1234567/app/main.py#L2", html)
+        self.assertIn("/blob/base1234567/app/main.py#L1", html)
+
+    def test_an_unchanged_pair_says_so_plainly(self):
+        same = [("app/main.py", "app/db.py", [1])]
+        html = self.render(base_edges=same, head_edges=same)
+        self.assertIn("Nothing structural changed", html)
+        self.assertIn("compares structure, not", html)
+
+    def test_a_rename_is_explained_rather_than_shown_as_churn(self):
+        html = self.render(
+            base_edges=[("app/main.py", "app/db.py", [1])],
+            head_edges=[("app/main.py", "app/core/db.py", [1])],
+        )
+        self.assertIn("Files that moved", html)
+        self.assertIn("app/core/db.py", html)
+        self.assertIn("No dependency was added or removed.", html)
+
+    def test_it_states_that_neither_side_came_from_a_model(self):
+        self.assertIn("No language model took part in either one", self.render())
