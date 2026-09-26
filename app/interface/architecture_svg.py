@@ -223,7 +223,7 @@ def build_layout(export) -> Layout:
     if not nodes:
         return Layout(width=MARGIN * 2, height=MARGIN * 2)
 
-    pairs = [(e.from_path, e.to_path) for e in export.edges]
+    pairs = [(e.from_path, e.to_path) for e in export.edges_to_draw]
     back_edges = _find_back_edges(nodes, pairs)
     acyclic = [p for p in pairs if p not in back_edges]
     layer_of = _assign_layers(nodes, acyclic)
@@ -289,7 +289,7 @@ def build_layout(export) -> Layout:
                 lines=list(e.lines),
                 is_cycle=(e.from_path, e.to_path) in back_edges,
             )
-            for e in export.edges
+            for e in export.edges_to_draw
         ],
         width=canvas_width,
         height=max(n.bottom for n in placed) + MARGIN,

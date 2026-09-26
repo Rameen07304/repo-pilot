@@ -230,8 +230,8 @@ def build_container() -> AppContainer:
     architecture_export_use_case = ExportArchitectureUseCase(
         cache=cache,
         parser=code_parser,
-        max_nodes=int(os.getenv("ARCH_EXPORT_MAX_NODES", "120")),
-        max_edges=int(os.getenv("ARCH_EXPORT_MAX_EDGES", "400")),
+        max_nodes=int(os.getenv("ARCH_EXPORT_MAX_NODES", "45")),
+        max_edges=int(os.getenv("ARCH_EXPORT_MAX_EDGES", "70")),
     )
 
     handbook_use_case = GenerateHandbookUseCase(
@@ -245,12 +245,14 @@ def build_container() -> AppContainer:
         export_use_case=architecture_export_use_case,
     )
 
-    # Reads the cached parse only. The depth cap keeps a deeply nested
-    # entry point from drawing a diagram nobody can read.
+    # Reads the cached parse only. The caps are for legibility, not
+    # cost: a Flutter screen traced 123 calls into a 5600px-tall wall.
+    # The page already says when it stopped early, so a small number
+    # here is honest rather than lossy.
     sequence_use_case = TraceCallSequenceUseCase(
         cache=cache,
-        max_depth=int(os.getenv("SEQUENCE_MAX_DEPTH", "6")),
-        max_steps=int(os.getenv("SEQUENCE_MAX_STEPS", "120")),
+        max_depth=int(os.getenv("SEQUENCE_MAX_DEPTH", "4")),
+        max_steps=int(os.getenv("SEQUENCE_MAX_STEPS", "28")),
     )
 
     # A question picks its own starting point: search narrows to files,

@@ -70,8 +70,11 @@ class ExportArchitectureUseCase:
         *,
         cache: RepoCache,
         parser: CodeParser,
-        max_nodes: int = 120,
-        max_edges: int = 400,
+        # Caps on what is DRAWN. The evidence table keeps every edge,
+        # so these are a legibility budget, not a data limit: 336
+        # arrows on one canvas is not a diagram.
+        max_nodes: int = 45,
+        max_edges: int = 70,
     ) -> None:
         self._cache = cache
         self._parser = parser
@@ -92,25 +95,26 @@ class ExportArchitectureUseCase:
                 "The architecture export is built from the parse, not from prose."
             )
 
-        edges_total = self._dedupe(parsed_index)
-        edges = self._cap(edges_total)
-        nodes_total = self._node_count(edges_total)
+        edges = self._dedupe(parsed_index)
+        drawn = self._cap(edges)
+        nodes_total = self._node_count(edges)
 
         return ArchitectureExport(
             repo_full_name=repo_full_name,
             commit_sha=commit_sha,
             repo_url=str(manifest.repo_url),
             edges=edges,
+            drawn_edges=drawn,
             detected_stack=list(manifest.detected_stack),
             coverage=ArchitectureCoverage(
                 files_in_repo=manifest.file_count,
                 files_skipped=manifest.skipped_file_count,
                 unparsed_extensions=self._unparsed_extensions(manifest),
                 degraded_languages=list(manifest.degraded_languages),
-                nodes_drawn=self._node_count(edges),
+                nodes_drawn=self._node_count(drawn),
                 nodes_total=nodes_total,
-                edges_drawn=len(edges),
-                edges_total=len(edges_total),
+                edges_drawn=len(drawn),
+                edges_total=len(edges),
                 granularity="file",
             ),
         )

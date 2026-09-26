@@ -55,10 +55,10 @@ DETAIL_LEVELS = {
     # The shallowest folder level that actually shows structure.
     # Not simply depth 1: everything in a Flutter app lives under lib/,
     # so depth 1 collapsed a 106-file repo to two boxes and one arrow.
-    "overview": {"max_nodes": 22, "max_edges": 35, "shallowest": True},
+    "overview": {"max_nodes": 16, "max_edges": 26, "shallowest": True},
     # The deepest folder level that fits, which is where most repos read
     # best. The default, because a saturated diagram helps nobody.
-    "balanced": {"max_nodes": 45, "max_edges": 60, "shallowest": False},
+    "balanced": {"max_nodes": 28, "max_edges": 42, "shallowest": False},
     # File-level where it fits at all.
     "detailed": {"max_nodes": 80, "max_edges": 120, "shallowest": False},
 }

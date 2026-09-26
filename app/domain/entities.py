@@ -462,14 +462,23 @@ class ArchitectureExport:
     commit_sha: str
     repo_url: str
     edges: list[ExportedEdge] = field(default_factory=list)
+    # The subset worth drawing. Capping `edges` for legibility would also
+    # delete rows from the evidence table, which is the one thing this
+    # document exists for — so the picture is trimmed and the evidence is
+    # not. Empty means draw everything.
+    drawn_edges: list[ExportedEdge] = field(default_factory=list)
     detected_stack: list[str] = field(default_factory=list)
     coverage: ArchitectureCoverage = field(default_factory=ArchitectureCoverage)
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
+    def edges_to_draw(self) -> list[ExportedEdge]:
+        return self.drawn_edges or self.edges
+
+    @property
     def nodes(self) -> list[str]:
         seen: dict[str, None] = {}
-        for edge in self.edges:
+        for edge in self.edges_to_draw:
             seen.setdefault(edge.from_path, None)
             seen.setdefault(edge.to_path, None)
         return list(seen)
