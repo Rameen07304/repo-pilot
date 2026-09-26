@@ -629,3 +629,51 @@ class CallSequence:
     @property
     def unresolved_total(self) -> int:
         return sum(self.unresolved_calls.values())
+
+
+@dataclass(frozen=True)
+class FlowCandidate:
+    """A function a question might be asking about."""
+    file_path: str
+    symbol: str
+    internal_calls: int
+    similarity: float  # how relevant search found this symbol's file
+
+
+@dataclass
+class QuestionFlow:
+    """
+    A question, and the call sequence that answers it.
+
+    The split that makes this trustworthy: a model reads the question and
+    the shortlist and picks ONE starting point. It does not draw anything.
+    Every step after that is traced from the parse, so a badly chosen
+    entry produces a diagram that is less useful, never one that is
+    untrue — which is a very different failure from a model inventing the
+    flow it thinks you meant.
+
+    `chosen_by` records which half did the choosing, so the page can say
+    so rather than implying the whole thing was computed.
+    """
+    question: str
+    sequence: "CallSequence"
+    chosen_by: str = "retrieval"  # "model" | "retrieval"
+    reason: str = ""
+    candidates: list[FlowCandidate] = field(default_factory=list)
+
+    @property
+    def entry_file(self) -> str:
+        return self.sequence.entry_file
+
+    @property
+    def entry_symbol(self) -> str:
+        return self.sequence.entry_symbol
+
+    @property
+    def alternatives(self) -> list[FlowCandidate]:
+        """The other starting points considered, best first."""
+        return [
+            c
+            for c in self.candidates
+            if not (c.file_path == self.entry_file and c.symbol == self.entry_symbol)
+        ]

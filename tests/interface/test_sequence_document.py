@@ -158,3 +158,86 @@ class SequenceDocumentTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class QuestionFlowDocumentTest(unittest.TestCase):
+    """
+    The same page, reached by asking a question.
+
+    The one thing it must never do is let a reader think the whole
+    diagram came out of a model. Everything below the heading is the
+    ordinary trace; the page has to say which single decision was the
+    model's.
+    """
+
+    @staticmethod
+    def flow(**kwargs):
+        from app.domain.entities import FlowCandidate, QuestionFlow
+
+        defaults = dict(
+            question="how does login work",
+            sequence=sequence(entry_file="account/views.py", entry_symbol="login_view"),
+            chosen_by="model",
+            reason="login_view handles the login process.",
+            candidates=[
+                FlowCandidate("account/views.py", "login_view", 2, 0.9),
+                FlowCandidate("account/views.py", "register", 3, 0.9),
+                FlowCandidate("account/forms.py", "clean", 1, 0.5),
+            ],
+        )
+        defaults.update(kwargs)
+        return QuestionFlow(**defaults)
+
+    def render(self, **kwargs):
+        f = self.flow(**kwargs)
+        return render_sequence_html(f.sequence, flow=f)
+
+    def test_the_question_is_the_heading(self):
+        html = self.render()
+        self.assertIn("<h1>how does login work</h1>", html)
+        self.assertIn("login_view()", html)
+
+    def test_it_says_the_model_only_chose_where_to_start(self):
+        html = self.render()
+        self.assertIn("A language model read your question", html)
+        self.assertIn("where to start", html)
+        self.assertIn("could not add a call, remove one, or change the order", html)
+
+    def test_a_bad_choice_is_framed_as_less_useful_not_wrong(self):
+        self.assertIn("less useful diagram rather than a wrong one", self.render())
+
+    def test_a_search_chosen_entry_does_not_claim_a_model_chose_it(self):
+        html = self.render(chosen_by="retrieval", reason="")
+        self.assertIn("Search picked this starting point", html)
+        self.assertNotIn("A language model read your question", html)
+
+    def test_the_other_candidates_are_offered(self):
+        # A reader who got a poor starting point should be able to see
+        # what else was on the list rather than re-asking blindly.
+        html = self.render()
+        self.assertIn("Other starting points considered", html)
+        self.assertIn("register()", html)
+
+    def test_the_chosen_entry_is_not_listed_as_an_alternative(self):
+        html = self.render()
+        alternatives = html[html.index("Other starting points considered"):]
+        alternatives = alternatives[: alternatives.index("</ul>")]
+        self.assertNotIn("login_view", alternatives)
+
+    def test_a_hostile_question_cannot_inject(self):
+        # The question is echoed as a heading and comes straight from a
+        # request body.
+        html = self.render(question='<img src=x onerror="alert(1)">')
+        self.assertNotIn("<img src=x", html)
+        self.assertIn("&lt;img src=x", html)
+
+    def test_a_hostile_model_reason_cannot_inject(self):
+        # The reason is model output, which is untrusted text like any
+        # other.
+        html = self.render(reason='<script>alert(1)</script>')
+        self.assertNotIn("<script>alert(1)", html)
+
+    def test_without_a_flow_the_page_is_unchanged(self):
+        html = render_sequence_html(sequence())
+        self.assertNotIn("How this starting point was chosen", html)
+        self.assertIn("<h1>handler()</h1>", html)

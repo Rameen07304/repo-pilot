@@ -90,7 +90,12 @@ class TraceCallSequenceUseCase:
         return sequence
 
     async def suggest_entries(
-        self, *, repo_full_name: str, commit_sha: str, limit: int = 40
+        self,
+        *,
+        repo_full_name: str,
+        commit_sha: str,
+        limit: int = 40,
+        within_files: set[str] | None = None,
     ) -> list[dict]:
         """
         Functions worth tracing, best first.
@@ -100,6 +105,10 @@ class TraceCallSequenceUseCase:
         them would mostly offer empty diagrams. Ranked by how many calls
         actually resolve inside the repo, which is the same thing as how
         much of a sequence the trace will have to show.
+
+        `within_files` narrows the search to files something else already
+        found relevant. That is what lets a question choose its own
+        starting point instead of a reader guessing one.
         """
         index = await self._cache.get_parsed_index(repo_full_name, commit_sha)
         if index is None:
@@ -115,6 +124,8 @@ class TraceCallSequenceUseCase:
 
         ranked: list[tuple[int, str, str]] = []
         for symbol in index.symbols:
+            if within_files is not None and symbol.file_path not in within_files:
+                continue
             internal = sum(
                 1
                 for callee, _line in symbol.call_sites

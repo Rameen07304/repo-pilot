@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 
-from app.domain.entities import CallSequence
+from app.domain.entities import CallSequence, QuestionFlow
 from app.interface.architecture_html import _STYLE, blob_url
 from app.interface.sequence_svg import render_sequence_svg
 
@@ -53,8 +53,18 @@ def _blob(repo: str, sha: str, path: str, line: int | None = None) -> str:
 
 
 def render_sequence_html(
-    sequence: CallSequence, *, generated_at: datetime | None = None
+    sequence: CallSequence,
+    *,
+    generated_at: datetime | None = None,
+    flow: "QuestionFlow | None" = None,
 ) -> str:
+    """
+    One renderer for both ways in. A reader who picked the function by
+    hand and a reader who asked a question get the same document, because
+    below the heading it IS the same document: the same trace, from the
+    same parse. Only the heading changes, and when a question led here it
+    says plainly which part of the answer a model was responsible for.
+    """
     when = generated_at or sequence.generated_at or datetime.now(timezone.utc)
     repo = escape(sequence.repo_full_name)
     sha = sequence.commit_sha
@@ -73,7 +83,17 @@ def render_sequence_html(
         f"<title>{repo} — {escape(sequence.entry_symbol)}() call sequence</title>",
         f"<style>{_STYLE}{_SEQUENCE_STYLE}</style>",
         "</head><body><main>",
-        f"<h1>{escape(sequence.entry_symbol)}()</h1>",
+    ]
+    if flow is not None:
+        out.append(f"<h1>{escape(flow.question)}</h1>")
+        out.append(
+            '<p class="verdict">Traced from <strong class="mono">'
+            f"{escape(sequence.entry_symbol)}()</strong> in <code>"
+            f"{escape(sequence.entry_file)}</code>.</p>"
+        )
+    else:
+        out.append(f"<h1>{escape(sequence.entry_symbol)}()</h1>")
+    out += [
         '<ul class="meta">',
         f'<li><a class="mono" href="{_blob(sequence.repo_full_name, sha, sequence.entry_file)}">'
         f"{escape(sequence.entry_file)}</a></li>",
@@ -83,6 +103,39 @@ def render_sequence_html(
         f"<li>{when.strftime('%Y-%m-%d %H:%M UTC')}</li>",
         "</ul>",
     ]
+
+    if flow is not None:
+        # Said before anything else, because a reader is entitled to know
+        # exactly how much of what follows a model is responsible for.
+        picked = (
+            "A language model read your question and picked this starting point"
+            if flow.chosen_by == "model"
+            else "Search picked this starting point"
+        )
+        out += [
+            '<section class="panel">',
+            "<h2>How this starting point was chosen</h2>",
+            f"<p>{picked} from {len(flow.candidates)} function(s) that the search "
+            "found in relevant files. "
+            + (f"<em>{escape(flow.reason)}</em> " if flow.reason else "")
+            + "Everything below it is traced from the parsed code: the model chose "
+            "<strong>where to start</strong> and nothing else. It could not add a call, "
+            "remove one, or change the order, so a poorly chosen starting point gives you "
+            "a less useful diagram rather than a wrong one.</p>",
+        ]
+        if flow.alternatives:
+            out += [
+                "<p>Other starting points considered, best first:</p>",
+                "<ul>",
+                *(
+                    f'<li><a class="mono" href="'
+                    f'{_blob(sequence.repo_full_name, sha, alt.file_path)}">'
+                    f"{escape(alt.symbol)}()</a> in <code>{escape(alt.file_path)}</code></li>"
+                    for alt in flow.alternatives[:6]
+                ),
+                "</ul>",
+            ]
+        out.append("</section>")
 
     # The limits come first whenever there are any, for the same reason
     # they do on the architecture export: a reader who scrolls no further

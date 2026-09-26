@@ -447,6 +447,67 @@
 
     const sequenceBtn = el("sequence-btn");
     if (sequenceBtn) sequenceBtn.addEventListener("click", downloadSequence);
+
+    // ===============================================================
+    // Diagram the flow — the same question, answered as a sequence
+    // ===============================================================
+
+    // The split worth understanding: the model reads the question and
+    // picks ONE starting function from a shortlist the search produced.
+    // Everything after that is traced from the parse, so a bad pick
+    // means a less useful diagram, never an invented one.
+    async function diagramFlow() {
+        const repo = RP.getCurrentRepo();
+        const status = el("ask-status");
+        const input = el("question-input");
+        if (!input) return;
+        const question = input.value.trim();
+
+        if (!repo) {
+            RP.setStatus(status, "ingest a repository first.", "error");
+            return;
+        }
+        if (question.length < 3) {
+            RP.setStatus(status, "ask a question first, then diagram it.", "error");
+            input.focus();
+            return;
+        }
+
+        const btn = el("flow-btn");
+        btn.disabled = true;
+        RP.setStatus(status, "finding where this happens, then tracing the calls from there...", "loading");
+        try {
+            const res = await fetch("/api/sequence/flow", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    repo_full_name: repo.repoFullName,
+                    commit_sha: repo.commitSha,
+                    question: question,
+                }),
+            });
+            if (!res.ok) {
+                let detail = "That question could not be traced as a flow.";
+                try { detail = (await res.json()).detail || detail; } catch (e) { /* not JSON */ }
+                throw new Error(detail);
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = repo.repoFullName.replace(/[^\w-]/g, "-") + "-flow.html";
+            a.click();
+            URL.revokeObjectURL(url);
+            RP.setStatus(status, "downloaded. The page names the starting point it chose and why.", "success");
+        } catch (err) {
+            RP.setStatus(status, err.message, "error");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    const flowBtn = el("flow-btn");
+    if (flowBtn) flowBtn.addEventListener("click", diagramFlow);
     document.querySelectorAll('.tab-btn[data-tab="diagram-tab"]').forEach(function (tab) {
         tab.addEventListener("click", refreshDeltaPicker);
         tab.addEventListener("click", refreshSequencePicker);
