@@ -149,6 +149,15 @@ class ParsedSymbol:
     start_line: int
     end_line: int
     calls: list[str] = field(default_factory=list)
+    # The same calls, each with the line inside this symbol where it is
+    # written: (callee_name, line). Kept beside `calls` rather than
+    # replacing it because every existing consumer matches on the name
+    # alone, and only the call-sequence diagram needs the position.
+    call_sites: list[tuple[str, int]] = field(default_factory=list)
+
+    def lines_calling(self, callee: str) -> list[int]:
+        """Every line in this symbol that calls `callee`, ascending."""
+        return sorted(line for name, line in self.call_sites if name == callee)
 
 
 @dataclass
@@ -553,3 +562,70 @@ class CachedCommit:
     """One commit of a repository that is already ingested and parsed."""
     commit_sha: str
     cached_at: datetime
+
+
+@dataclass(frozen=True)
+class CallStep:
+    """
+    One call in a traced sequence: who called whom, and from which line.
+
+    `line` is inside `from_file`, at the call site — not at the callee's
+    definition. That is the line a reader opens to check the arrow.
+    """
+    depth: int
+    from_file: str
+    from_symbol: str
+    to_file: str
+    to_symbol: str
+    line: int
+    # True when the callee is already on the current call stack. The step
+    # is drawn and then not followed, because recursion is worth seeing
+    # and not worth expanding forever.
+    is_recursive: bool = False
+
+
+@dataclass
+class CallSequence:
+    """
+    What actually happens when one function runs, as far as the parse can
+    tell.
+
+    Every step comes from a call tree-sitter found inside a definition and
+    resolved to a symbol in this repository. Calls that leave the
+    repository — a framework, the standard library — are counted in
+    `unresolved_calls` rather than drawn: this diagram is about what this
+    codebase does, and a step nobody can open is not evidence.
+    """
+    repo_full_name: str
+    commit_sha: str
+    repo_url: str
+    entry_file: str
+    entry_symbol: str
+    steps: list[CallStep] = field(default_factory=list)
+    # Callee name -> how many times it was called and not resolved to a
+    # symbol in this repository, most frequent first.
+    unresolved_calls: dict[str, int] = field(default_factory=dict)
+    # Names that matched several symbols with nothing to choose between
+    # them. Guessing would draw a call that may not happen, so they are
+    # reported instead.
+    ambiguous_calls: dict[str, int] = field(default_factory=dict)
+    truncated: bool = False
+    max_depth: int = 0
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @property
+    def participants(self) -> list[str]:
+        """Files taking part, in the order the sequence first reaches them."""
+        seen: dict[str, None] = {self.entry_file: None}
+        for step in self.steps:
+            seen.setdefault(step.from_file, None)
+            seen.setdefault(step.to_file, None)
+        return list(seen)
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.steps
+
+    @property
+    def unresolved_total(self) -> int:
+        return sum(self.unresolved_calls.values())

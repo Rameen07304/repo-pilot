@@ -267,3 +267,67 @@ class ArchitectureRouteTest(unittest.TestCase):
         c = self.arch_client(limit=1)
         self.assertEqual(c.post("/api/architecture", json=keys()).status_code, 200)
         self.assertEqual(c.post("/api/architecture", json=keys()).status_code, 429)
+
+
+class SequenceRouteTest(unittest.TestCase):
+    """The call-sequence endpoints, including the entry listing the UI needs."""
+
+    @staticmethod
+    def seq_client(*, empty=False, limit=100):
+        from app.application.use_cases.trace_call_sequence import TraceCallSequenceUseCase
+        from app.interface.routes import sequence
+
+        app = FastAPI()
+        app.include_router(sequence.router)
+        cache = StubCache(empty=empty)
+        if not empty:
+            # main.py calls save() in core/db.py, which calls nothing.
+            cache.index.symbols[0].call_sites = [("save", 3)]
+            cache.index.symbols[0].calls = ["save"]
+        container = Container(cache, limit=limit)
+        container.sequence_use_case = TraceCallSequenceUseCase(cache=cache)
+        app.state.container = container
+        return TestClient(app)
+
+    def body(self):
+        return {
+            "repo_full_name": REPO, "commit_sha": SHA,
+            "entry_file": "app/main.py", "entry_symbol": "run",
+        }
+
+    def test_it_serves_a_self_contained_page(self):
+        res = self.seq_client().post("/api/sequence", json=self.body())
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("attachment", res.headers["content-disposition"])
+        self.assertIn("run-sequence", res.headers["content-disposition"])
+        self.assertIn("core/db.py", res.text)
+        self.assertNotIn("<script src", res.text)
+
+    def test_entries_are_listed_for_the_picker(self):
+        res = self.seq_client().get(
+            "/api/sequence/entries", params={"repo_full_name": REPO, "commit_sha": SHA}
+        )
+        self.assertEqual(res.status_code, 200)
+        entries = res.json()["entries"]
+        self.assertTrue(entries)
+        self.assertEqual(entries[0]["symbol"], "run")
+
+    def test_an_unknown_symbol_is_a_404(self):
+        body = self.body() | {"entry_symbol": "does_not_exist"}
+        self.assertEqual(
+            self.seq_client().post("/api/sequence", json=body).status_code, 404
+        )
+
+    def test_an_unparsed_repo_is_a_404_on_both_endpoints(self):
+        c = self.seq_client(empty=True)
+        self.assertEqual(c.post("/api/sequence", json=self.body()).status_code, 404)
+        self.assertEqual(
+            c.get("/api/sequence/entries",
+                  params={"repo_full_name": REPO, "commit_sha": SHA}).status_code,
+            404,
+        )
+
+    def test_the_hourly_limiter_applies(self):
+        c = self.seq_client(limit=1)
+        self.assertEqual(c.post("/api/sequence", json=self.body()).status_code, 200)
+        self.assertEqual(c.post("/api/sequence", json=self.body()).status_code, 429)

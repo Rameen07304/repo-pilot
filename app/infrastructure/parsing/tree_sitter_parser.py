@@ -171,7 +171,7 @@ _DEFINITION_NODE_TYPES.update(_GRAMMAR_NODE_TYPES)
 # import resolution. Caches carrying an older value are re-parsed.
 #   1 - python, javascript, typescript, dart
 #   2 - go, rust, ruby, java, php fully parsed; .mjs/.cjs on the JS grammar
-PARSER_VERSION = "3"
+PARSER_VERSION = "4"
 
 _NAME_FIELD = "name"  # consistent across these grammars for def/class nodes
 
@@ -316,7 +316,7 @@ class TreeSitterCodeParser:
             if node.is_named and node.type in def_types:
                 name_node = node.child_by_field_name(_NAME_FIELD)
                 name = name_node.text.decode("utf-8") if name_node else "<anonymous>"
-                calls = self._extract_calls_within(node, language)
+                call_sites = self._extract_calls_within(node, language)
                 symbols.append(
                     ParsedSymbol(
                         name=name,
@@ -324,7 +324,11 @@ class TreeSitterCodeParser:
                         file_path=file_path,
                         start_line=node.start_point[0] + 1,  # tree-sitter is 0-indexed
                         end_line=node.end_point[0] + 1,
-                        calls=calls,
+                        # `calls` stays a plain name list: the code-health
+                        # checks and trace_calls match on names and have no
+                        # use for a position.
+                        calls=[name for name, _line in call_sites],
+                        call_sites=call_sites,
                     )
                 )
             for child in node.children:
@@ -440,9 +444,18 @@ class TreeSitterCodeParser:
     # Internal: call + import extraction
     # ------------------------------------------------------------------
 
-    def _extract_calls_within(self, node: Node, language: str) -> list[str]:
+    def _extract_calls_within(self, node: Node, language: str) -> list[tuple[str, int]]:
+        """
+        Every call inside a definition, paired with the 1-based line it is
+        written on.
+
+        The line is what lets a call sequence be checked: a reader who
+        does not believe an arrow can open the caller at that line and see
+        the call. tree-sitter already knows it, so it is carried rather
+        than recovered later.
+        """
         call_types = _CALL_NODE_TYPE[language]
-        calls: list[str] = []
+        calls: list[tuple[str, int]] = []
 
         def walk(n: Node) -> None:
             if n.type in call_types:
@@ -463,7 +476,7 @@ class TreeSitterCodeParser:
                     # For `obj.method()` grab just `method` — name-based
                     # matching works on the bare name, not the full path.
                     simple_name = text.rsplit(".", 1)[-1]
-                    calls.append(simple_name)
+                    calls.append((simple_name, n.start_point[0] + 1))
             for child in n.children:
                 walk(child)
 

@@ -25,6 +25,7 @@ from app.application.use_cases.generate_onboarding import GenerateOnboardingUseC
 from app.application.use_cases.get_file_source import GetFileSourceUseCase
 from app.application.use_cases.ingest_repo import IngestRepoUseCase, RepoCache
 from app.application.use_cases.investigate_question import DeepInvestigationUseCase
+from app.application.use_cases.trace_call_sequence import TraceCallSequenceUseCase
 from app.infrastructure.cache.sqlite_cache import SqliteRepoCache
 from app.infrastructure.github.github_api_client import GitHubApiClient
 from app.infrastructure.llm.composite_llm_client import CompositeLLMClient
@@ -53,6 +54,7 @@ class AppContainer:
     agent_tooling_use_case: DetectAgentToolingUseCase
     architecture_export_use_case: ExportArchitectureUseCase
     architecture_compare_use_case: CompareArchitectureUseCase
+    sequence_use_case: TraceCallSequenceUseCase
     # The delta screen asks which commits of a repo are comparable,
     # which is a question about the cache itself rather than about any
     # one use case.
@@ -234,6 +236,14 @@ def build_container() -> AppContainer:
         export_use_case=architecture_export_use_case,
     )
 
+    # Reads the cached parse only. The depth cap keeps a deeply nested
+    # entry point from drawing a diagram nobody can read.
+    sequence_use_case = TraceCallSequenceUseCase(
+        cache=cache,
+        max_depth=int(os.getenv("SEQUENCE_MAX_DEPTH", "6")),
+        max_steps=int(os.getenv("SEQUENCE_MAX_STEPS", "120")),
+    )
+
     return AppContainer(
         ingest_use_case=ingest_use_case,
         ask_use_case=ask_use_case,
@@ -247,6 +257,7 @@ def build_container() -> AppContainer:
         agent_tooling_use_case=agent_tooling_use_case,
         architecture_export_use_case=architecture_export_use_case,
         architecture_compare_use_case=architecture_compare_use_case,
+        sequence_use_case=sequence_use_case,
         cache=cache,
         quota_guard=quota_guard,
         question_limiter=question_limiter,

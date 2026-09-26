@@ -40,10 +40,31 @@
       el.classList.remove('dim', 'lit', 'lit-node');
     });
   }
+  // Markup is never built by concatenating strings. File paths come from
+  // whatever repository was ingested, so a file named with an HTML tag
+  // would otherwise run as script inside a document people are meant to
+  // open and pass around. Everything goes in as text.
+  function node(tag, className, text) {
+    var el = document.createElement(tag);
+    if (className) el.className = className;
+    if (text !== undefined && text !== null) el.textContent = text;
+    return el;
+  }
+  function sep(text) { return document.createTextNode(text); }
   function linkFor(path, line) {
-    return repo && sha
-      ? 'https://github.com/' + repo + '/blob/' + sha + '/' + path + '#L' + line
-      : '';
+    if (!repo || !sha) return '';
+    // Each path segment is encoded, so a path can neither close the
+    // attribute nor introduce a different scheme.
+    return 'https://github.com/' + repo + '/blob/' + sha + '/'
+      + String(path).split('/').map(encodeURIComponent).join('/')
+      + '#L' + encodeURIComponent(line);
+  }
+  function lineLink(path, line) {
+    var a = node('a', 'mono', 'line ' + line);
+    a.href = linkFor(path, line);
+    a.target = '_blank';
+    a.rel = 'noreferrer noopener';
+    return a;
   }
   function focusEdge(from, to, lines) {
     clear();
@@ -56,19 +77,21 @@
       if (p === from || p === to) n.classList.add('lit-node'); else n.classList.add('dim');
     });
     var numbers = lines ? lines.split(',').filter(Boolean) : [];
-    var html = '<strong class="mono">' + from + '</strong> imports <strong class="mono">'
-      + to + '</strong>';
+    detail.textContent = '';
+    detail.appendChild(node('strong', 'mono', from));
+    detail.appendChild(sep(' imports '));
+    detail.appendChild(node('strong', 'mono', to));
+    detail.appendChild(sep(' \u00b7 '));
     if (numbers.length && repo && sha) {
-      html += ' &middot; ' + numbers.map(function (n) {
-        return '<a class="mono" target="_blank" rel="noreferrer noopener" href="'
-          + linkFor(from, n) + '">line ' + n + '</a>';
-      }).join(', ');
+      numbers.forEach(function (n, i) {
+        if (i) detail.appendChild(sep(', '));
+        detail.appendChild(lineLink(from, n));
+      });
     } else if (numbers.length) {
-      html += ' &middot; <span class="mono">line ' + numbers.join(', ') + '</span>';
+      detail.appendChild(node('span', 'mono', 'line ' + numbers.join(', ')));
     } else {
-      html += ' &middot; <span class="note">no single line accounts for this edge</span>';
+      detail.appendChild(node('span', 'note', 'no single line accounts for this edge'));
     }
-    detail.innerHTML = html;
   }
   function focusNode(path) {
     clear();
@@ -89,9 +112,10 @@
       else if (!involved[p]) n.classList.add('dim');
     });
     var up = Object.keys(upstream).length, down = Object.keys(downstream).length;
-    detail.innerHTML = '<strong class="mono">' + path + '</strong> &middot; '
-      + up + ' file(s) reach it, it reaches ' + down + ' &middot; '
-      + '<span class="note">transitive, not just direct neighbours</span>';
+    detail.textContent = '';
+    detail.appendChild(node('strong', 'mono', path));
+    detail.appendChild(sep(' \u00b7 ' + up + ' file(s) reach it, it reaches ' + down + ' \u00b7 '));
+    detail.appendChild(node('span', 'note', 'transitive, not just direct neighbours'));
   }
 
   hits.forEach(function (hit) {
@@ -115,7 +139,7 @@
       if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); activate(ev); }
     });
   });
-  svg.addEventListener('click', function () { clear(); detail.innerHTML = ''; });
+  svg.addEventListener('click', function () { clear(); detail.textContent = ''; });
 
   // ---- filter -------------------------------------------------------
   // Archify's own stated weakness is that a large repository draws a
@@ -127,7 +151,7 @@
     box.addEventListener('input', function () {
       var q = box.value.trim().toLowerCase();
       clear();
-      if (!q) { detail.innerHTML = ''; return; }
+      if (!q) { detail.textContent = ''; return; }
       var matched = {};
       nodes.forEach(function (n) {
         var p = n.getAttribute('data-path');
@@ -139,9 +163,13 @@
         e.classList.add(matched[f] || matched[t] ? 'lit' : 'dim');
       });
       var count = Object.keys(matched).length;
-      detail.innerHTML = count
-        ? count + ' file(s) match <strong class="mono">' + q + '</strong>'
-        : '<span class="note">nothing matches ' + q + '</span>';
+      detail.textContent = '';
+      if (count) {
+        detail.appendChild(sep(count + ' file(s) match '));
+        detail.appendChild(node('strong', 'mono', q));
+      } else {
+        detail.appendChild(node('span', 'note', 'nothing matches ' + q));
+      }
     });
   }
 
@@ -204,38 +232,47 @@
   function renderRoute(result, from, to) {
     if (!routeOut) return;
     if (result.sameNode) {
-      routeOut.innerHTML = '<span class="note">Pick two different files.</span>';
+      routeOut.textContent = '';
+      routeOut.appendChild(node('span', 'note', 'Pick two different files.'));
       return;
     }
     if (!result.found) {
-      routeOut.innerHTML = '<span class="note"><strong class="mono">' + from
-        + '</strong> does not reach <strong class="mono">' + to + '</strong>'
-        + (result.reverseExists
-            ? ' &mdash; but the dependency runs the other way. Swap them.'
-            : ' by any chain of imports in this diagram.')
-        + '</span>';
+      routeOut.textContent = '';
+      var miss = node('span', 'note');
+      miss.appendChild(node('strong', 'mono', from));
+      miss.appendChild(sep(' does not reach '));
+      miss.appendChild(node('strong', 'mono', to));
+      miss.appendChild(sep(result.reverseExists
+        ? ' \u2014 but the dependency runs the other way. Swap them.'
+        : ' by any chain of imports in this diagram.'));
+      routeOut.appendChild(miss);
       return;
     }
-    var parts = ['<ol class="route">'];
+    routeOut.textContent = '';
+    var list = node('ol', 'route');
     result.hops.forEach(function (h) {
-      var cited = h.lines.length && repo && sha
-        ? h.lines.map(function (n) {
-            return '<a class="mono" target="_blank" rel="noreferrer noopener" href="'
-              + linkFor(h.from, n) + '">line ' + n + '</a>';
-          }).join(', ')
-        : (h.lines.length
-            ? '<span class="mono">line ' + h.lines.join(', ') + '</span>'
-            : '<span class="note">no single line</span>');
-      parts.push('<li><span class="mono">' + h.from + '</span> imports <span class="mono">'
-        + h.to + '</span> &middot; ' + cited + '</li>');
+      var li = document.createElement('li');
+      li.appendChild(node('span', 'mono', h.from));
+      li.appendChild(sep(' imports '));
+      li.appendChild(node('span', 'mono', h.to));
+      li.appendChild(sep(' \u00b7 '));
+      if (h.lines.length && repo && sha) {
+        h.lines.forEach(function (n, i) {
+          if (i) li.appendChild(sep(', '));
+          li.appendChild(lineLink(h.from, n));
+        });
+      } else if (h.lines.length) {
+        li.appendChild(node('span', 'mono', 'line ' + h.lines.join(', ')));
+      } else {
+        li.appendChild(node('span', 'note', 'no single line'));
+      }
+      list.appendChild(li);
     });
-    parts.push('</ol>');
-    parts.push('<p class="note">' + result.hops.length + ' hop(s)'
+    routeOut.appendChild(list);
+    routeOut.appendChild(node('p', 'note', result.hops.length + ' hop(s) \u00b7 '
       + (result.alternatives
-          ? ' &middot; ' + result.alternatives + ' other route(s) of the same length exist'
-          : ' &middot; the only route this short')
-      + '.</p>');
-    routeOut.innerHTML = parts.join('');
+          ? result.alternatives + ' other route(s) of the same length exist.'
+          : 'the only route this short.')));
   }
 
   function doTrace() {
@@ -247,7 +284,7 @@
       litRoute(result.hops);
       routeState = { from: from, to: to, hops: result.hops };
       if (routeCardBtn) routeCardBtn.hidden = false;
-      detail.innerHTML = '';
+      detail.textContent = '';
     } else {
       clear();
       routeState = null;
@@ -299,8 +336,9 @@
     var img = new Image();
     img.onload = function () { draw(img, name); };
     img.onerror = function () {
-      detail.innerHTML = '<span class="note">this browser refused to rasterise the diagram; '
-        + 'the page itself is still complete</span>';
+      detail.textContent = '';
+      detail.appendChild(node('span', 'note',
+        'this browser refused to rasterise the diagram; the page itself is still complete'));
     };
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(serialised(keepState));
   }

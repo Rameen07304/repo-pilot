@@ -170,6 +170,13 @@ class ArchitectureDeltaRequest(BaseModel):
     head_sha: str = Field(..., max_length=100)
 
 
+class CallSequenceRequest(BaseModel):
+    repo_full_name: str = Field(..., max_length=200)
+    commit_sha: str = Field(..., max_length=100)
+    entry_file: str = Field(..., max_length=500)
+    entry_symbol: str = Field(..., max_length=200)
+
+
 class CodeHealthFindingResponse(BaseModel):
     check: str
     severity: str

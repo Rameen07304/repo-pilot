@@ -47,6 +47,20 @@ logger = logging.getLogger(__name__)
 _BUSY_TIMEOUT_SECONDS = 10.0
 
 
+def _symbol_from_json(data: dict) -> ParsedSymbol:
+    """
+    Rebuild a symbol from its cached JSON.
+
+    JSON has no tuples, so call sites come back as two-element lists and
+    have to be restored, and rows written before the column existed have
+    none at all. An index that old fails the parser-version check and is
+    re-parsed anyway; this just has to load rather than raise first.
+    """
+    fields = dict(data)
+    fields["call_sites"] = [tuple(site) for site in fields.get("call_sites", [])]
+    return ParsedSymbol(**fields)
+
+
 def _connect(db_path: str) -> sqlite3.Connection:
     """
     Open a connection configured for concurrent use.
@@ -310,7 +324,7 @@ class SqliteRepoCache(RepoCache):
         return ParsedRepoIndex(
             repo_full_name=data["repo_full_name"],
             commit_sha=data["commit_sha"],
-            symbols=[ParsedSymbol(**s) for s in data["symbols"]],
+            symbols=[_symbol_from_json(s) for s in data["symbols"]],
             module_edges=[tuple(edge) for edge in data["module_edges"]],
             edge_provenance=[tuple(edge) for edge in data.get("edge_provenance", [])],
             parser_version=data.get("parser_version", ""),

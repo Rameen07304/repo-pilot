@@ -33,6 +33,7 @@ from app.interface.routes import (  # noqa: E402
     ingest,
     investigate_stream,
     onboarding,
+    sequence,
     source,
 )
 
@@ -63,6 +64,7 @@ app.include_router(handbook.router)
 app.include_router(agent_tooling.router)
 app.include_router(architecture.router)
 app.include_router(architecture_delta.router)
+app.include_router(sequence.router)
 
 templates = Jinja2Templates(directory="app/interface/templates")
 app.mount("/static", StaticFiles(directory="app/interface/static"), name="static")

@@ -368,3 +368,70 @@ class RouteTracingWiringTest(unittest.TestCase):
         ):
             with self.subTest(document=name):
                 self.assertIn('id="rp-route"', html)
+
+
+class HostileRepoContentTest(unittest.TestCase):
+    """
+    Anyone can ask a public deployment to ingest any public repository,
+    so file names are attacker-controlled and a file may legally be
+    called `" onmouseover=...` or `<img src=x onerror=...>.py`.
+
+    These documents are built to be downloaded and passed around, which
+    makes script injected into one worth more than usual. Two places got
+    it wrong and both are covered here: a path interpolated raw into an
+    href, and a path concatenated into innerHTML by the inlined script.
+    """
+
+    EVIL = '<img src=x onerror="alert(1)">.py'
+    QUOTE_BREAK = 'a" onmouseover="alert(1)'
+
+    def documents(self, path):
+        from app.interface.architecture_delta_html import render_architecture_delta_html
+
+        yield "export", render_architecture_html(
+            export(edges=[ExportedEdge(path, "app/db.py", [3])])
+        )
+        yield "delta", render_architecture_delta_html(
+            DeltaDocumentTest.delta(
+                base_edges=[(path, "app/db.py", [1])],
+                head_edges=[(path, "app/other.py", [2])],
+            )
+        )
+
+    def test_a_tag_in_a_file_name_never_reaches_the_page_unescaped(self):
+        for name, html in self.documents(self.EVIL):
+            with self.subTest(document=name):
+                self.assertNotIn("<img src=x", html)
+                self.assertNotIn('onerror="alert(1)"', html)
+                self.assertIn("&lt;img src=x", html)
+
+    def test_a_quote_in_a_file_name_cannot_close_an_href(self):
+        for name, html in self.documents(self.QUOTE_BREAK):
+            with self.subTest(document=name):
+                self.assertNotIn('onmouseover="alert(1)"', html)
+                self.assertNotIn('href="https://github.com/acme/widgets/blob/'
+                                 + self.QUOTE_BREAK, html)
+
+    def test_the_link_is_percent_encoded_so_it_still_works(self):
+        # Escaping must not break the link: the point of the citation is
+        # that it opens the file.
+        from app.interface.architecture_html import blob_url
+
+        url = blob_url("acme/widgets", "abc123", "src/a b<c>.py", 9)
+        self.assertIn("src/a%20b%3Cc%3E.py", url)
+        self.assertTrue(url.endswith("#L9"))
+        self.assertNotIn("<", url)
+        self.assertNotIn('"', url)
+
+    def test_a_line_number_cannot_smuggle_anything_into_the_fragment(self):
+        from app.interface.architecture_html import blob_url
+
+        with self.assertRaises(ValueError):
+            blob_url("acme/widgets", "abc123", "a.py", "9\" onload=\"x")
+
+    def test_the_inlined_script_builds_no_markup_from_strings(self):
+        # The detail panel used to concatenate a file path into
+        # innerHTML, which executed a hostile name on click.
+        for name, html in self.documents("app/main.py"):
+            with self.subTest(document=name):
+                self.assertNotIn("innerHTML", html)

@@ -355,8 +355,101 @@
 
     const deltaBtn = el("delta-btn");
     if (deltaBtn) deltaBtn.addEventListener("click", downloadDelta);
+
+    // ===============================================================
+    // Call sequence — what runs when one function runs
+    // ===============================================================
+
+    // Most symbols in a repo call nothing that lives in the same repo,
+    // so offering all of them would mostly offer empty diagrams. The
+    // server ranks by how many calls actually resolve internally.
+    async function refreshSequencePicker() {
+        const picker = el("sequence-picker");
+        const select = el("sequence-select");
+        const btn = el("sequence-btn");
+        if (!picker || !select || !btn) return;
+
+        const repo = RP.getCurrentRepo();
+        if (!repo) {
+            picker.classList.add("hidden");
+            btn.classList.add("hidden");
+            return;
+        }
+        let entries = [];
+        try {
+            const res = await fetch("/api/sequence/entries?repo_full_name="
+                + encodeURIComponent(repo.repoFullName)
+                + "&commit_sha=" + encodeURIComponent(repo.commitSha));
+            if (res.ok) entries = (await res.json()).entries || [];
+        } catch (e) {
+            entries = [];  // a listing that fails just hides the control
+        }
+        if (!entries.length) {
+            picker.classList.add("hidden");
+            btn.classList.add("hidden");
+            return;
+        }
+        select.textContent = "";
+        entries.forEach(function (entry) {
+            const opt = document.createElement("option");
+            opt.value = entry.file_path + "::" + entry.symbol;
+            opt.textContent = entry.symbol + "()  ·  " + entry.file_path;
+            select.appendChild(opt);
+        });
+        picker.classList.remove("hidden");
+        btn.classList.remove("hidden");
+    }
+
+    async function downloadSequence() {
+        const repo = RP.getCurrentRepo();
+        const select = el("sequence-select");
+        const status = el("diagram-status");
+        if (!repo || !select || !select.value) return;
+
+        const cut = select.value.lastIndexOf("::");
+        const entryFile = select.value.slice(0, cut);
+        const entrySymbol = select.value.slice(cut + 2);
+
+        const btn = el("sequence-btn");
+        btn.disabled = true;
+        RP.setStatus(status, "following the calls, resolving each one to a symbol in this repo...", "loading");
+        try {
+            const res = await fetch("/api/sequence", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    repo_full_name: repo.repoFullName,
+                    commit_sha: repo.commitSha,
+                    entry_file: entryFile,
+                    entry_symbol: entrySymbol,
+                }),
+            });
+            if (!res.ok) {
+                let detail = "The call sequence could not be traced.";
+                try { detail = (await res.json()).detail || detail; } catch (e) { /* not JSON */ }
+                throw new Error(detail);
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = repo.repoFullName.replace(/[^\w-]/g, "-") + "-"
+                + entrySymbol.replace(/[^\w-]/g, "-") + "-sequence.html";
+            a.click();
+            URL.revokeObjectURL(url);
+            RP.setStatus(status, "downloaded. Every step cites the line the call is written on.", "success");
+        } catch (err) {
+            RP.setStatus(status, err.message, "error");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    const sequenceBtn = el("sequence-btn");
+    if (sequenceBtn) sequenceBtn.addEventListener("click", downloadSequence);
     document.querySelectorAll('.tab-btn[data-tab="diagram-tab"]').forEach(function (tab) {
         tab.addEventListener("click", refreshDeltaPicker);
+        tab.addEventListener("click", refreshSequencePicker);
     });
 
     // ===============================================================

@@ -332,6 +332,11 @@
                             <select id="delta-base-select" aria-label="Earlier commit to compare against"></select>
                         </label>
                         <button id="delta-btn" class="cmd-btn secondary-btn hidden" type="button">architecture delta</button>
+                        <label id="sequence-picker" class="orientation-toggle hidden" title="Trace what runs when one function runs. Every step is a call tree-sitter found, with the line it is written on.">
+                            call sequence from
+                            <select id="sequence-select" aria-label="Function to trace"></select>
+                        </label>
+                        <button id="sequence-btn" class="cmd-btn secondary-btn hidden" type="button">trace sequence</button>
                     </div>
                     <div id="diagram-status"></div>
                     <div id="mermaid-container" class="hidden">

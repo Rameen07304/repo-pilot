@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
+from urllib.parse import quote
 
 from app.domain.entities import ArchitectureExport
 from app.interface.architecture_svg import render_architecture_svg
@@ -159,9 +160,26 @@ def _short(sha: str) -> str:
     return sha[:7] if sha else "unknown"
 
 
+def blob_url(repo_full_name: str, sha: str, path: str, line: int | None = None) -> str:
+    """
+    A GitHub link to a file, safe to put in an href attribute.
+
+    Repository paths are attacker-controlled: anyone can ask a public
+    deployment to ingest a repo, and a file may legally be named
+    `" onmouseover=...`. Interpolating that raw closed the attribute and
+    put script into a document whose whole purpose is to be shared.
+    Percent-encoding each segment fixes the URL and the escaping at once,
+    and `escape` on the way out covers the repo name and sha too.
+    """
+    encoded = "/".join(quote(segment, safe="") for segment in path.split("/"))
+    url = f"https://github.com/{quote(repo_full_name, safe='/')}/blob/{quote(sha, safe='')}/{encoded}"
+    if line:
+        url = f"{url}#L{int(line)}"
+    return escape(url, quote=True)
+
+
 def _blob_url(export: ArchitectureExport, path: str, line: int | None = None) -> str:
-    url = f"https://github.com/{export.repo_full_name}/blob/{export.commit_sha}/{path}"
-    return f"{url}#L{line}" if line else url
+    return blob_url(export.repo_full_name, export.commit_sha, path, line)
 
 
 def _coverage_section(export: ArchitectureExport) -> list[str]:

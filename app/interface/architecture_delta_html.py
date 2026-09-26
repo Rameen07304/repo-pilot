@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from html import escape
 
 from app.domain.entities import ArchitectureDelta, ArchitectureExport, ExportedEdge
-from app.interface.architecture_html import _SCRIPT, _STYLE, _TOOLBAR
+from app.interface.architecture_html import _SCRIPT, _STYLE, _TOOLBAR, blob_url
 from app.interface.architecture_svg import render_architecture_svg
 
 _DELTA_STYLE = """
@@ -54,8 +54,7 @@ def _short(sha: str) -> str:
 
 
 def _blob(repo: str, sha: str, path: str, line: int | None = None) -> str:
-    url = f"https://github.com/{repo}/blob/{sha}/{path}"
-    return f"{url}#L{line}" if line else url
+    return blob_url(repo, sha, path, line)
 
 
 def _cited(repo: str, sha: str, path: str, lines: list[int]) -> str:
