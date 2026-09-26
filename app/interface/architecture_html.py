@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from html import escape
+from pathlib import Path
 
 from app.domain.entities import ArchitectureExport
 from app.interface.architecture_svg import render_architecture_svg
@@ -80,6 +81,14 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-
   cursor: pointer; }
 .toolbar button:hover { border-color: var(--rp-accent); color: var(--rp-accent); }
 .toolbar button:active { transform: translateY(1px); }
+.routebar select { padding: 8px 10px; border: 1px solid var(--rp-line); border-radius: 9px;
+  background: var(--rp-surface); color: var(--rp-ink); font: inherit; font-size: 0.85rem;
+  max-width: 260px; }
+.routebar label { display: flex; align-items: center; gap: 7px; font-size: 0.85rem;
+  color: var(--rp-ink-dim); }
+#rp-route { margin: 10px 0 0; }
+ol.route { margin: 0; padding-left: 22px; font-size: 0.88rem; }
+ol.route li { margin-bottom: 5px; }
 #detail { margin-top: 12px; font-size: 0.9rem; }
 #detail:empty::before { content: "Select any arrow to see the import it was resolved from.";
   color: var(--rp-ink-dim); }
@@ -103,260 +112,21 @@ footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--rp-lin
 }
 """
 
-# Everything below is an enhancement. Every fact it surfaces is already
-# in the evidence table as plain HTML, so a reader with scripts off loses
-# convenience and no information — which is why the controls it drives
-# are hidden until it runs.
-_SCRIPT = r"""
-(function () {
-  var svg = document.querySelector('svg.rp-arch');
-  var detail = document.getElementById('detail');
-  if (!svg || !detail) return;
-  var edges = Array.prototype.slice.call(svg.querySelectorAll('.rp-edge'));
-  var hits = Array.prototype.slice.call(svg.querySelectorAll('.rp-edge-hit'));
-  var nodes = Array.prototype.slice.call(svg.querySelectorAll('.rp-node'));
-  var repo = svg.getAttribute('data-repo') || '';
-  var sha = svg.getAttribute('data-sha') || '';
+# The page's behaviour lives in real files rather than in a string here:
+# the frontend suite loads them directly, and extending them does not mean
+# escaping JavaScript through Python. They are read once at import and
+# inlined verbatim, so the exported document still needs no network.
+_STATIC = Path(__file__).resolve().parent / "static"
 
-  // Adjacency, built once. Reach is transitive: the question a reader
-  // actually has is "what does changing this touch", and the answer
-  // rarely stops at the first hop.
-  var out = {}, into = {};
-  edges.forEach(function (e) {
-    var f = e.getAttribute('data-from'), t = e.getAttribute('data-to');
-    (out[f] = out[f] || []).push(t);
-    (into[t] = into[t] || []).push(f);
-  });
-  function reach(start, graph) {
-    var seen = {}, stack = [start];
-    while (stack.length) {
-      var n = stack.pop();
-      (graph[n] || []).forEach(function (m) {
-        if (!seen[m] && m !== start) { seen[m] = 1; stack.push(m); }
-      });
-    }
-    return seen;
-  }
 
-  function clear() {
-    edges.concat(nodes).forEach(function (el) {
-      el.classList.remove('dim', 'lit', 'lit-node');
-    });
-  }
-  function linkFor(path, line) {
-    return repo && sha
-      ? 'https://github.com/' + repo + '/blob/' + sha + '/' + path + '#L' + line
-      : '';
-  }
-  function focusEdge(from, to, lines) {
-    clear();
-    edges.forEach(function (e) {
-      var match = e.getAttribute('data-from') === from && e.getAttribute('data-to') === to;
-      e.classList.add(match ? 'lit' : 'dim');
-    });
-    nodes.forEach(function (n) {
-      var p = n.getAttribute('data-path');
-      if (p === from || p === to) n.classList.add('lit-node'); else n.classList.add('dim');
-    });
-    var numbers = lines ? lines.split(',').filter(Boolean) : [];
-    var html = '<strong class="mono">' + from + '</strong> imports <strong class="mono">'
-      + to + '</strong>';
-    if (numbers.length && repo && sha) {
-      html += ' &middot; ' + numbers.map(function (n) {
-        return '<a class="mono" target="_blank" rel="noreferrer noopener" href="'
-          + linkFor(from, n) + '">line ' + n + '</a>';
-      }).join(', ');
-    } else if (numbers.length) {
-      html += ' &middot; <span class="mono">line ' + numbers.join(', ') + '</span>';
-    } else {
-      html += ' &middot; <span class="note">no single line accounts for this edge</span>';
-    }
-    detail.innerHTML = html;
-  }
-  function focusNode(path) {
-    clear();
-    var downstream = reach(path, out);   // what this file leans on
-    var upstream = reach(path, into);    // what leans on this file
-    var involved = {};
-    involved[path] = 1;
-    Object.keys(downstream).forEach(function (k) { involved[k] = 1; });
-    Object.keys(upstream).forEach(function (k) { involved[k] = 1; });
+def _inline_script(name: str) -> str:
+    return (_STATIC / name).read_text(encoding="utf-8")
 
-    edges.forEach(function (e) {
-      var f = e.getAttribute('data-from'), t = e.getAttribute('data-to');
-      e.classList.add(involved[f] && involved[t] ? 'lit' : 'dim');
-    });
-    nodes.forEach(function (n) {
-      var p = n.getAttribute('data-path');
-      if (p === path) n.classList.add('lit-node');
-      else if (!involved[p]) n.classList.add('dim');
-    });
-    var up = Object.keys(upstream).length, down = Object.keys(downstream).length;
-    detail.innerHTML = '<strong class="mono">' + path + '</strong> &middot; '
-      + up + ' file(s) reach it, it reaches ' + down + ' &middot; '
-      + '<span class="note">transitive, not just direct neighbours</span>';
-  }
 
-  hits.forEach(function (hit) {
-    function activate(ev) {
-      ev.stopPropagation();
-      focusEdge(hit.getAttribute('data-from'), hit.getAttribute('data-to'),
-                hit.getAttribute('data-lines'));
-    }
-    hit.addEventListener('click', activate);
-    hit.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); activate(ev); }
-    });
-  });
-  nodes.forEach(function (node) {
-    function activate(ev) {
-      ev.stopPropagation();
-      focusNode(node.getAttribute('data-path'));
-    }
-    node.addEventListener('click', activate);
-    node.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); activate(ev); }
-    });
-  });
-  svg.addEventListener('click', function () { clear(); detail.innerHTML = ''; });
-
-  // ---- filter -------------------------------------------------------
-  // Archify's own stated weakness is that a large repository draws a
-  // diagram too dense to read. Filtering is the cheapest answer to that:
-  // the whole graph stays on the page, and everything not matching
-  // recedes rather than disappearing, so context is never lost.
-  var box = document.getElementById('rp-filter');
-  if (box) {
-    box.addEventListener('input', function () {
-      var q = box.value.trim().toLowerCase();
-      clear();
-      if (!q) { detail.innerHTML = ''; return; }
-      var matched = {};
-      nodes.forEach(function (n) {
-        var p = n.getAttribute('data-path');
-        if (p.toLowerCase().indexOf(q) !== -1) matched[p] = 1;
-        else n.classList.add('dim');
-      });
-      edges.forEach(function (e) {
-        var f = e.getAttribute('data-from'), t = e.getAttribute('data-to');
-        e.classList.add(matched[f] || matched[t] ? 'lit' : 'dim');
-      });
-      var count = Object.keys(matched).length;
-      detail.innerHTML = count
-        ? count + ' file(s) match <strong class="mono">' + q + '</strong>'
-        : '<span class="note">nothing matches ' + q + '</span>';
-    });
-  }
-
-  // ---- image export -------------------------------------------------
-  // The SVG on the page paints from CSS custom properties defined on the
-  // document. Once it is serialised into an <img> it has no document to
-  // read them from, so the resolved values are baked into a <style> on
-  // the clone. Without that step the PNG comes out unstyled.
-  var NS = 'http://www.w3.org/2000/svg';
-  var VARS = ['--rp-edge', '--rp-node-bg', '--rp-node-line', '--rp-ink', '--rp-ink-dim',
-              '--rp-accent', '--rp-added', '--rp-removed'];
-  function serialised() {
-    var clone = svg.cloneNode(true);
-    var cs = getComputedStyle(document.documentElement);
-    var decls = VARS.map(function (v) {
-      var value = cs.getPropertyValue(v).trim();
-      return value ? v + ':' + value : '';
-    }).filter(Boolean).join(';');
-    var style = document.createElementNS(NS, 'style');
-    style.textContent = 'svg{' + decls + '}'
-      + '.rp-edge-cycle{stroke-dasharray:5 4}'
-      + '.rp-edge-added{stroke:var(--rp-added);stroke-width:2.2}'
-      + '.rp-edge-removed{stroke:var(--rp-removed);stroke-width:2.2;stroke-dasharray:6 4}'
-      + '.rp-node-added rect{stroke:var(--rp-added);stroke-width:2}'
-      + '.rp-node-removed rect{stroke:var(--rp-removed);stroke-width:2;stroke-dasharray:5 3}'
-      + '.rp-node-moved rect{stroke:var(--rp-accent);stroke-width:2}';
-    clone.insertBefore(style, clone.firstChild);
-    // Highlight state is a viewer's temporary choice, not part of the
-    // diagram, so an exported image never carries it.
-    Array.prototype.forEach.call(clone.querySelectorAll('.dim,.lit,.lit-node'),
-      function (el) { el.classList.remove('dim', 'lit', 'lit-node'); });
-    return new XMLSerializer().serializeToString(clone);
-  }
-  function rasterise(draw, name) {
-    var img = new Image();
-    img.onload = function () { draw(img, name); };
-    img.onerror = function () {
-      detail.innerHTML = '<span class="note">this browser refused to rasterise the diagram; '
-        + 'the page itself is still complete</span>';
-    };
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(serialised());
-  }
-  function save(canvas, name) {
-    canvas.toBlob(function (blob) {
-      if (!blob) return;
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url; a.download = name; a.click();
-      URL.revokeObjectURL(url);
-    }, 'image/png');
-  }
-  function pageBackground() {
-    var bg = getComputedStyle(document.body).backgroundColor;
-    return bg && bg !== 'rgba(0, 0, 0, 0)' ? bg : '#ffffff';
-  }
-  var base = (repo || 'architecture').replace(/[^\w-]/g, '-') + '-' + sha.slice(0, 7);
-
-  var pngBtn = document.getElementById('rp-png');
-  if (pngBtn) {
-    pngBtn.addEventListener('click', function () {
-      rasterise(function (img, name) {
-        var scale = 2;  // legible when dropped into a doc or a ticket
-        var canvas = document.createElement('canvas');
-        canvas.width = svg.width.baseVal.value * scale;
-        canvas.height = svg.height.baseVal.value * scale;
-        var ctx = canvas.getContext('2d');
-        ctx.fillStyle = pageBackground();
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        save(canvas, name);
-      }, base + '.png');
-    });
-  }
-
-  var cardBtn = document.getElementById('rp-card');
-  if (cardBtn) {
-    cardBtn.addEventListener('click', function () {
-      rasterise(function (img, name) {
-        var W = 1200, H = 630, PAD = 56, HEADER = 104;
-        var canvas = document.createElement('canvas');
-        canvas.width = W; canvas.height = H;
-        var ctx = canvas.getContext('2d');
-        var cs = getComputedStyle(document.documentElement);
-        ctx.fillStyle = pageBackground();
-        ctx.fillRect(0, 0, W, H);
-
-        ctx.fillStyle = cs.getPropertyValue('--rp-ink').trim() || '#0B1420';
-        ctx.font = '600 34px system-ui, sans-serif';
-        ctx.fillText(repo || 'architecture', PAD, PAD + 26);
-        ctx.fillStyle = cs.getPropertyValue('--rp-ink-dim').trim() || '#515D72';
-        ctx.font = '19px ui-monospace, Menlo, monospace';
-        ctx.fillText(sha.slice(0, 7) + '  ·  ' + edges.length + ' dependencies  ·  '
-                     + nodes.length + ' files', PAD, PAD + 60);
-
-        // Fit the whole diagram rather than cropping it: a share card
-        // that shows a corner of a graph tells the reader nothing.
-        var availW = W - PAD * 2, availH = H - HEADER - PAD;
-        var w = svg.width.baseVal.value, h = svg.height.baseVal.value;
-        var k = Math.min(availW / w, availH / h);
-        var dw = w * k, dh = h * k;
-        ctx.drawImage(img, PAD + (availW - dw) / 2, HEADER + (availH - dh) / 2, dw, dh);
-        save(canvas, name);
-      }, base + '-card.png');
-    });
-  }
-
-  // The controls are inert without this script, so they ship hidden and
-  // are revealed only once it has wired them up.
-  Array.prototype.forEach.call(document.querySelectorAll('[data-needs-js]'),
-    function (el) { el.hidden = false; });
-})();
-"""
+# Order matters: the page script calls into the route tracer.
+_SCRIPT = "\n".join(
+    (_inline_script("route_trace.js"), _inline_script("export_page.js"))
+)
 
 
 # Hidden until the script reveals them: with scripts off these controls
@@ -371,6 +141,17 @@ _TOOLBAR = (
     'title="A 1200x630 image with the repository, the commit and the whole diagram, '
     'sized for a pull request or a chat message">share card</button>'
     "</div>"
+    '<div class="toolbar routebar" data-needs-js hidden>'
+    "<label>trace from <select id=\"rp-from\" aria-label=\"Route start\"></select></label>"
+    "<label>to <select id=\"rp-to\" aria-label=\"Route end\"></select></label>"
+    '<button id="rp-trace" type="button" '
+    'title="The shortest chain of imports from one file to the other, with the line '
+    'behind every hop">trace route</button>'
+    '<button id="rp-route-card" type="button" hidden '
+    'title="A 1200x630 image of this route: the chain, the line each hop was resolved '
+    'from, and the diagram with the route lit">route card</button>'
+    "</div>"
+    '<div id="rp-route"></div>'
 )
 
 

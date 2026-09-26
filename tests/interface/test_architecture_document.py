@@ -281,14 +281,41 @@ class ToolbarTest(unittest.TestCase):
         yield "export", render_architecture_html(export())
         yield "delta", render_architecture_delta_html(DeltaDocumentTest.delta())
 
+    CONTROLS = (
+        'id="rp-filter"', 'id="rp-png"', 'id="rp-card"',
+        'id="rp-from"', 'id="rp-to"', 'id="rp-trace"', 'id="rp-route-card"',
+    )
+
     def test_controls_ship_hidden_so_nothing_inert_is_offered(self):
         for name, html in self.both_documents():
             with self.subTest(document=name):
-                for control in ('id="rp-filter"', 'id="rp-png"', 'id="rp-card"'):
+                for control in self.CONTROLS:
                     self.assertIn(control, html)
-                # Each control carries both the hidden attribute and the
-                # marker the script uses to reveal it.
-                self.assertEqual(html.count("data-needs-js hidden"), 3)
+        # The invariant, not a count: anything marked for the script to
+        # reveal must arrive hidden, or a reader with scripts off is
+        # offered a control that does nothing. Checked against the markup
+        # rather than the whole page, since the script mentions the
+        # attribute too and that is not an element.
+        from app.interface.architecture_html import _TOOLBAR
+
+        self.assertEqual(
+            _TOOLBAR.count("data-needs-js"), _TOOLBAR.count("data-needs-js hidden")
+        )
+        self.assertGreater(_TOOLBAR.count("data-needs-js hidden"), 0)
+
+    def test_the_route_card_button_waits_for_a_route(self):
+        # It is hidden but NOT marked data-needs-js: revealing it with the
+        # other controls would offer a card for a route nobody traced.
+        for name, html in self.both_documents():
+            with self.subTest(document=name):
+                self.assertIn('id="rp-route-card" type="button" hidden', html)
+                self.assertNotIn('id="rp-route-card" type="button" data-needs-js', html)
+
+    def test_the_route_tracer_is_inlined_not_fetched(self):
+        for name, html in self.both_documents():
+            with self.subTest(document=name):
+                self.assertIn("RPRoute", html)
+                self.assertNotIn("route_trace.js", html)
 
     def test_both_documents_carry_the_script(self):
         for name, html in self.both_documents():
@@ -311,3 +338,33 @@ class ToolbarTest(unittest.TestCase):
             with self.subTest(document=name):
                 for host in ("cdnjs", "jsdelivr", "unpkg", "fonts.googleapis"):
                     self.assertNotIn(host, html)
+
+
+class RouteTracingWiringTest(unittest.TestCase):
+    """
+    The route controls, and the one thing about them that can be wrong in
+    a way nobody would notice: on a delta page the drawing also carries
+    the dependencies that were removed, so they can be seen. Tracing
+    through one would put a route in a review that does not exist at the
+    head commit.
+    """
+
+    def test_removed_edges_are_marked_so_the_tracer_can_exclude_them(self):
+        from app.interface.architecture_delta_html import render_architecture_delta_html
+
+        html = render_architecture_delta_html(DeltaDocumentTest.delta())
+        self.assertIn('data-status="removed"', html)
+
+    def test_the_tracer_actually_excludes_them(self):
+        html = render_architecture_html(export())
+        self.assertIn("data-status') !== 'removed'", html)
+
+    def test_the_route_panel_exists_on_both_documents(self):
+        from app.interface.architecture_delta_html import render_architecture_delta_html
+
+        for name, html in (
+            ("export", render_architecture_html(export())),
+            ("delta", render_architecture_delta_html(DeltaDocumentTest.delta())),
+        ):
+            with self.subTest(document=name):
+                self.assertIn('id="rp-route"', html)
