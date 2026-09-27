@@ -378,6 +378,10 @@
                             <p class="mode-note">The structure is parsed from imports, not generated: nothing is drawn that is not in the code.</p>
                         </div>
                     </header>
+                    <!-- Three verbs, not one band of nine controls: draw it
+                         here, take a document away, compare two commits. They
+                         are grouped by space and a rule rather than by labels,
+                         because the buttons already name their own action. -->
                     <div class="diagram-controls">
                         <button id="diagram-btn" class="cmd-btn cmd-btn-primary">generate diagram</button>
                         <label class="orientation-toggle" title="Left-to-right stacks sibling folders vertically, which fits a landscape screen better than top-down for most repos.">
@@ -396,15 +400,19 @@
                                 <option value="detailed">detailed &mdash; everything that fits</option>
                             </select>
                         </label>
+                        <span class="control-rule" aria-hidden="true"></span>
                         <button id="download-png-btn" class="cmd-btn secondary-btn hidden">download png</button>
                         <button id="download-svg-btn" class="cmd-btn secondary-btn hidden">download svg</button>
+                    </div>
+
+                    <div class="diagram-controls control-group-documents">
                         <button id="export-arch-btn" class="cmd-btn secondary-btn" type="button" title="One self-contained HTML file: the same graph, plus the source line every arrow was resolved from and a note on what the parse could not see. Opens with no internet connection.">export shareable page</button>
+                        <span class="control-rule" aria-hidden="true"></span>
                         <label id="delta-picker" class="orientation-toggle hidden" title="This repository was ingested here more than once, at different commits. Compare the structure then against the structure now — both sides are parsed, so a difference means the code differs.">
                             <span id="delta-picker-label">compare with an earlier ingest of this repo</span>
                             <select id="delta-base-select" aria-label="Earlier ingest of this repository to compare against"></select>
                         </label>
                         <button id="delta-btn" class="cmd-btn secondary-btn hidden" type="button">architecture delta</button>
-
                     </div>
                     <div id="diagram-status"></div>
                     <div id="mermaid-container" class="hidden">

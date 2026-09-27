@@ -713,6 +713,11 @@ function fitDiagram() {
 // file names stop being readable. A big diagram therefore opens at
 // this zoom from its top-left corner; "fit" still gives the overview.
 const READABLE_ZOOM = 0.6;
+// And an upper bound. svg-pan-zoom's fit() scales to FILL the container,
+// so a five-node diagram arrived blown up to comic size. Mermaid already
+// drew it at a sensible scale; never open above that. "fit" still fits,
+// because that is the reader asking for it.
+const NATURAL_ZOOM = 1;
 
 /**
  * Turns on pan and zoom once the SVG has been laid out.
@@ -753,10 +758,14 @@ function showReadable() {
     if (!panZoomInstance) return;
     fitDiagram();
     const sizes = panZoomInstance.getSizes();
+    // getZoom() is relative to the fitted scale; convert a target real scale.
+    const zoomFor = (real) => real / (sizes.realZoom / panZoomInstance.getZoom());
     if (sizes.realZoom < READABLE_ZOOM) {
-        // getZoom() is relative to the fitted scale; convert the target real scale
-        panZoomInstance.zoom(READABLE_ZOOM / (sizes.realZoom / panZoomInstance.getZoom()));
+        panZoomInstance.zoom(zoomFor(READABLE_ZOOM));
         panZoomInstance.pan({ x: 24, y: 24 });
+    } else if (sizes.realZoom > NATURAL_ZOOM) {
+        panZoomInstance.zoom(zoomFor(NATURAL_ZOOM));
+        panZoomInstance.center();
     }
 }
 

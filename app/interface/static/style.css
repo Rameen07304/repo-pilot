@@ -1869,7 +1869,47 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---------- Diagram ---------- */
 
-.diagram-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+/* Tight within a group, generous between them: the row used to run nine
+   controls together at equal weight, so "generate diagram" (draws here)
+   read the same as "architecture delta" (opens a whole document). */
+.diagram-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.control-group-documents { margin-top: 14px; }
+.control-rule {
+    /* flex-shrink defaults to 1, so a 1px divider in a wrapping row
+       collapses to nothing. It has to refuse to shrink. */
+    flex: 0 0 1px;
+    align-self: stretch;
+    min-height: 24px;
+    margin: 0 6px;
+    background: var(--hairline);
+}
+/* A rule is only a separator when something visible sits after it. The
+   buttons it divides start hidden and appear once a diagram exists, and
+   .hidden keeps them in the DOM — so :last-child never matches and the
+   rule would dangle at the end of the row. */
+.control-rule:not(:has(~ *:not(.hidden))) { display: none; }
+.control-rule:first-child { display: none; }
+@media (max-width: 640px) {
+    .control-rule { display: none; }
+    /* The delta picker carries a sentence of label plus a date-stamped
+       option, which together overflowed a 375px screen and gave the whole
+       page a horizontal scrollbar. Stack it and let the select shrink. */
+    #delta-picker {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        width: 100%;
+        /* .orientation-toggle sets nowrap, which is right for a two-word
+           checkbox label and wrong for a sentence. */
+        white-space: normal;
+    }
+    #delta-picker select,
+    #sequence-picker select,
+    #diagram-detail,
+    #flow-view { max-width: 100%; }
+    .diagram-controls > label { max-width: 100%; }
+    .diagram-controls select { min-width: 0; }
+}
 
 #mermaid-container {
     width: 100%;
