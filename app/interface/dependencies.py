@@ -18,6 +18,7 @@ from app.application.use_cases.analyze_impact import AnalyzeImpactUseCase
 from app.application.use_cases.answer_question import AnswerQuestionUseCase
 from app.application.use_cases.compare_architecture import CompareArchitectureUseCase
 from app.application.use_cases.detect_agent_tooling import DetectAgentToolingUseCase
+from app.application.use_cases.explain_pull_request import ExplainPullRequestUseCase
 from app.application.use_cases.export_architecture import ExportArchitectureUseCase
 from app.application.use_cases.generate_diagram import GenerateDiagramUseCase
 from app.application.use_cases.generate_handbook import GenerateHandbookUseCase
@@ -56,6 +57,7 @@ class AppContainer:
     agent_tooling_use_case: DetectAgentToolingUseCase
     architecture_export_use_case: ExportArchitectureUseCase
     architecture_compare_use_case: CompareArchitectureUseCase
+    pull_request_use_case: ExplainPullRequestUseCase
     sequence_use_case: TraceCallSequenceUseCase
     flow_use_case: TraceFlowForQuestionUseCase
     control_flow_use_case: TraceControlFlowUseCase
@@ -262,6 +264,14 @@ def build_container() -> AppContainer:
     # the trace itself stays entirely parse-driven.
     control_flow_use_case = TraceControlFlowUseCase(cache=cache)
 
+    # Reads a pull request's two ends and compares them. Both ends have
+    # to be parsed, so an unseen pull request costs two ingests.
+    pull_request_use_case = ExplainPullRequestUseCase(
+        github_client=github_client,
+        ingest_use_case=ingest_use_case,
+        compare_use_case=architecture_compare_use_case,
+    )
+
     flow_use_case = TraceFlowForQuestionUseCase(
         vector_store=vector_store,
         llm_client=llm_client,
@@ -281,6 +291,7 @@ def build_container() -> AppContainer:
         agent_tooling_use_case=agent_tooling_use_case,
         architecture_export_use_case=architecture_export_use_case,
         architecture_compare_use_case=architecture_compare_use_case,
+        pull_request_use_case=pull_request_use_case,
         sequence_use_case=sequence_use_case,
         flow_use_case=flow_use_case,
         control_flow_use_case=control_flow_use_case,

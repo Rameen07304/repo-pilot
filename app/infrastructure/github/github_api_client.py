@@ -32,6 +32,7 @@ from app.application.interfaces.github_client import (
     GitHubClient,
     GitHubRateLimitError,
     GitHubRepoNotFoundError,
+    PullRequestRef,
     RemoteFileMeta,
     RepoIsPrivateError,
 )
@@ -124,6 +125,27 @@ class GitHubApiClient(GitHubClient):
         if not data:
             raise ValueError(f"Repo {repo.owner}/{repo.repo} has no commits")
         return data[0]["sha"]
+
+    async def get_pull_request(self, repo: RepoUrl, number: int) -> PullRequestRef:
+        url = f"{_GITHUB_API_BASE}/repos/{repo.owner}/{repo.repo}/pulls/{number}"
+        try:
+            data = await self._get_json_with_retry(url)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise GitHubRepoNotFoundError(f"{repo.full_name}#{number}") from e
+            raise
+
+        # GitHub's `base.sha` is the merge base for the pull request, which
+        # is what makes the comparison about this change rather than about
+        # everything that landed on the base branch since it opened.
+        return PullRequestRef(
+            number=int(data["number"]),
+            title=str(data.get("title") or ""),
+            base_sha=str(data["base"]["sha"]),
+            head_sha=str(data["head"]["sha"]),
+            state=str(data.get("state") or ""),
+            author=str((data.get("user") or {}).get("login") or ""),
+        )
 
     async def get_repo_tree(self, repo: RepoUrl, *, commit_sha: str) -> list[RemoteFileMeta]:
         url = (

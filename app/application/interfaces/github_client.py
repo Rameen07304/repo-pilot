@@ -9,6 +9,17 @@ from app.domain.value_objects import RepoUrl
 
 
 @dataclass(frozen=True)
+class PullRequestRef:
+    """A pull request, reduced to what a structural comparison needs."""
+    number: int
+    title: str
+    base_sha: str
+    head_sha: str
+    state: str
+    author: str = ""
+
+
+@dataclass(frozen=True)
 class FetchedFiles:
     """
     What came back from a content fetch.
@@ -51,6 +62,17 @@ class GitHubClient(Protocol):
         """
         Cheap call, used first: if this SHA matches what we already
         have cached, skip the rest of ingestion entirely.
+        """
+        ...
+
+    async def get_pull_request(self, repo: RepoUrl, number: int) -> "PullRequestRef":
+        """
+        The two commits a pull request sits between, plus enough context
+        to label a diagram.
+
+        `base_sha` is the merge base as GitHub reports it, not the tip of
+        the base branch: comparing against the tip would attribute every
+        unrelated commit landed since to this pull request.
         """
         ...
 

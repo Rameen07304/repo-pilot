@@ -171,6 +171,10 @@ class ArchitectureDeltaRequest(BaseModel):
     head_sha: str = Field(..., max_length=100)
 
 
+class PullRequestExplainRequest(BaseModel):
+    pull_request_url: str = Field(..., max_length=400)
+
+
 class CallSequenceRequest(BaseModel):
     repo_full_name: str = Field(..., max_length=200)
     commit_sha: str = Field(..., max_length=100)

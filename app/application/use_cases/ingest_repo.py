@@ -101,12 +101,19 @@ class IngestRepoUseCase:
         self._max_chunks = max_chunks
         self._max_embed_chars = max_embed_chars
 
-    async def execute(self, repo_url_raw: str) -> tuple[RepoManifest, bool]:
+    async def execute(
+        self, repo_url_raw: str, *, commit_sha: str | None = None
+    ) -> tuple[RepoManifest, bool]:
         """
         Returns (manifest, was_cached).
         Raises ValueError (bad URL), IngestionLimitExceeded, or
         GitHubRateLimitError — the interface layer maps these to
         appropriate HTTP status codes.
+
+        `commit_sha` pins the ingest to one commit instead of the latest.
+        Everything downstream already took a sha; only this step assumed
+        HEAD, which is what stopped a pull request being read at both of
+        its ends.
         """
         # Step 0: validation happens at construction — SSRF guard lives
         # in the domain layer, we just let it raise if invalid.
@@ -120,8 +127,10 @@ class IngestRepoUseCase:
         # after being ingested stops being re-ingested.
         await self._github.assert_public(repo)
 
-        # Step 1: cheap call first
-        commit_sha = await self._github.get_latest_commit_sha(repo)
+        # Step 1: cheap call first, unless the caller already knows which
+        # commit it wants.
+        if commit_sha is None:
+            commit_sha = await self._github.get_latest_commit_sha(repo)
 
         # Step 2: cache check — this is what makes "re-asking about the
         # same commit" free. No GitHub/LLM calls at all on a cache hit.

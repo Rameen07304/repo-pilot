@@ -104,6 +104,21 @@
                     <button type="submit" id="ingest-btn" class="cmd-btn cmd-btn-primary">ingest repo</button>
                 </form>
                 <div id="ingest-status"></div>
+
+                <!-- A pull request is its own entry point: it ingests both of
+                     its commits, so it must not sit behind "load a repo
+                     first" the way it did when it lived in the diagram tab. -->
+                <details id="pr-entry" class="pr-entry">
+                    <summary>or explain a pull request</summary>
+                    <form id="pr-form">
+                        <div class="cmd-line">
+                            <span class="cmd-prompt">$</span>
+                            <input type="text" id="pr-url" placeholder="github.com/owner/repo/pull/123" autocomplete="off" spellcheck="false" />
+                        </div>
+                        <button type="submit" id="pr-btn" class="cmd-btn secondary-btn">explain this PR</button>
+                    </form>
+                    <p class="dim pr-hint">Compares the two commits the pull request sits between, against its merge base. Both ends are parsed, so one nobody has opened here takes a minute.</p>
+                </details>
             </section>
 
             <section id="tabs" class="hidden">
@@ -389,6 +404,7 @@
                             <select id="delta-base-select" aria-label="Earlier ingest of this repository to compare against"></select>
                         </label>
                         <button id="delta-btn" class="cmd-btn secondary-btn hidden" type="button">architecture delta</button>
+
                     </div>
                     <div id="diagram-status"></div>
                     <div id="mermaid-container" class="hidden">

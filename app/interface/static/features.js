@@ -463,6 +463,46 @@
     const deltaBtn = el("delta-btn");
     if (deltaBtn) deltaBtn.addEventListener("click", downloadDelta);
 
+    // A pull request is the same comparison with its two commits looked
+    // up for you, so it goes next to the delta control rather than
+    // somewhere new. It needs no ingested repo first: it ingests both
+    // ends itself.
+    async function explainPullRequest() {
+        const input = el("pr-url");
+        const status = el("ingest-status");
+        if (!input) return;
+        const url = input.value.trim();
+        if (!url) {
+            RP.setStatus(status, "paste a pull request URL first.", "error");
+            input.focus();
+            return;
+        }
+        await openGeneratedDocument({
+            url: "/api/architecture/pull",
+            body: { pull_request_url: url },
+            buttonId: "pr-btn",
+            statusId: "ingest-status",
+            working: "reading the pull request, then parsing both of its ends. A PR nobody has opened here takes a minute...",
+            failure: "That pull request could not be explained.",
+            done: "compared against the merge base, so only this PR's changes are counted.",
+            // Named from the URL that was pasted: the server sends a
+            // better name on the response, but this is the one the
+            // viewer's download button uses.
+            filename: (url.match(/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/) || [])
+                .slice(1, 4).join("-").replace(/[^\w-]/g, "-") + ".html" || "pull-request.html",
+            title: "pull request — what changed structurally",
+            note: "both ends parsed; renames resolved before dependencies",
+        });
+    }
+
+    const prForm = el("pr-form");
+    if (prForm) {
+        prForm.addEventListener("submit", function (e) {
+            e.preventDefault();
+            explainPullRequest();
+        });
+    }
+
     // ===============================================================
     // Call sequence — what runs when one function runs
     // ===============================================================

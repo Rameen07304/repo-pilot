@@ -18,6 +18,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from html import escape
 
+from app.application.interfaces.github_client import PullRequestRef
 from app.domain.entities import ArchitectureDelta, ArchitectureExport, ExportedEdge
 from app.interface.architecture_html import _SCRIPT, _STYLE, _TOOLBAR, blob_url
 from app.interface.architecture_svg import render_architecture_svg
@@ -102,8 +103,17 @@ def _change_table(delta: ArchitectureDelta) -> list[str]:
 
 
 def render_architecture_delta_html(
-    delta: ArchitectureDelta, *, generated_at: datetime | None = None
+    delta: ArchitectureDelta,
+    *,
+    generated_at: datetime | None = None,
+    pull: "PullRequestRef | None" = None,
 ) -> str:
+    """
+    The same document either way. A pull request only changes the heading
+    and adds a line saying which two commits were compared and why those
+    two — below that it is the ordinary delta, because that is exactly
+    what it is.
+    """
     when = generated_at or delta.generated_at or datetime.now(timezone.utc)
     repo = escape(delta.repo_full_name)
     base_sha, head_sha = delta.base_sha, delta.head_sha
@@ -163,6 +173,22 @@ def render_architecture_delta_html(
         "<li>Repo Pilot</li>",
         "</ul>",
     ]
+
+    if pull is not None:
+        out += [
+            '<section class="panel">',
+            f"<h2>Pull request #{pull.number}</h2>",
+            f"<p class=\"verdict\">{escape(pull.title)}</p>",
+            "<p>Compared against the merge base GitHub reports for this pull request, not "
+            "the tip of the base branch — otherwise every unrelated commit landed while it "
+            "was open would be counted as part of it.</p>",
+            f'<p><a href="https://github.com/{repo}/pull/{pull.number}">'
+            f"View #{pull.number} on GitHub</a>"
+            + (f" · opened by {escape(pull.author)}" if pull.author else "")
+            + (f" · {escape(pull.state)}" if pull.state else "")
+            + "</p>",
+            "</section>",
+        ]
 
     if delta.is_unchanged:
         out += [
