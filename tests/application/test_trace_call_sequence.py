@@ -224,3 +224,89 @@ class SuggestedEntriesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EntryKindTest(unittest.TestCase):
+    """
+    Only things that run can be a starting point.
+
+    A class node contains its methods, so its call count is their sum.
+    That put classes at the top of every ranking — the picker opened on
+    _ProjectDetailScreenState with 349 calls, whose flowchart is empty
+    because a class body has no single path through it, while followUser
+    was nowhere to be seen.
+    """
+
+    def suggest(self, symbols, edges=()):
+        import asyncio
+
+        index = ParsedRepoIndex(
+            repo_full_name=REPO, commit_sha=SHA,
+            symbols=list(symbols), module_edges=list(edges),
+        )
+        uc = TraceCallSequenceUseCase(cache=FakeCache(index))
+        return asyncio.run(uc.suggest_entries(repo_full_name=REPO, commit_sha=SHA))
+
+    @staticmethod
+    def sym_of(kind, name, file, sites):
+        return ParsedSymbol(
+            name=name, kind=kind, file_path=file, start_line=1, end_line=9,
+            calls=[n for n, _ in sites], call_sites=list(sites),
+        )
+
+    def test_a_class_is_never_offered_even_with_the_most_calls(self):
+        entries = self.suggest([
+            self.sym_of("class", "Screen", "ui.dart", [("helper", 2), ("helper", 3), ("helper", 4)]),
+            self.sym_of("method", "onTap", "ui.dart", [("helper", 5)]),
+            self.sym_of("function", "helper", "util.dart", []),
+        ])
+        names = [e["symbol"] for e in entries]
+        self.assertNotIn("Screen", names)
+        self.assertIn("onTap", names)
+
+    def test_other_non_callable_kinds_are_excluded_too(self):
+        entries = self.suggest([
+            self.sym_of("struct", "S", "a.rs", [("helper", 2)]),
+            self.sym_of("interface", "I", "a.java", [("helper", 2)]),
+            self.sym_of("module", "M", "a.rb", [("helper", 2)]),
+            self.sym_of("function", "helper", "u.py", []),
+            self.sym_of("function", "run", "m.py", [("helper", 2)]),
+        ])
+        self.assertEqual([e["symbol"] for e in entries], ["run"])
+
+    def test_the_cap_keeps_the_best_of_both_orders(self):
+        # The client re-sorts this list per diagram, so truncating by one
+        # criterion hides the other's best candidates entirely. Ranked by
+        # calls alone, every branchy function fell outside the cap and
+        # re-sorting forty branchless methods got nowhere.
+        symbols = [
+            self.sym_of("function", f"caller{i}", "a.py", [("helper", 2)] * (20 - i))
+            for i in range(8)
+        ]
+        branchy = ParsedSymbol(
+            name="branchy", kind="function", file_path="b.py", start_line=1, end_line=9,
+            calls=["helper"], call_sites=[("helper", 2)], branch_count=9,
+        )
+        symbols.append(branchy)
+        symbols.append(self.sym_of("function", "helper", "u.py", []))
+
+        import asyncio
+
+        index = ParsedRepoIndex(repo_full_name=REPO, commit_sha=SHA, symbols=symbols)
+        entries = asyncio.run(
+            TraceCallSequenceUseCase(cache=FakeCache(index)).suggest_entries(
+                repo_full_name=REPO, commit_sha=SHA, limit=4
+            )
+        )
+        names = [e["symbol"] for e in entries]
+        self.assertEqual(len(entries), 4)
+        self.assertIn("branchy", names, "the branchiest must survive a cap ranked by calls")
+        self.assertIn("caller0", names, "so must the one that calls the most")
+
+    def test_symbols_the_parser_could_not_name_are_not_offered(self):
+        entries = self.suggest([
+            self.sym_of("method", "<anonymous>", "a.dart", [("helper", 2)]),
+            self.sym_of("method", "real", "a.dart", [("helper", 2)]),
+            self.sym_of("function", "helper", "u.dart", []),
+        ])
+        self.assertEqual([e["symbol"] for e in entries], ["real"])

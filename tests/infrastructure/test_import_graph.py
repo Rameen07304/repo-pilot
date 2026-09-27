@@ -466,3 +466,53 @@ class ControlFlowTest(unittest.TestCase):
         )
         self.assertTrue(truncated)
         self.assertLessEqual(len(items), MAX_STEPS)
+
+    def test_the_branch_count_equals_what_the_chart_would_draw(self):
+        # The ranking signal and the drawing must not drift. A first
+        # version counted every conditional expression anywhere in the
+        # subtree, so a Flutter build() advertised ten branches and then
+        # charted none — a ternary inside a widget argument is not a
+        # statement. Worse than no ranking.
+        from tree_sitter_language_pack import get_parser
+
+        from app.infrastructure.parsing.control_flow import (
+            Decision,
+            Loop,
+            build_flow,
+            count_branches,
+        )
+
+        def drawn(items):
+            total = 0
+            for item in items:
+                if isinstance(item, Decision):
+                    total += 1 + drawn(item.yes) + drawn(item.no)
+                elif isinstance(item, Loop):
+                    total += 1 + drawn(item.body)
+            return total
+
+        samples = {
+            # A ternary in a widget tree: counted as zero, because that is
+            # what gets drawn.
+            "dart": "class W { Widget build() { return Row(children:[ ok ? A() : B() ]); } }",
+            "python": "def f(x):\n    if x:\n        a()\n    for i in y:\n        b()\n",
+            "javascript": "function f(x){ if(x){a();} while(y){b();} }",
+        }
+        for language, source in samples.items():
+            with self.subTest(language=language):
+                tree = get_parser(language).parse(source.encode())
+                body = max(
+                    (n for n in self._walk(tree.root_node)
+                     if n.type in ("block", "function_body", "statement_block")),
+                    key=lambda n: n.end_byte - n.start_byte,
+                )
+                flow, _ = build_flow(body)
+                self.assertEqual(count_branches(body), drawn(flow))
+
+    @staticmethod
+    def _walk(node):
+        stack = [node]
+        while stack:
+            current = stack.pop()
+            yield current
+            stack.extend(current.children)

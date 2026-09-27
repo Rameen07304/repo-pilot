@@ -154,6 +154,12 @@ class ParsedSymbol:
     # replacing it because every existing consumer matches on the name
     # alone, and only the call-sequence diagram needs the position.
     call_sites: list[tuple[str, int]] = field(default_factory=list)
+    # How many ifs and loops this symbol contains. Recorded at parse time
+    # because the two diagrams want opposite things from an entry point:
+    # a call sequence wants the symbol that calls the most, a flowchart
+    # wants the one that branches the most, and a Flutter build() method
+    # is the first of those and the worst of the second.
+    branch_count: int = 0
 
     def lines_calling(self, callee: str) -> list[int]:
         """Every line in this symbol that calls `callee`, ascending."""

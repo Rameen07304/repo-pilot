@@ -105,6 +105,32 @@ def _child_by_fields(node, fields):
     return None
 
 
+def count_branches(node) -> int:
+    """
+    How many shapes a flowchart of this node would actually draw.
+
+    Defined as "run the chart and count", rather than as its own walk of
+    the tree, so the two cannot disagree. The first version counted every
+    conditional expression anywhere in the subtree, which made a Flutter
+    build() method look like ten decisions because of the ternaries in
+    its widget tree — and then charted none of them, because a ternary
+    inside an argument is not a statement. A ranking that promises ten
+    branches and draws zero is worse than no ranking.
+    """
+    items, _ = build_flow(node)
+
+    def tally(nodes) -> int:
+        total = 0
+        for item in nodes:
+            if isinstance(item, Decision):
+                total += 1 + tally(item.yes) + tally(item.no)
+            elif isinstance(item, Loop):
+                total += 1 + tally(item.body)
+        return total
+
+    return tally(items)
+
+
 def _first_condition(node):
     """The first child that is not a body, for grammars with no condition field."""
     for child in node.named_children:

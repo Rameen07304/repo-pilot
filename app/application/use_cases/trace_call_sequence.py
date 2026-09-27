@@ -34,6 +34,14 @@ from app.domain.entities import CallSequence, CallStep, ParsedRepoIndex, ParsedS
 
 logger = logging.getLogger(__name__)
 
+# Only these can be an entry point. A class is not something that runs:
+# it has no single path through it, so a flowchart of one is empty and a
+# sequence of one is every method's calls piled together. Worse, a class
+# node contains its methods, so its call count is their sum — which put
+# classes at the top of every ranking and left the methods people
+# actually wanted unreachable.
+_CALLABLE_KINDS = frozenset({"function", "method"})
+
 
 class SequenceNotTraceableError(Exception):
     """Raised when the repo is not parsed, or the entry symbol is not in it."""
@@ -100,9 +108,9 @@ class TraceCallSequenceUseCase:
         """
         Functions worth tracing, best first.
 
-        A repository has hundreds of symbols and most of them call
-        nothing that lives in the same repository, so offering all of
-        them would mostly offer empty diagrams. Ranked by how many calls
+        Functions and methods only, and only those that call something
+        inside the same repository — most symbols do neither, so offering
+        all of them would mostly offer empty diagrams. Ranked by how many calls
         actually resolve inside the repo, which is the same thing as how
         much of a sequence the trace will have to show.
 
@@ -122,8 +130,14 @@ class TraceCallSequenceUseCase:
         for symbol in index.symbols:
             by_name.setdefault(symbol.name, []).append(symbol)
 
-        ranked: list[tuple[int, str, str]] = []
+        ranked: list[tuple[int, int, str, str]] = []
         for symbol in index.symbols:
+            if symbol.kind not in _CALLABLE_KINDS:
+                continue
+            # A name the parser could not read is not something a reader
+            # can choose from a list.
+            if symbol.name.startswith("<"):
+                continue
             if within_files is not None and symbol.file_path not in within_files:
                 continue
             internal = sum(
@@ -131,13 +145,40 @@ class TraceCallSequenceUseCase:
                 for callee, _line in symbol.call_sites
                 if self._resolve(callee, symbol, by_name, imports)[0] is not None
             )
-            if internal:
-                ranked.append((internal, symbol.file_path, symbol.name))
+            # Worth offering if it does either thing: calls into the repo,
+            # or branches. A function that only branches still makes a
+            # flowchart, and one that only calls still makes a sequence.
+            if internal or symbol.branch_count:
+                ranked.append((internal, symbol.branch_count, symbol.file_path, symbol.name))
 
-        ranked.sort(key=lambda r: (-r[0], r[1], r[2]))
+        # The client re-sorts this list for whichever diagram is selected,
+        # so truncating by one criterion would hide the other's best
+        # candidates entirely — ranking by calls alone cut every branchy
+        # function, and re-sorting forty branchless build() methods got
+        # nowhere. Taking from both orders alternately means the top of
+        # each survives the cap.
+        by_calls = sorted(ranked, key=lambda r: (-r[0], -r[1], r[2], r[3]))
+        by_branches = sorted(ranked, key=lambda r: (-r[1], -r[0], r[2], r[3]))
+
+        chosen: list[tuple[int, int, str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for pair in zip(by_calls, by_branches, strict=False):
+            for entry in pair:
+                key = (entry[2], entry[3])
+                if key not in seen and len(chosen) < limit:
+                    seen.add(key)
+                    chosen.append(entry)
+            if len(chosen) >= limit:
+                break
+
         return [
-            {"file_path": path, "symbol": name, "internal_calls": count}
-            for count, path, name in ranked[:limit]
+            {
+                "file_path": path,
+                "symbol": name,
+                "internal_calls": calls,
+                "branches": branches,
+            }
+            for calls, branches, path, name in chosen
         ]
 
     # ------------------------------------------------------------------

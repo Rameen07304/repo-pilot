@@ -470,6 +470,44 @@
     // Most symbols in a repo call nothing that lives in the same repo,
     // so offering all of them would mostly offer empty diagrams. The
     // server ranks by how many calls actually resolve internally.
+    // The two drawings want opposite entry points. A Flutter build()
+    // method calls the most and branches the least, so ranking one list
+    // by calls buries every function worth charting. Both counts come
+    // back with the list and the sort happens here, so switching view
+    // costs no round trip.
+    let sequenceEntries = [];
+
+    function fillSequenceOptions() {
+        const select = el("sequence-select");
+        if (!select) return;
+        const wantsBranches = ((el("flow-view") || {}).value || "flowchart") === "flowchart";
+        const ordered = sequenceEntries.slice().sort(function (a, b) {
+            const primary = wantsBranches
+                ? (b.branches || 0) - (a.branches || 0)
+                : (b.internal_calls || 0) - (a.internal_calls || 0);
+            if (primary) return primary;
+            const secondary = wantsBranches
+                ? (b.internal_calls || 0) - (a.internal_calls || 0)
+                : (b.branches || 0) - (a.branches || 0);
+            return secondary || a.symbol.localeCompare(b.symbol);
+        });
+        const keep = select.value;
+        select.textContent = "";
+        ordered.forEach(function (entry) {
+            const opt = document.createElement("option");
+            opt.value = entry.file_path + "::" + entry.symbol;
+            const count = wantsBranches
+                ? (entry.branches || 0) + " branch(es)"
+                : (entry.internal_calls || 0) + " call(s)";
+            opt.textContent = entry.symbol + "()  ·  " + count + "  ·  " + entry.file_path;
+            select.appendChild(opt);
+        });
+        if (keep) select.value = keep;
+    }
+
+    const flowView = el("flow-view");
+    if (flowView) flowView.addEventListener("change", fillSequenceOptions);
+
     async function refreshSequencePicker() {
         const picker = el("sequence-picker");
         const select = el("sequence-select");
@@ -501,13 +539,8 @@
             return;
         }
         if (empty) empty.classList.add("hidden");
-        select.textContent = "";
-        entries.forEach(function (entry) {
-            const opt = document.createElement("option");
-            opt.value = entry.file_path + "::" + entry.symbol;
-            opt.textContent = entry.symbol + "()  ·  " + entry.file_path;
-            select.appendChild(opt);
-        });
+        sequenceEntries = entries;
+        fillSequenceOptions();
         picker.classList.remove("hidden");
         btn.classList.remove("hidden");
     }

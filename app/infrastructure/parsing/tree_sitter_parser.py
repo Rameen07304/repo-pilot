@@ -37,6 +37,7 @@ from tree_sitter import Language, Node, Parser
 
 from app.application.interfaces.code_parser import ModuleEdge, TraceStep
 from app.domain.entities import CodeChunk, ParsedRepoIndex, ParsedSymbol
+from app.infrastructure.parsing.control_flow import count_branches
 from app.infrastructure.parsing.language_tables import (
     _CALL_NODE_TYPE,
     _DEFINITION_NODE_TYPES,
@@ -209,6 +210,7 @@ class TreeSitterCodeParser:
                 if body is not None:
                     call_sites = call_sites + self._extract_calls_within(body, language)
                 last = body if body is not None else node
+                branches = count_branches(last)
                 symbols.append(
                     ParsedSymbol(
                         name=name,
@@ -221,6 +223,7 @@ class TreeSitterCodeParser:
                         # use for a position.
                         calls=[name for name, _line in call_sites],
                         call_sites=call_sites,
+                        branch_count=branches,
                     )
                 )
             for child in node.children:
