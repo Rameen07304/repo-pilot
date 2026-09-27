@@ -1,13 +1,31 @@
+---
+title: Repo Pilot
+emoji: 🤖
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+short_description: Read an unfamiliar codebase. Every claim cites a file and line.
+---
+
 # Repo Pilot
 
 A codebase onboarding agent. Point it at a public GitHub repository and it:
 
 - **Explores** — fetches the tree, detects the stack, chunks and embeds the code, and writes a one-paragraph summary.
 - **Explains** — answers "how does X work?" by vector-searching the code, tracing the call graph with tree-sitter, and citing the real files it used. Citations come from retrieval, never from the model's text.
-- **Diagrams** — draws the import graph as a Mermaid flowchart. The structure is parsed, not generated: the LLM cannot add or remove an edge. Click any node to read that file's source.
 - **Onboards** — ranks the repo's most central files from the import graph and lays out a reading order, so a newcomer knows where to start.
+- **Diagrams four ways** — the import graph, what changed between two commits, what one function calls, and the branches inside it. All four are parsed, not generated.
+- **Answers a question as a diagram** — ask "how does login work" and get the call flow. A model picks only *where to start*; every step after that comes from the parse.
+- **Explains a pull request** — paste its URL and see what it changes structurally, compared against the merge base.
 - **Traces impact** — answers "what breaks if I change this?" by walking the dependency graph backwards from a file or symbol.
-- **Grades code health** — a maintainability report card (circular imports, hub modules, untested modules, long functions, large files, unreferenced symbols) computed entirely from the parsed index, with no LLM involved, downloadable as a Markdown report.
+- **Grades code health** — a maintainability report card computed entirely from the parsed index, with no LLM involved.
+- **Finds the AI tooling a repo ships** — `SKILL.md` files and agent configs, with what each one does.
+- **Exports documents that stand alone** — self-contained HTML with no network dependency, where every arrow links to the line it was resolved from, and the page states what the parse could not see.
+
+The through-line: **a language model never decides what is true about your code.** It writes prose about files the parser already found, and picks a starting point from a list the search already produced. It cannot add a file, an edge, or a step.
 
 ## Quick start
 
@@ -38,7 +56,9 @@ Everything is read from `.env` at startup; see `.env.example` for the full list.
 | `RATE_LIMIT_*_PER_HOUR_PER_IP` | Per-IP question limits, enforced before any LLM call is spent. |
 | `RATE_LIMIT_LLM_CALLS_PER_DAY_PER_IP` | Each caller's share of the day's model budget, so the first visitor cannot spend all of it. |
 | `MAX_CACHED_REPOS` | How many repositories the store keeps, oldest evicted first. `0` disables the cap for local use. |
-| `TRUST_PROXY_HEADERS` | Only set this when a proxy you control sits in front of the app. Off, `X-Forwarded-For` is attacker-controlled and would let anyone dodge the rate limit. |
+| `RATE_LIMIT_DOCUMENTS_PER_HOUR_PER_IP` | A separate, larger allowance for the generated documents. They read the cached parse and run no model, so browsing them must not spend an hour's questions. |
+| `ARCH_EXPORT_MAX_NODES`, `ARCH_EXPORT_MAX_EDGES` | How much of the architecture export is **drawn**. The evidence table always lists every dependency; these only keep the picture legible. |
+| `SEQUENCE_MAX_DEPTH`, `SEQUENCE_MAX_STEPS` | How far a call sequence follows and how many steps it draws. Small on purpose: a Flutter screen traced 123 calls into a 5,600px-tall wall nobody could read. |
 | `TRUST_PROXY_HEADERS` | Set `true` only behind a reverse proxy you control; otherwise `X-Forwarded-For` is client-supplied and would let anyone bypass the per-IP limits. |
 
 ## How it works
@@ -77,7 +97,29 @@ If any file could not be fetched, the result is returned with a warning and is *
 
 The Mermaid output is laid out as a nested folder tree: real nesting (`frontend` ⊃ `src` ⊃ `pages`), single-child folder chains merged into one box, and a lone file hoisted into its parent with a relative label. When most files in a folder share a dependency, one arrow is drawn from the folder instead of one per file (labelled `3/4` when it is most-but-not-all), which is what keeps hub modules like an API client from receiving a line from every page. Repos too large to draw at file level are aggregated to folder-level nodes with edges weighted by how many imports they collapse; the UI says when this has happened.
 
-The viewer opens at a readable zoom, and has `+`/`−`, "fit" (whole-diagram overview), "full" (expand to the window, Esc to exit), and PNG/SVG export.
+The viewer opens at a readable zoom, and has `+`/`−`, "fit" (whole-diagram overview), "full" (expand to the window, Esc to exit), and PNG/SVG export. A **detail** control picks how much to draw — overview (the shallowest folder level that still shows structure), balanced, or everything that fits. The caps are for eyes, not cost: a 106-file Flutter app drew 65 nodes and 120 edges before, which is a wall rather than a diagram.
+
+**Call sequences and flowcharts.** Two more views of one function, both read off the syntax tree:
+
+- A **call sequence** puts each file on a lifeline and draws every call between them in source order, with activation bars showing which call happened *because of* which. Calls that leave the repository are counted and named rather than drawn — nobody can open a framework's internals to check them — and calls that match several definitions with nothing to choose between them are reported as ambiguous instead of pointed somewhere.
+- A **flowchart** draws the branches inside one function: boxes, diamonds, a Yes and a No. An `if` in the file is a diamond on the chart, because tree-sitter already produces the shape a flowchart wants. Node types were read off real parse trees per language, which is the only way to get them right — Ruby calls its `if` an `if`, Rust an `if_expression`, and Dart exposes no condition field at all.
+
+The picker ranks entry points by what the chosen view needs: a sequence wants the function that calls the most, a flowchart the one that branches the most, and a Flutter `build()` is the first of those and the worst of the second.
+
+**A question, answered as a diagram.** Ask "how does login work" and get the call flow. The split is the whole design: the question is embedded and searched, which gives files; functions in those files that call something internal become a shortlist; one bounded model call picks **one** entry from that shortlist and says why. Everything after that is traced from the parse. The model can only answer with an index from the list — anything else falls back to search order — so the worst a bad call can do is start in the wrong place, and the diagram is still a true description of whatever it started from. The page says which decision was the model's, in those words.
+
+**Architecture delta.** What changed structurally between two commits, or across a pull request. Renames are resolved before dependencies are compared, so a file that only moved produces one entry instead of every dependency it touches appearing twice; two files sharing a name that both move are deliberately *not* paired, because guessing would put a wrong arrow in a review. Paste a pull request URL and it reads the two commits itself, comparing against the merge base GitHub reports rather than the tip of the base branch — otherwise every unrelated commit landed while the PR was open gets blamed on it.
+
+**Documents that stand alone.** The architecture, a delta, a sequence and a flowchart each export as one self-contained HTML file: no CDN, no font request, no script pointing anywhere. They open from a folder on a plane and are still complete. Two properties do the work:
+
+- **Evidence on every edge, always.** Each arrow records the line it was resolved from and links to that file at that line on the pinned commit. The full table is plain HTML, so the proof survives with JavaScript switched off.
+- **A declared blind spot.** Files the ingest never fetched, extensions no grammar reads, grammars that did not load, and anything dropped to keep the picture legible are all counted and printed. A complete export says so explicitly rather than letting silence imply it.
+
+Capping the drawing never trims the evidence: `edges` keeps every dependency, `drawn_edges` is the subset on the canvas.
+
+**Agent tooling detection** lists the `SKILL.md` files and agent configs a repository ships, with what each one does, read from path patterns and frontmatter. No model, no extra GitHub call, identical every run.
+
+**The handbook** gathers the reading order, the stack, the file counts and the maintainability findings into one Markdown document a team can commit next to the code.
 
 ## Tests
 
@@ -106,6 +148,26 @@ It targets Hugging Face Spaces, which runs containers as uid 1000 on port
 7860, but nothing is Spaces-specific: `PORT` is read at start, so the same
 image runs on Fly, Render or locally.
 
+### Hugging Face Spaces
+
+The YAML block at the top of this file is what makes the Space build as a
+Docker space — `sdk: docker` and `app_port: 7860`. Without it the Space
+will not start, whatever the Dockerfile says.
+
+1. Create a Space, **SDK: Docker**, and push this repository to it.
+2. Add `GEMINI_API_KEY`, `GROQ_API_KEY` and `GITHUB_TOKEN` under
+   **Settings → Variables and secrets** as **Secrets**, not Variables.
+   Variables are visible to anyone who can see the Space.
+3. Scope the GitHub token to **public repositories, read-only**. Private
+   repos are refused during ingest, and a token that cannot read them
+   means a missed check could never expose one either.
+
+On the free tier the container filesystem resets when the Space restarts,
+so `data/` does not survive. Nothing breaks — the cache is designed to be
+rebuildable — but the first visitor after a restart waits out a fresh
+ingest. Attach persistent storage if that matters, or accept it and let
+the examples warm the cache.
+
 Two things worth knowing before you scale it:
 
 - **One worker, deliberately.** The rate limiter and the daily quota guard
@@ -122,6 +184,7 @@ Built by Rameen Fatima and Dania Imran.
 
 - Public repositories only, and only via `https://github.com/owner/repo` URLs (this is also the SSRF guard).
 - Call tracing is name-based, not scope-aware. Same-file matches are preferred, then imported files, then anywhere — see the note at the top of `tree_sitter_parser.py`.
+- A flowchart charts statement-level branches. A ternary inside a widget argument is a decision to a reader but not a statement to a parser, so UI-building code charts thin — which is why the entry picker ranks by how many branches would actually be *drawn*, not how many exist.
 - Free-tier LLM providers meter tokens per minute (Groq: 8k/min on `gpt-oss-120b`). Prompts are budgeted to fit one deep investigation inside that, but asking several deep questions back to back can still return "the AI service may be at capacity" — wait a minute or use quick mode.
 
 ## License
