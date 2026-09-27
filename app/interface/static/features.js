@@ -521,8 +521,12 @@
         const entryFile = select.value.slice(0, cut);
         const entrySymbol = select.value.slice(cut + 2);
 
+        // One picker, two drawings. A flowchart is the branches inside
+        // this function; a sequence is which files it reaches.
+        const view = (el("flow-view") || {}).value || "flowchart";
+        const isChart = view === "flowchart";
         await openGeneratedDocument({
-            url: "/api/sequence",
+            url: isChart ? "/api/flowchart" : "/api/sequence",
             body: {
                 repo_full_name: repo.repoFullName,
                 commit_sha: repo.commitSha,
@@ -531,12 +535,19 @@
             },
             buttonId: "sequence-btn",
             statusId: "flow-status",
-            working: "following the calls, resolving each one to a symbol in this repo...",
-            failure: "The call sequence could not be traced.",
-            done: "every step cites the line the call is written on.",
+            working: isChart
+                ? "reading the branches and loops out of the syntax tree..."
+                : "following the calls, resolving each one to a symbol in this repo...",
+            failure: isChart
+                ? "That function could not be charted."
+                : "The call sequence could not be traced.",
+            done: isChart
+                ? "every diamond is an if in the file, linked to its line."
+                : "every step cites the line the call is written on.",
             filename: repo.repoFullName.replace(/[^\w-]/g, "-") + "-"
-                + entrySymbol.replace(/[^\w-]/g, "-") + "-sequence.html",
-            title: entrySymbol + "() — call sequence",
+                + entrySymbol.replace(/[^\w-]/g, "-")
+                + (isChart ? "-flowchart.html" : "-sequence.html"),
+            title: entrySymbol + (isChart ? "() — flowchart" : "() — call sequence"),
             note: entryFile,
         });
     }

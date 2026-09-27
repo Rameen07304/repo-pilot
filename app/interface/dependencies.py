@@ -26,6 +26,7 @@ from app.application.use_cases.get_file_source import GetFileSourceUseCase
 from app.application.use_cases.ingest_repo import IngestRepoUseCase, RepoCache
 from app.application.use_cases.investigate_question import DeepInvestigationUseCase
 from app.application.use_cases.trace_call_sequence import TraceCallSequenceUseCase
+from app.application.use_cases.trace_control_flow import TraceControlFlowUseCase
 from app.application.use_cases.trace_flow_for_question import TraceFlowForQuestionUseCase
 from app.infrastructure.cache.sqlite_cache import SqliteRepoCache
 from app.infrastructure.github.github_api_client import GitHubApiClient
@@ -57,6 +58,7 @@ class AppContainer:
     architecture_compare_use_case: CompareArchitectureUseCase
     sequence_use_case: TraceCallSequenceUseCase
     flow_use_case: TraceFlowForQuestionUseCase
+    control_flow_use_case: TraceControlFlowUseCase
     # The delta screen asks which commits of a repo are comparable,
     # which is a question about the cache itself rather than about any
     # one use case.
@@ -258,6 +260,8 @@ def build_container() -> AppContainer:
     # A question picks its own starting point: search narrows to files,
     # one bounded model call picks a function from that shortlist, and
     # the trace itself stays entirely parse-driven.
+    control_flow_use_case = TraceControlFlowUseCase(cache=cache)
+
     flow_use_case = TraceFlowForQuestionUseCase(
         vector_store=vector_store,
         llm_client=llm_client,
@@ -279,6 +283,7 @@ def build_container() -> AppContainer:
         architecture_compare_use_case=architecture_compare_use_case,
         sequence_use_case=sequence_use_case,
         flow_use_case=flow_use_case,
+        control_flow_use_case=control_flow_use_case,
         cache=cache,
         quota_guard=quota_guard,
         question_limiter=question_limiter,

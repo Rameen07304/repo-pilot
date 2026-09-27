@@ -52,6 +52,34 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Repo Pilot", lifespan=lifespan)
 
+# Every external origin the pages actually use, pinned. Grepped from the
+# templates rather than remembered: the first attempt allowed the two
+# script CDNs and silently broke the webfont, which loads from a third.
+_CDN = "https://cdnjs.cloudflare.com https://cdn.jsdelivr.net"
+_FONT_CSS = "https://fonts.googleapis.com"
+_FONT_FILES = "https://fonts.gstatic.com"
+_CSP = "; ".join(
+    (
+        "default-src 'self'",
+        # 'unsafe-inline' is required by the generated documents; see the
+        # middleware docstring. Nothing else may load script.
+        f"script-src 'self' 'unsafe-inline' {_CDN}",
+        f"style-src 'self' 'unsafe-inline' {_CDN} {_FONT_CSS}",
+        # Diagrams and exported images are data: and blob: URLs we make.
+        "img-src 'self' data: blob:",
+        f"font-src 'self' data: {_FONT_FILES}",
+        # The one that matters most: injected markup cannot phone home.
+        "connect-src 'self'",
+        # The document viewer frames blob: URLs produced by this origin.
+        "frame-src 'self' blob:",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+    )
+)
+
+
 @app.middleware("http")
 async def security_headers(request, call_next):
     """
@@ -61,12 +89,14 @@ async def security_headers(request, call_next):
     names and symbols, so it is worth being strict about the cheap things
     before it is hosted anywhere.
 
-    No Content-Security-Policy yet, deliberately rather than by oversight.
-    A blob: document can inherit the creating page's CSP, and the four
-    generated documents depend on inline <script> and inline <style> to
-    stay self-contained with no network. A policy strict enough to be
-    worth having would break them in the viewer, so it needs its own pass
-    with nonces threaded through both renderers.
+    The CSP allows inline script and style, which is weaker than a nonce
+    policy and deliberate: the four generated documents are inline script
+    and style by design, and a blob: document inherits the creating page's
+    policy, so a stricter header here breaks them inside the viewer. What
+    it still buys is the part that matters for a tool that renders
+    arbitrary repository content — script, frames and connections can only
+    come from this origin and the four pinned CDNs, so injected markup has
+    nowhere to send anything.
     """
     response = await call_next(request)
     # The generated documents are served as text/html on purpose; never
@@ -80,6 +110,7 @@ async def security_headers(request, call_next):
     response.headers.setdefault(
         "Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()"
     )
+    response.headers.setdefault("Content-Security-Policy", _CSP)
     return response
 
 

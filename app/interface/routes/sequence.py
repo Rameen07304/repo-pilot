@@ -3,6 +3,7 @@ Call sequence: what runs when one function runs.
 
   GET  /api/sequence/entries — functions worth tracing, best first
   POST /api/sequence         — the trace, as one standalone page
+  POST /api/flowchart        — the same function as a flowchart
   POST /api/sequence/flow    — the same page, from a question
 
 The first two read the cached parse and run no model, so they are on
@@ -22,6 +23,7 @@ from app.application.use_cases.trace_call_sequence import SequenceNotTraceableEr
 from app.application.use_cases.trace_flow_for_question import NoFlowFoundError
 from app.infrastructure.llm.quota_aware_llm_client import DailyQuotaExceededError
 from app.interface.client_ip import get_client_ip
+from app.interface.flowchart_html import render_flowchart_html
 from app.interface.limits import enforce_daily_budget
 from app.interface.schemas import CallSequenceRequest, FlowQuestionRequest
 from app.interface.sequence_html import render_sequence_html
@@ -124,6 +126,43 @@ async def sequence_flow(payload: FlowQuestionRequest, request: Request) -> HTMLR
     name = f"{safe(flow.sequence.repo_full_name)}-{safe(flow.entry_symbol)}-flow.html"
     return HTMLResponse(
         render_sequence_html(flow.sequence, flow=flow),
+        media_type="text/html; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
+@router.post("/api/flowchart", response_class=HTMLResponse)
+async def flowchart(payload: CallSequenceRequest, request: Request) -> HTMLResponse:
+    """Same entry point as a call sequence, drawn as boxes and diamonds."""
+    container = request.app.state.container
+    client_ip = get_client_ip(request, trust_proxy_headers=container.trust_proxy_headers)
+
+    allowed, _remaining = container.document_limiter.check_and_increment(client_ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many documents generated from your IP this hour. Try again shortly.",
+        )
+
+    try:
+        chart = await container.control_flow_use_case.execute(
+            repo_full_name=payload.repo_full_name,
+            commit_sha=payload.commit_sha,
+            entry_file=payload.entry_file,
+            entry_symbol=payload.entry_symbol,
+        )
+    except SequenceNotTraceableError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Unexpected error charting control flow")
+        raise HTTPException(status_code=500, detail="Failed to chart that function.") from e
+
+    def safe(text: str) -> str:
+        return "".join(c if c.isalnum() or c in "-_" else "-" for c in text)
+
+    name = f"{safe(chart.repo_full_name)}-{safe(chart.symbol)}-flowchart.html"
+    return HTMLResponse(
+        render_flowchart_html(chart),
         media_type="text/html; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )

@@ -378,3 +378,91 @@ class ImportProvenanceTest(unittest.TestCase):
         for path in ("a.kt", "a.css", "a.swift", "README.md"):
             with self.subTest(path=path):
                 self.assertFalse(self.parser.reads_dependencies_from(path))
+
+
+class ControlFlowTest(unittest.TestCase):
+    """
+    Flowchart shapes, read off the syntax tree.
+
+    Every grammar names things differently and the differences are not
+    guessable: Ruby calls its if `if`, Rust calls it `if_expression` and
+    wraps it in a statement, Dart exposes no condition field at all, and
+    Go hides its statements behind a statement_list. Each of those was a
+    silently empty or mislabelled chart before it was checked here.
+    """
+
+    CASES = {
+        "python": ("def f():\n    if x > 1:\n        a()\n    else:\n        b()\n", "f", 1),
+        "javascript": ("function f(){ if (x > 1) { a(); } else { b(); } }", "f", 1),
+        "java": ("class C{ int f(){ if(x>1){a();}else{b();} return 1; } }", "f", 1),
+        "go": ("package m\nfunc f(){ if x > 1 { a() } else { b() } }", "f", 2),
+        "dart": ("void f(){ if (uid == null) { a(); } else { b(); } }", "f", 1),
+        "ruby": ("def f\n if x > 1\n  a\n end\nend", "f", 1),
+        "rust": ("fn f(){ if x > 1 { a(); } }", "f", 1),
+        "php": ("<?php function f(){ if ($x > 1) { a(); } }", "f", 1),
+    }
+
+    def test_every_language_finds_the_decision(self):
+        from app.infrastructure.parsing.control_flow import Decision, flow_for_symbol
+
+        for language, (source, symbol, line) in self.CASES.items():
+            with self.subTest(language=language):
+                result = flow_for_symbol(
+                    content=source, language=language, symbol=symbol, start_line=line
+                )
+                self.assertIsNotNone(result, f"{language}: no flow found")
+                decisions = [i for i in result[0] if isinstance(i, Decision)]
+                self.assertEqual(len(decisions), 1, f"{language}: {result[0]}")
+
+    def test_the_condition_is_the_real_text_not_a_placeholder(self):
+        # A diamond reading "condition" tells a reader nothing. Dart has
+        # no condition field, so it needs the first-child fallback.
+        from app.infrastructure.parsing.control_flow import Decision, flow_for_symbol
+
+        for language, (source, symbol, line) in self.CASES.items():
+            with self.subTest(language=language):
+                flow = flow_for_symbol(
+                    content=source, language=language, symbol=symbol, start_line=line
+                )[0]
+                label = next(i for i in flow if isinstance(i, Decision)).label
+                self.assertIn("x" if language != "dart" else "uid", label)
+                self.assertNotEqual(label, "condition")
+
+    def test_both_branches_are_kept(self):
+        from app.infrastructure.parsing.control_flow import Decision, flow_for_symbol
+
+        flow = flow_for_symbol(
+            content=self.CASES["python"][0], language="python", symbol="f", start_line=1
+        )[0]
+        decision = next(i for i in flow if isinstance(i, Decision))
+        self.assertTrue(decision.yes)
+        self.assertTrue(decision.no)
+
+    def test_the_file_root_is_not_mistaken_for_the_function(self):
+        # The root node starts on line 1 too, and its first child is the
+        # definition, so it answered to the name and won on size.
+        from app.infrastructure.parsing.control_flow import flow_for_symbol
+
+        result = flow_for_symbol(
+            content="void f(){ if (a) { b(); } }", language="dart", symbol="f", start_line=1
+        )
+        self.assertIsNotNone(result)
+        self.assertTrue(result[0])
+
+    def test_an_unknown_symbol_returns_nothing_rather_than_guessing(self):
+        from app.infrastructure.parsing.control_flow import flow_for_symbol
+
+        self.assertIsNone(
+            flow_for_symbol(content="def f():\n    pass\n", language="python",
+                            symbol="nope", start_line=1)
+        )
+
+    def test_a_long_function_is_truncated_not_dumped(self):
+        from app.infrastructure.parsing.control_flow import MAX_STEPS, flow_for_symbol
+
+        body = "\n".join(f"    step{i}()" for i in range(MAX_STEPS + 20))
+        items, truncated = flow_for_symbol(
+            content=f"def f():\n{body}\n", language="python", symbol="f", start_line=1
+        )
+        self.assertTrue(truncated)
+        self.assertLessEqual(len(items), MAX_STEPS)

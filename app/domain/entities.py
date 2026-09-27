@@ -686,3 +686,33 @@ class QuestionFlow:
             for c in self.candidates
             if not (c.file_path == self.entry_file and c.symbol == self.entry_symbol)
         ]
+
+
+@dataclass
+class ControlFlowChart:
+    """
+    One function's control flow: the shape a flowchart draws.
+
+    `items` holds the nested Step/Decision/Loop/Return structure the
+    parser produced. It is deliberately not flattened here — the nesting
+    IS the diagram, and flattening it would throw away the branches.
+
+    `charted` is False when the language has no control-flow support in
+    this build, or the definition has no body. That is a limit worth
+    stating rather than an empty picture worth showing.
+    """
+    repo_full_name: str
+    commit_sha: str
+    repo_url: str
+    file_path: str
+    symbol: str
+    start_line: int = 0
+    end_line: int = 0
+    items: list = field(default_factory=list)
+    truncated: bool = False
+    charted: bool = True
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.items

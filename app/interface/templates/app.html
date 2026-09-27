@@ -185,7 +185,14 @@
                             <label id="sequence-picker" class="orientation-toggle hidden" title="Ranked by how many calls resolve inside this repository, so the ones at the top have the most to show.">
                                 <select id="sequence-select" aria-label="Function to trace"></select>
                             </label>
-                            <button id="sequence-btn" class="cmd-btn secondary-btn hidden" type="button">trace this function</button>
+                            <label class="orientation-toggle" title="A sequence shows which files call which, over time. A flowchart shows the branches and loops inside this one function.">
+                                as
+                                <select id="flow-view" aria-label="How to draw it">
+                                    <option value="flowchart" selected>flowchart &mdash; branches and loops</option>
+                                    <option value="sequence">call sequence &mdash; across files</option>
+                                </select>
+                            </label>
+                            <button id="sequence-btn" class="cmd-btn secondary-btn hidden" type="button">draw it</button>
                             <span id="sequence-empty" class="dim hidden">Nothing in this repository calls anything else in it, so there is no sequence to draw.</span>
                         </div>
                     </div>

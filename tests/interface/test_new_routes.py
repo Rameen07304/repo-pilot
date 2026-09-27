@@ -369,3 +369,30 @@ class SecurityHeaderTest(unittest.TestCase):
             res.headers.get("Referrer-Policy"), "strict-origin-when-cross-origin"
         )
         self.assertIn("camera=()", res.headers.get("Permissions-Policy", ""))
+
+    def test_the_csp_allows_every_origin_the_templates_actually_use(self):
+        # The first attempt allowed the two script CDNs and silently broke
+        # the webfont, which loads from a third. Read the origins out of
+        # the templates rather than trusting a list written from memory.
+        import pathlib
+        import re
+
+        csp = self.app_client().get("/health").headers["Content-Security-Policy"]
+        templates = pathlib.Path("app/interface/templates")
+        origins = {
+            re.match(r"https://[^/\"]+", url).group(0)
+            for path in templates.glob("*.html")
+            for url in re.findall(r'(?:src|href)="(https://[^"]+)"', path.read_text(encoding="utf-8"))
+        }
+        # github.com is only ever a link target, never a subresource.
+        origins.discard("https://github.com")
+        for origin in origins:
+            self.assertIn(origin, csp, f"{origin} is used by a template but not allowed by the CSP")
+
+    def test_the_csp_still_blocks_the_things_worth_blocking(self):
+        csp = self.app_client().get("/health").headers["Content-Security-Policy"]
+        # Injected markup must not be able to send anything anywhere.
+        self.assertIn("connect-src 'self'", csp)
+        self.assertIn("object-src 'none'", csp)
+        self.assertIn("base-uri 'none'", csp)
+        self.assertIn("frame-ancestors 'none'", csp)
