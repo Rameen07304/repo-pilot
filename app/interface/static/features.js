@@ -293,10 +293,14 @@
                 const node = el(id);
                 if (node) node.textContent = "";
             });
-        const guide = el("onboarding-guide");
-        if (guide) guide.textContent = "";
+        // Deliberately NOT clearing #onboarding-guide's contents: the
+        // template puts the section scaffolding inside it and the
+        // renderer only fills those children in. Wiping it destroyed
+        // them permanently, so onboarding failed on every repo after the
+        // first with "Cannot set properties of null". Hiding is the whole
+        // job here; the renderer overwrites the fields when it next runs.
         const agents = el("agents-result");
-        if (agents) agents.textContent = "";
+        if (agents) agents.textContent = "";  // built from scratch each time
         closeDocViewer();
         RP.hideInvestigationTimeline();
     }
@@ -1441,6 +1445,9 @@
         use.textContent = asset.how_to_use;
         item.appendChild(use);
 
+        const actions = document.createElement("div");
+        actions.className = "agent-actions";
+
         const path = document.createElement("button");
         path.type = "button";
         path.className = "agent-path";
@@ -1449,8 +1456,50 @@
         path.addEventListener("click", () => {
             if (RP.openFile) RP.openFile(asset.path);
         });
-        item.appendChild(path);
+        actions.appendChild(path);
 
+        // The point of finding someone else's SKILL.md is usually to use
+        // it yourself, which means having the file rather than reading an
+        // excerpt of it. /api/file already returns the whole thing from
+        // the cached ingest, so this needs no new endpoint.
+        const save = document.createElement("button");
+        save.type = "button";
+        save.className = "agent-download";
+        save.textContent = "download";
+        save.title = "Save this file as it is in the repository";
+        save.addEventListener("click", async () => {
+            const keys = repoKeys();
+            if (!keys) return;
+            save.disabled = true;
+            const previous = save.textContent;
+            save.textContent = "fetching...";
+            try {
+                const data = await postJson("/api/file", {
+                    repo_full_name: keys.repo_full_name,
+                    commit_sha: keys.commit_sha,
+                    file_path: asset.path,
+                });
+                const blob = new Blob([data.content], { type: "text/markdown;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = asset.path.split("/").pop() || "SKILL.md";
+                a.click();
+                URL.revokeObjectURL(url);
+                // A file the ingest truncated would save short, and saving
+                // a partial skill silently is worse than saying so.
+                save.textContent = data.truncated ? "saved (truncated)" : "saved";
+            } catch (err) {
+                save.textContent = "could not fetch";
+                RP.setStatus(el("agents-status"), err.message, "error");
+            } finally {
+                save.disabled = false;
+                setTimeout(() => { save.textContent = previous; }, 2500);
+            }
+        });
+        actions.appendChild(save);
+
+        item.appendChild(actions);
         return item;
     }
 

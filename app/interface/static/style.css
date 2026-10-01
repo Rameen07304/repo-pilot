@@ -1598,6 +1598,16 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
     display: flex;
     flex-direction: column;
     gap: 28px;
+    /* A flex child stretches to the tallest sibling by default, so on a
+       long reading order or a long answer the sidebar grew to 2000px and
+       scrolled away with the page. It stays put and scrolls its own
+       content instead. */
+    align-self: flex-start;
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .sidebar-logo-heading { margin: 0; font-size: inherit; font-weight: inherit; }
@@ -2080,6 +2090,11 @@ body.has-fullscreen-diagram { overflow: hidden; }
         border-right: none;
         border-bottom: 1px solid var(--hairline);
         padding: 20px;
+        /* Stacked above the content here, so none of the desktop
+           sticky-column behaviour applies. */
+        position: static;
+        height: auto;
+        overflow: visible;
         gap: 18px;
     }
     .sidebar-nav { flex-direction: row; flex-wrap: wrap; gap: 6px; }
@@ -2960,3 +2975,24 @@ body.has-doc-viewer { overflow: hidden; }
     .claim-mark { font-size: 1.7rem; }
     .proof-compare, .proof-empty { padding: 22px 18px; }
 }
+
+/* Agent asset row: open the file, or take it away. */
+.agent-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+.agent-download {
+    border: 1px solid var(--hairline);
+    background: transparent;
+    color: var(--ink-muted);
+    font: inherit;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.agent-download:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.agent-download:disabled { opacity: 0.6; cursor: default; }

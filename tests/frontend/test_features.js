@@ -580,8 +580,44 @@ test("ingest: a new repo clears the previous repo's results", async () => {
 
     assert.ok(doc.getElementById("handbook-btn").classList.contains("hidden"),
         "the previous repo's handbook button should be gone");
-    assert.equal(doc.getElementById("onboarding-guide").textContent, "",
-        "the previous repo's reading order should be gone");
+    assert.ok(doc.getElementById("onboarding-guide").classList.contains("hidden"),
+        "the previous repo's reading order should be hidden");
+
+    // Hidden, NOT emptied. The template puts the section scaffolding
+    // inside #onboarding-guide and the renderer only fills those
+    // children; wiping it destroyed them for good, so onboarding failed
+    // on every repo after the first. This assertion used to demand the
+    // destructive version.
+    assert.ok(doc.getElementById("onboarding-overview"),
+        "the guide scaffolding must survive a repo switch");
+});
+
+test("ingest: onboarding still works on a second repo", async () => {
+    // The end-to-end version of the bug above: the failure only showed
+    // on the SECOND repo, which is exactly the path a reset test skips
+    // if it only checks what is hidden.
+    const h = harnessWithRepo({
+        "/api/ingest": async () => ({
+            repo_full_name: "acme/other", commit_sha: "sha2", summary: "Another.",
+            file_count: 3, detected_stack: ["python"], skipped_file_count: 0, was_cached: false,
+        }),
+    });
+    const doc = h.document;
+
+    doc.getElementById("onboarding-btn").click();
+    await h.flush();
+
+    doc.getElementById("repo-url").value = "https://github.com/acme/other";
+    doc.getElementById("ingest-form").dispatchEvent(
+        new h.window.Event("submit", { bubbles: true, cancelable: true }));
+    await h.flush(30);
+
+    doc.getElementById("onboarding-btn").click();
+    await h.flush();
+
+    assert.ok(!doc.getElementById("onboarding-guide").classList.contains("hidden"),
+        "onboarding should render again after switching repos");
+    assert.match(doc.getElementById("onboarding-status").textContent, /^(?!.*Cannot set properties)/);
 });
 
 test("ingest: re-ingesting the same repo at a new commit also clears results", async () => {
