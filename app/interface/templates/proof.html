@@ -124,8 +124,9 @@
                 picture. The diagram was rendered twice while this page loaded. Here are both
                 SHA&#8209;256 digests of the {{ "{:,}".format(svg_bytes) }}&nbsp;bytes of SVG:
             </p>
-            <pre class="digest">{{ digest_a }}
-{{ digest_b }}</pre>
+            {# One element each, so that when they wrap on a narrow screen it
+               stays obvious which lines belong to which digest. #}
+            <pre class="digest"><span>{{ digest_a }}</span><span>{{ digest_b }}</span></pre>
             <p class="claim-note">
                 {% if digests_match %}
                 Identical. Two exports of one commit can be diffed against each other, so a

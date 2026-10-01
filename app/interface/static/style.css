@@ -2085,23 +2085,71 @@ body.has-fullscreen-diagram { overflow: hidden; }
 
 @media (max-width: 768px) {
     .app-shell { flex-direction: column; }
-    .sidebar {
-        width: 100%;
-        border-right: none;
-        border-bottom: 1px solid var(--hairline);
-        padding: 20px;
-        /* Stacked above the content here, so none of the desktop
-           sticky-column behaviour applies. */
-        position: static;
-        height: auto;
-        overflow: visible;
-        gap: 18px;
+
+    /* The sidebar stops being a box and lets its children join the
+       shell's column directly. Stacked as one block it was 351px of
+       nav sitting on top of the content: scroll down to read anything
+       and all six tabs were off-screen with no way back. As loose
+       children they can be reordered and the nav alone can stick. */
+    .sidebar { display: contents; }
+
+    .sidebar-top {
+        order: 0;
+        padding: 16px 20px 12px;
+        background: var(--surface-alt);
     }
-    .sidebar-nav { flex-direction: row; flex-wrap: wrap; gap: 6px; }
-    .sidebar-nav .tab-btn { flex: 1 1 45%; }
+
+    .sidebar-nav {
+        order: 1;
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        gap: 2px;
+        padding: 0 12px;
+        background: var(--surface-alt);
+        border-bottom: 1px solid var(--hairline);
+        /* Six tabs will not fit 375px, so the strip scrolls sideways
+           rather than wrapping into rows that change height as you
+           move between tabs. */
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+    }
+    .sidebar-nav::-webkit-scrollbar { display: none; }
+
+    .sidebar-nav .tab-btn {
+        flex: 0 0 auto;
+        width: auto;
+        align-items: center;
+        gap: 7px;
+        padding: 13px 12px;
+        /* A left bar reads as nothing in a horizontal strip. */
+        border-left: none;
+        border-bottom: 2px solid transparent;
+        white-space: nowrap;
+    }
+    .sidebar-nav .tab-btn.active {
+        border-left-color: transparent;
+        border-bottom-color: var(--accent);
+    }
     .nav-desc { display: none; }
-    .sidebar-repo-info { margin-top: 0; }
-    .app-main { padding: 24px 20px; }
+
+    .app-main { order: 2; padding: 24px 20px; }
+
+    /* Below the content: useful, but not worth another 200px between
+       the tabs and what you came to read. */
+    .sidebar-repo-info, .sidebar-recent {
+        order: 3;
+        margin-top: 0;
+        padding: 18px 20px;
+        border-top: 1px solid var(--hairline);
+        background: var(--surface-alt);
+    }
+
+    /* Touch targets. The close buttons were 18px squares. */
+    .tool-btn { min-width: 40px; min-height: 40px; }
 }
 
 /* ==============================================================
@@ -2959,6 +3007,7 @@ body.has-doc-viewer { overflow: hidden; }
     line-height: 1.7;
     color: var(--ink-body);
 }
+.digest span { display: block; }
 .proof-compare, .proof-empty {
     margin-top: 12px;
     padding: 30px 32px;
@@ -2974,6 +3023,16 @@ body.has-doc-viewer { overflow: hidden; }
     .claim { grid-template-columns: 1fr; gap: 10px; padding: 28px 0; }
     .claim-mark { font-size: 1.7rem; }
     .proof-compare, .proof-empty { padding: 22px 18px; }
+
+    /* Two 64-character digests need 511px and had 343px, so the one
+       thing this page asks the reader to compare sat off the edge
+       behind a sideways scroll. Wrapping beats hiding. */
+    .digest {
+        white-space: pre-wrap;
+        word-break: break-all;
+        overflow-x: visible;
+        font-size: 0.74rem;
+    }
 }
 
 /* Agent asset row: open the file, or take it away. */
