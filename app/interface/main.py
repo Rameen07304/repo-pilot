@@ -33,6 +33,7 @@ from app.interface.routes import (  # noqa: E402
     ingest,
     investigate_stream,
     onboarding,
+    proof,
     sequence,
     source,
 )
@@ -127,6 +128,7 @@ app.include_router(agent_tooling.router)
 app.include_router(architecture.router)
 app.include_router(architecture_delta.router)
 app.include_router(sequence.router)
+app.include_router(proof.router)
 
 templates = Jinja2Templates(directory="app/interface/templates")
 app.mount("/static", StaticFiles(directory="app/interface/static"), name="static")
@@ -134,6 +136,11 @@ app.mount("/static", StaticFiles(directory="app/interface/static"), name="static
 # Appended to static asset URLs so browsers pick up new CSS/JS after a
 # restart instead of serving a cached copy of the old interface.
 STATIC_VERSION = str(int(time.time()))
+
+# Routes in their own modules need these, and importing them back from
+# this module would be circular. State is the seam that already exists.
+app.state.templates = templates
+app.state.static_version = STATIC_VERSION
 
 
 @app.get("/")

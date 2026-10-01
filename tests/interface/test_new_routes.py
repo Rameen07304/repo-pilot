@@ -379,15 +379,22 @@ class SecurityHeaderTest(unittest.TestCase):
 
         csp = self.app_client().get("/health").headers["Content-Security-Policy"]
         templates = pathlib.Path("app/interface/templates")
-        origins = {
-            re.match(r"https://[^/\"]+", url).group(0)
-            for path in templates.glob("*.html")
-            for url in re.findall(r'(?:src|href)="(https://[^"]+)"', path.read_text(encoding="utf-8"))
-        }
-        # github.com is only ever a link target, never a subresource.
-        origins.discard("https://github.com")
+
+        # Only SUBRESOURCES are governed by the CSP: script/img src, and
+        # href on a <link>. An ordinary <a href> is somewhere the reader
+        # navigates to, not something the page loads, and listing those
+        # would mean adding every outbound citation to the policy.
+        origins = set()
+        for path in templates.glob("*.html"):
+            markup = path.read_text(encoding="utf-8")
+            urls = re.findall(r'src="(https://[^"]+)"', markup)
+            urls += re.findall(r'<link[^>]*href="(https://[^"]+)"', markup)
+            for url in urls:
+                origins.add(re.match(r"https://[^/\"]+", url).group(0))
+
+        self.assertTrue(origins, "no subresource origins found; the scan is broken")
         for origin in origins:
-            self.assertIn(origin, csp, f"{origin} is used by a template but not allowed by the CSP")
+            self.assertIn(origin, csp, f"{origin} is loaded by a template but not allowed by the CSP")
 
     def test_the_csp_still_blocks_the_things_worth_blocking(self):
         csp = self.app_client().get("/health").headers["Content-Security-Policy"]

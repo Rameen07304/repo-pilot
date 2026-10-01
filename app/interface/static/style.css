@@ -2849,3 +2849,114 @@ body.has-doc-viewer { overflow: hidden; }
 @media (max-width: 640px) {
     .pr-entry #pr-form { flex-direction: column; align-items: stretch; }
 }
+
+/* ------------------------------------------------------------------
+   Proof page — claims a reader can check, not claims they must believe
+   ------------------------------------------------------------------ */
+.proof-wrap {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 56px 20px 96px;
+}
+.proof-back {
+    display: inline-block;
+    margin-bottom: 28px;
+    font-size: 0.86rem;
+    color: var(--ink-muted);
+    text-decoration: none;
+}
+.proof-back:hover { color: var(--accent); }
+.proof-head h1 {
+    margin: 0 0 14px;
+    font-size: clamp(1.9rem, 5vw, 3rem);
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+}
+.proof-lede {
+    margin: 0;
+    max-width: 62ch;
+    font-size: 1.02rem;
+    color: var(--ink-body);
+}
+.proof-subject {
+    margin: 32px 0 8px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--hairline);
+    font-size: 0.9rem;
+    color: var(--ink-body);
+}
+
+/* The number carries the claim, so it is the largest thing in the row. */
+.claim {
+    display: grid;
+    grid-template-columns: 148px 1fr;
+    gap: 28px;
+    padding: 36px 0;
+    border-bottom: 1px solid var(--hairline);
+}
+.claim-mark {
+    font-family: var(--font-mono);
+    font-size: 2.1rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    padding-top: 4px;
+}
+.claim-mark span { font-size: 1.1rem; font-weight: 400; color: var(--ink-faint); }
+.claim-ok { color: var(--success); }
+.claim-partial { color: var(--accent); }
+.claim-fail { color: var(--error); }
+.claim-body {
+    /* A grid track defaults to min-width:auto, so a long unbreakable
+       file path in the samples below pushes the column wider than the
+       page instead of wrapping. */
+    min-width: 0;
+}
+.claim-body h2 {
+    margin: 0 0 10px;
+    font-size: 1.22rem;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+}
+.claim-body p { margin: 0 0 12px; max-width: 64ch; color: var(--ink-body); }
+.claim-note { font-size: 0.88rem; color: var(--ink-muted); }
+.claim-samples, .claim-facts {
+    margin: 0 0 14px;
+    padding-left: 18px;
+    font-size: 0.9rem;
+    color: var(--ink-body);
+}
+.claim-samples li, .claim-facts li { margin-bottom: 6px; }
+/* Repository paths have no spaces to break at. */
+.claim-samples .mono, .claim-facts code, .proof-subject .mono {
+    overflow-wrap: anywhere;
+}
+.claim-decisive { border-bottom: 0; }
+.digest {
+    margin: 0 0 12px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    border: 1px solid var(--hairline);
+    background: var(--surface-sunken);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    line-height: 1.7;
+    color: var(--ink-body);
+}
+.proof-compare, .proof-empty {
+    margin-top: 12px;
+    padding: 30px 32px;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+}
+.proof-compare h2, .proof-empty h2 { margin: 0 0 12px; font-size: 1.18rem; color: var(--ink); }
+.proof-compare p, .proof-empty p { margin: 0 0 12px; max-width: 64ch; color: var(--ink-body); }
+.proof-closer { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 40px; }
+
+@media (max-width: 640px) {
+    .proof-wrap { padding: 36px 16px 64px; }
+    .claim { grid-template-columns: 1fr; gap: 10px; padding: 28px 0; }
+    .claim-mark { font-size: 1.7rem; }
+    .proof-compare, .proof-empty { padding: 22px 18px; }
+}

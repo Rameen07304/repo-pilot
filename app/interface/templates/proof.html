@@ -1,0 +1,172 @@
+{# The claim, checked rather than asserted. Every number on this page is
+   computed from the repository named at the top, at request time. #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Check it yourself &mdash; Repo Pilot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/style.css?v={{ static_version }}" />
+    <script src="/static/theme.js?v={{ static_version }}"></script>
+</head>
+<body class="proof-page">
+<main class="proof-wrap">
+
+    <header class="proof-head">
+        <a class="proof-back" href="/">&larr; Repo Pilot</a>
+        <h1>Don't take the diagram on trust.</h1>
+        <p class="proof-lede">
+            Every tool in this category says its output is accurate. Saying it is free.
+            Below are three claims you can check in about a minute, on
+            {% if repo %}the repository you last ingested{% else %}your own repository{% endif %},
+            without believing a word of this page.
+        </p>
+    </header>
+
+    {% if not repo %}
+    <section class="proof-empty">
+        <h2>There is nothing to prove yet.</h2>
+        <p>
+            This page runs on a real repository rather than a prepared example, because a
+            demonstration on somebody else's codebase is a screenshot and a demonstration on
+            yours is evidence. Ingest one and come back.
+        </p>
+        <a class="cta-primary" href="/app">ingest a repository</a>
+    </section>
+    {% else %}
+
+    <p class="proof-subject">
+        Running on <a class="mono" href="https://github.com/{{ repo }}">{{ repo }}</a>
+        at commit <code>{{ short_sha }}</code>.
+        {% if others %}
+        <span class="dim">Also ingested here:
+            {% for other in others %}<a class="mono" href="/proof?repo={{ other }}">{{ other }}</a>{% if not loop.last %}, {% endif %}{% endfor %}.
+        </span>
+        {% endif %}
+    </p>
+
+    <section class="claim">
+        <div class="claim-mark {% if every_edge_cited %}claim-ok{% else %}claim-partial{% endif %}">
+            {{ edges_evidenced }}<span>/{{ edges_total }}</span>
+        </div>
+        <div class="claim-body">
+            <h2>Every arrow names the line it came from.</h2>
+            <p>
+                Not the file &mdash; the line. {{ edges_evidenced }} of {{ edges_total }}
+                dependencies in this repository carry the exact line of the import they were
+                resolved from.
+                {% if not every_edge_cited %}
+                The {{ edges_total - edges_evidenced }} without one are edges no single line
+                accounts for, and they are reported as such rather than quietly dropped.
+                {% endif %}
+            </p>
+            {% if samples %}
+            <ul class="claim-samples">
+                {% for edge in samples %}
+                <li>
+                    <span class="mono">{{ edge.from_path }}</span> imports
+                    <span class="mono">{{ edge.to_path }}</span> &middot;
+                    {% for line in edge.lines %}<a class="mono" target="_blank" rel="noreferrer noopener"
+                       href="https://github.com/{{ repo }}/blob/{{ commit_sha }}/{{ edge.from_path }}#L{{ line }}">line {{ line }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+                </li>
+                {% endfor %}
+            </ul>
+            <p class="claim-note">Open one. The import is on that line, or this page is lying to you.</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="claim">
+        <div class="claim-mark claim-partial">
+            {{ nodes_drawn }}<span>/{{ nodes_total }}</span>
+        </div>
+        <div class="claim-body">
+            <h2>It tells you what it could not see.</h2>
+            <p>
+                A diagram drawn by a language model cannot do this, because it does not know
+                what it missed. This one counts the gaps and prints them, including the
+                unflattering ones.
+            </p>
+            <ul class="claim-facts">
+                <li>{{ coverage.files_in_repo }} files in the repository at this commit.</li>
+                <li>{{ nodes_drawn }} of {{ nodes_total }} files with dependencies are drawn; the rest are left out to keep the picture readable, and every one of them still appears in the evidence table.</li>
+                {% if coverage.files_skipped %}
+                <li>{{ coverage.files_skipped }} file(s) could not be fetched, so anything depending on them is missing.</li>
+                {% endif %}
+                {% if coverage.unparsed_extensions %}
+                <li>
+                    {{ coverage.unparsed_file_count }} file(s) have no import parser here:
+                    {% for ext, count in coverage.unparsed_extensions.items() %}<code>{{ ext }}</code>&nbsp;({{ count }}){% if not loop.last %}, {% endif %}{% endfor %}.
+                    They may depend on other files; no arrow above says so.
+                </li>
+                {% endif %}
+                {% if coverage.degraded_languages %}
+                <li>Grammar unavailable for {{ coverage.degraded_languages|join(', ') }} on this machine, so those files contributed nothing.</li>
+                {% endif %}
+                {% if coverage.is_complete %}
+                <li>Nothing was skipped, and nothing was dropped to make the picture fit.</li>
+                {% endif %}
+            </ul>
+        </div>
+    </section>
+
+    <section class="claim claim-decisive">
+        <div class="claim-mark {% if digests_match %}claim-ok{% else %}claim-fail{% endif %}">
+            {% if digests_match %}&#10003;{% else %}&#10007;{% endif %}
+        </div>
+        <div class="claim-body">
+            <h2>The same commit always draws the same diagram.</h2>
+            <p>
+                This is the one that cannot be imitated by a tool that asks a model to draw the
+                picture. The diagram was rendered twice while this page loaded. Here are both
+                SHA&#8209;256 digests of the {{ "{:,}".format(svg_bytes) }}&nbsp;bytes of SVG:
+            </p>
+            <pre class="digest">{{ digest_a }}
+{{ digest_b }}</pre>
+            <p class="claim-note">
+                {% if digests_match %}
+                Identical. Two exports of one commit can be diffed against each other, so a
+                change in the picture means a change in the code &mdash; never a change of mood.
+                {% else %}
+                These differ, which would mean the renderer is not deterministic. That is a bug,
+                and this page is the right place to find out.
+                {% endif %}
+            </p>
+        </div>
+    </section>
+
+    <section class="proof-compare">
+        <h2>The comparison worth making</h2>
+        <p>
+            Published work on LLM&#8209;generated architecture views finds they are
+            <em>&ldquo;syntactically valid but semantically flawed&rdquo;</em>, commonly containing
+            <em>&ldquo;hallucinated features or incorrect relationships that are syntactically correct
+            but lack semantic basis&rdquo;</em>
+            (<a href="https://arxiv.org/html/2603.21178v1" target="_blank" rel="noreferrer noopener">LLM-based
+            Automated Architecture View Generation: Where Are We Now?</a>).
+        </p>
+        <p>
+            So run a generated&#8209;diagram tool on this same repository and put the two side by
+            side. Then try, on its output, the three things you just did here: click an arrow to
+            the line it came from, read what it admits it missed, and generate it twice to see
+            whether you get the same picture.
+        </p>
+        <p class="claim-note">
+            This page deliberately does not reproduce a competitor's output. A comparison that
+            invents the other side proves nothing, and one bad-faith screenshot would cost more
+            credibility than the whole argument is worth. Run it yourself.
+        </p>
+    </section>
+
+    <section class="proof-closer">
+        <a class="cta-primary" href="/app">try it on another repository</a>
+        <a class="cta-ghost" href="/">what this is</a>
+    </section>
+
+    {% endif %}
+</main>
+</body>
+</html>

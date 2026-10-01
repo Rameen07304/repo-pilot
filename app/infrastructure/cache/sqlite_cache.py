@@ -277,6 +277,34 @@ class SqliteRepoCache(RepoCache):
         """
         return await asyncio.to_thread(self._list_commits_sync, repo_full_name)
 
+    async def list_repos(self) -> list[str]:
+        """
+        Repositories with a usable parse, newest ingest first.
+
+        Only used by the proof page, which has to pick something real to
+        demonstrate on and should demonstrate on whatever the reader just
+        ingested rather than a name baked into a template.
+        """
+        return await asyncio.to_thread(self._list_repos_sync)
+
+    def _list_repos_sync(self) -> list[str]:
+        conn = _connect(self._db_path)
+        try:
+            rows = conn.execute(
+                """
+                SELECT m.repo_full_name, MAX(m.cached_at) AS newest
+                  FROM repo_manifests m
+                  JOIN parsed_repo_indexes p
+                    ON p.repo_full_name = m.repo_full_name
+                   AND p.commit_sha = m.commit_sha
+                 GROUP BY m.repo_full_name
+                 ORDER BY newest DESC
+                """
+            ).fetchall()
+        finally:
+            conn.close()
+        return [row[0] for row in rows]
+
     def _list_commits_sync(self, repo_full_name: str) -> list[CachedCommit]:
         conn = _connect(self._db_path)
         try:
