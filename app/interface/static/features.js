@@ -994,6 +994,9 @@
     });
 
     RP.openFile = openFile;
+    // The agents block below is a separate IIFE and cannot see this
+    // scope's helpers; it reaches everything else through RP already.
+    RP.postJson = postJson;
 
     // ===============================================================
     // Feature 4 — Impact analysis
@@ -1474,7 +1477,7 @@
             const previous = save.textContent;
             save.textContent = "fetching...";
             try {
-                const data = await postJson("/api/file", {
+                const data = await RP.postJson("/api/file", {
                     repo_full_name: keys.repo_full_name,
                     commit_sha: keys.commit_sha,
                     file_path: asset.path,
