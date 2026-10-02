@@ -72,6 +72,14 @@ class RepoUrlRejectsTest(unittest.TestCase):
         ("empty owner", "https://github.com//widgets"),
         ("empty repo", "https://github.com/acme/"),
         ("path traversal", "https://github.com/acme/../../etc/passwd"),
+        # Two segments, so the regex shape is satisfied and only the
+        # name check rejects these. Each one resolves, once an HTTP
+        # client normalises it, to a different path on api.github.com.
+        ("dot segments as names", "https://github.com/../.."),
+        ("single dots as names", "https://github.com/./."),
+        ("dotted owner, dot-dot repo", "https://github.com/..../.."),
+        ("real owner, dot-dot repo", "https://github.com/acme/.."),
+        ("dot owner, real repo", "https://github.com/./widgets"),
         ("query string", "https://github.com/acme/widgets?x=1"),
         ("fragment", "https://github.com/acme/widgets#frag"),
 
@@ -91,6 +99,31 @@ class RepoUrlRejectsTest(unittest.TestCase):
             with self.subTest(label=label, url=candidate):
                 with self.assertRaises(ValueError):
                     RepoUrl(candidate)
+
+    def test_a_name_made_only_of_dots_cannot_move_the_request(self):
+        # Why the names above matter, stated as the thing that actually
+        # goes wrong: every API URL is .../repos/{owner}/{repo}/..., and
+        # an HTTP client resolves dot segments before sending. With
+        # owner and repo both "..", a request meant for one repository's
+        # commits became a request to the API root, carrying our token.
+        from urllib.parse import urljoin
+        self.assertEqual(
+            urljoin("https://api.github.com/", "/repos/../../commits"),
+            "https://api.github.com/commits",
+            "the dots are resolved away before the request is sent",
+        )
+        with self.assertRaises(ValueError):
+            RepoUrl("https://github.com/../..")
+
+    def test_dots_are_still_allowed_inside_a_real_name(self):
+        # The fix must not reject rails/rails.github.com, which exists.
+        self.assertEqual(
+            RepoUrl("https://github.com/rails/rails.github.com").full_name,
+            "rails/rails.github.com",
+        )
+        self.assertEqual(
+            RepoUrl("https://github.com/a-b/c_d.e").full_name, "a-b/c_d.e"
+        )
 
     def test_uppercase_host_is_rejected_rather_than_silently_accepted(self):
         # The pattern is case sensitive on the host. Documenting the

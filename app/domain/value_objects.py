@@ -27,6 +27,21 @@ class RepoUrl:
                 f"Invalid GitHub repo URL: {self.raw!r}. "
                 "Only https://github.com/owner/repo URLs are allowed."
             )
+        # The charset above allows dots, which real repository names need
+        # (rails/rails.github.com). It therefore also allowed "." and
+        # "..", and those are not names: they are path segments. Every
+        # API URL is built as .../repos/{owner}/{repo}/..., and an HTTP
+        # client resolves the dots before sending, so
+        # https://github.com/../.. turned into a request for
+        # https://api.github.com/commits with our token attached. The
+        # host is hardcoded so this was never arbitrary SSRF, but a
+        # guard whose whole job is to make the rest of the code safe
+        # must not hand it a value that moves the request.
+        if not match.group(1).strip(".") or not match.group(2).strip("."):
+            raise ValueError(
+                f"Invalid GitHub repo URL: {self.raw!r}. "
+                "Owner and repository names cannot be '.' or '..'."
+            )
         # store the parsed parts via object.__setattr__ since the dataclass is frozen
         object.__setattr__(self, "_owner", match.group(1))
         object.__setattr__(self, "_repo", match.group(2))
