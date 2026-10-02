@@ -508,9 +508,23 @@
             </aside>
 
             <section class="empty-state" aria-label="No repository loaded">
-                <div class="dim">$ repo-pilot status</div>
-                <div>&gt; no repo loaded</div>
-                <div class="dim">&gt; paste a public GitHub URL above, or start with one of these</div>
+                {# This is the first thing a newcomer sees, and it used to be
+                   three lines of terminal cosplay that told them the state of
+                   the app rather than what the app would do for them. The
+                   three steps below are a real sequence, which is the only
+                   reason they are numbered. #}
+                <h2 class="empty-title">Open a codebase you have never read.</h2>
+                <p class="empty-lede">
+                    Repo Pilot reads a public GitHub repository and works out which files
+                    the rest depend on, so you know what to open first instead of guessing.
+                    The first read takes about a minute.
+                </p>
+
+                <ol class="empty-steps">
+                    <li>Pick one of the repositories below, or paste any public GitHub URL in the box above.</li>
+                    <li>Read the order it gives back. Files are ranked by how much depends on them, and each one says why it is worth your time.</li>
+                    <li>Ask it anything about the code. Every answer names the files it came from, so you can check it rather than trust it.</li>
+                </ol>
 
                 {# Real repositories, sizes measured rather than guessed. Each
                    one is here because it shows a different thing. #}

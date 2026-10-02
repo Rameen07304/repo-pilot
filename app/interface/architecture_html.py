@@ -46,18 +46,37 @@ _STYLE = """
 body {
   margin: 0; padding: 0 16px 72px;
   background: var(--rp-base); color: var(--rp-ink-body);
-  font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 15.5px/1.68 system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-wrap: pretty;
 }
 main { max-width: 1100px; margin: 0 auto; }
-h1, h2 { color: var(--rp-ink); line-height: 1.25; }
-h1 { font-size: clamp(1.5rem, 4vw, 2rem); margin: 40px 0 8px; letter-spacing: -0.02em; }
-h2 { font-size: 1.15rem; margin: 40px 0 12px; }
+
+/* A document is two kinds of thing at once: prose you read in order,
+   and evidence you scan. They do not want the same width. Measured at
+   1100px, a paragraph here ran to 162 characters a line, against a
+   comfortable maximum of about 75 -- the reason these pages felt like a
+   wall of text even though the writing was short. Prose is held to a
+   measure; the diagram, the tables and the stats still get the full
+   width, because being able to see a whole row at once is the point of
+   them. */
+p, .note, .callout li, ol.route li, #detail { max-width: 68ch; }
+h1, h2, h3 { max-width: 34ch; }
+
+h1, h2, h3 { color: var(--rp-ink); line-height: 1.2; }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); margin: 44px 0 6px; letter-spacing: -0.021em; }
+/* A clear step down to the section headings, so the eye can find them
+   while scrolling without them competing with the title. */
+h2 { font-size: 1.22rem; margin: 44px 0 14px; letter-spacing: -0.011em; }
+h3 { font-size: 1rem; margin: 26px 0 8px; }
+p { margin: 0 0 14px; }
+p + p { margin-top: -2px; }
 a { color: var(--rp-accent); }
 code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; }
 .meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0 0 4px; padding: 0; list-style: none;
   color: var(--rp-ink-dim); font-size: 0.86rem; }
 .panel { background: var(--rp-surface); border: 1px solid var(--rp-line);
-  border-radius: 14px; padding: 18px 20px; }
+  border-radius: 14px; padding: 22px 26px; }
+.panel > :last-child { margin-bottom: 0; }
 .callout { border-left: 3px solid var(--rp-warn); }
 .callout h2 { margin-top: 0; }
 .figure { overflow: auto; padding: 12px; -webkit-overflow-scrolling: touch; }
@@ -102,8 +121,7 @@ td.num { text-align: right; white-space: nowrap; }
 .stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   margin: 0; padding: 0; }
 .stats div { background: var(--rp-sunken); border-radius: 10px; padding: 12px 14px; }
-.stats dt { color: var(--rp-ink-dim); font-size: 0.76rem; text-transform: uppercase;
-  letter-spacing: 0.06em; }
+.stats dt { color: var(--rp-ink-dim); font-size: 0.82rem; }
 .stats dd { margin: 4px 0 0; color: var(--rp-ink); font-size: 1.3rem; font-weight: 600; }
 .note { color: var(--rp-ink-dim); font-size: 0.86rem; }
 footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--rp-line);

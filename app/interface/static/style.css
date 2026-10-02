@@ -1819,6 +1819,32 @@ button { font-family: inherit; cursor: pointer; }
     line-height: 2;
     color: var(--ink-body);
 }
+.empty-title {
+    font-size: 21px;
+    line-height: 1.25;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    margin: 0 0 10px;
+}
+.empty-lede {
+    font-size: 14px;
+    line-height: 1.7;
+    /* A reading measure, for the same reason the exported documents got
+       one: this is the paragraph that decides whether a newcomer keeps
+       going, and it was running the full 900px. */
+    max-width: 64ch;
+    margin: 0 0 22px;
+}
+.empty-steps {
+    margin: 0 0 28px;
+    padding-left: 20px;
+    max-width: 64ch;
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: var(--ink-body);
+}
+.empty-steps li { margin-bottom: 9px; padding-left: 4px; }
+.empty-steps li::marker { color: var(--accent); font-weight: 600; }
 #tabs:not(.hidden) ~ .empty-state { display: none; }
 
 /* ---------- Tab content ---------- */
@@ -2615,7 +2641,11 @@ g.node.selected-node circle {
 .health-finding { padding: 12px 14px; border: 1px solid var(--hairline); background: var(--surface); }
 .health-finding-header { display: flex; align-items: center; gap: 10px; }
 .health-finding-title { font-size: 13.5px; color: var(--ink); }
-.health-finding-detail { font-size: 12.5px; line-height: 1.6; margin: 6px 0 8px; }
+/* The explanation of a finding is the part a newcomer actually has to
+   read, so it gets a measure. The file list under it does not: a path
+   is scanned, not read, and wrapping one helps nobody. */
+.health-finding-detail { font-size: 12.5px; line-height: 1.65; margin: 6px 0 8px; max-width: 72ch; }
+.severity-blurb, #health-verdict, #health-next { max-width: 72ch; }
 .badge-high { color: var(--error); border-color: var(--error); }
 .badge-medium { color: var(--warn); border-color: var(--warn); }
 .badge-low { color: var(--ink-faint); }

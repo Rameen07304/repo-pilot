@@ -231,7 +231,7 @@ class AnalyzeCodeHealthUseCase:
                 check="circular_import",
                 severity="medium",
                 title=f"{len(component)} modules import each other in a cycle",
-                detail="Cycles make modules impossible to test or reuse in isolation and cause import-order bugs. Break the cycle by moving the shared piece into a module both can import.",
+                detail="These files need each other to work: A imports B, and B imports A (sometimes through a longer chain). You cannot read, test or reuse one without dragging in the rest, and whichever loads first can change the behaviour. The usual fix is to move the part they both need into a third file they can each import.",
                 files=component,
             ))
         return findings
@@ -251,7 +251,7 @@ class AnalyzeCodeHealthUseCase:
                 check="hub_module",
                 severity="medium" if fan_in >= self._hub_fan_in * 2 else "low",
                 title=f"{fan_in} modules depend on {path.rsplit('/', 1)[-1]}",
-                detail="A change here has a wide blast radius. Keep its public surface small and stable, and make sure it has tests.",
+                detail="So many files rely on this one that editing it can break any of them, often somewhere you were not looking. That is not a bug in itself, but it makes this a file to change carefully: keep what it offers to other files small and stable, and make sure it is well tested.",
                 files=[path],
                 metric=fan_in,
             ))
@@ -266,7 +266,7 @@ class AnalyzeCodeHealthUseCase:
                 check="untested_module",
                 severity="high",
                 title="No test files found",
-                detail="Nothing in the repo looks like a test (no tests/ directory, no test_*/ *.test.* files). Every module is unverified.",
+                detail="Tests are code that runs your code and checks it did the right thing, so you find out when a change breaks something. Nothing here looks like one: no tests/ folder and no test_* or *.test.* files. Every change to this repository has to be checked by hand.",
                 files=[],
             )]
 
@@ -299,7 +299,7 @@ class AnalyzeCodeHealthUseCase:
                 check="untested_module",
                 severity="high" if dependents >= self._hub_fan_in else "medium",
                 title=f"{path.rsplit('/', 1)[-1]} has no test importing it",
-                detail=f"{dependents} module(s) depend on it, but no test file imports it directly. A regression here is only caught indirectly, if at all.",
+                detail=f"{dependents} other file(s) use this one, but no test file imports it, so nothing checks it on its own. If a change here breaks something, you are likely to find out somewhere else entirely, or not until it is running.",
                 files=[path],
                 metric=dependents,
             ))
@@ -320,7 +320,7 @@ class AnalyzeCodeHealthUseCase:
                 check="long_function",
                 severity="medium" if length >= self._very_long_function else "low",
                 title=f"{s.name}() is {length} lines",
-                detail="Long functions hide multiple responsibilities and are hard to test in isolation. Look for a natural seam to split it.",
+                detail="A function this long is usually doing several separate jobs, which makes it hard to read, hard to test, and easy to break while changing one part. Look for a run of lines that does one nameable thing and move it into its own function.",
                 files=[s.file_path],
                 symbol=s.name,
                 line=s.start_line,
@@ -341,7 +341,7 @@ class AnalyzeCodeHealthUseCase:
                 check="large_file",
                 severity="medium" if lines >= self._very_large_file else "low",
                 title=f"{path.rsplit('/', 1)[-1]} is {lines} lines",
-                detail="Very large files usually bundle several concerns. Splitting by responsibility makes each part easier to navigate and review.",
+                detail="A file this size usually holds several unrelated things, so finding anything means scrolling and every change touches the same file. Splitting it so each file covers one subject makes both easier.",
                 files=[path],
                 metric=lines,
             ))
@@ -378,7 +378,7 @@ class AnalyzeCodeHealthUseCase:
                 check="unreferenced_symbol",
                 severity="low",
                 title=f"{s.name}() is never called by name",
-                detail="No other function in the repo calls this by name. It may be dead code, a framework hook, or only used via a reference — check before deleting.",
+                detail="Nothing else in this repository mentions this name, so it may be code nobody uses any more. It may also be called in a way the parser cannot see: by a framework, from a test, or passed around as a value. Worth checking, not worth deleting on this alone.",
                 files=[s.file_path],
                 symbol=s.name,
                 line=s.start_line,
