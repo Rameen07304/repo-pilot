@@ -25,6 +25,7 @@ from app.interface.routes import (  # noqa: E402
     agent_tooling,
     architecture,
     architecture_delta,
+    architecture_evidence,
     ask,
     code_health,
     diagram,
@@ -126,6 +127,7 @@ app.include_router(code_health.router)
 app.include_router(handbook.router)
 app.include_router(agent_tooling.router)
 app.include_router(architecture.router)
+app.include_router(architecture_evidence.router)
 app.include_router(architecture_delta.router)
 app.include_router(sequence.router)
 app.include_router(proof.router)

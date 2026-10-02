@@ -165,6 +165,36 @@ class ArchitectureExportRequest(BaseModel):
     commit_sha: str = Field(..., max_length=100)
 
 
+class ArchitectureEvidenceEdgeResponse(BaseModel):
+    from_path: str
+    to_path: str
+    # Every line in from_path that imports to_path, ascending. Empty only
+    # when no single line accounts for the edge -- never as a shorthand
+    # for "not checked".
+    lines: list[int] = []
+
+
+class ArchitectureEvidenceResponse(BaseModel):
+    """
+    The import graph as data, with the line each edge was resolved from.
+
+    The HTML export has carried this all along but only ever rendered it.
+    An agent asking "what actually depends on this" needs the citation,
+    not a picture of it.
+    """
+    repo_full_name: str
+    commit_sha: str
+    edges: list[ArchitectureEvidenceEdgeResponse]
+    edges_total: int
+    edges_evidenced: int
+    files_in_repo: int
+    files_skipped: int
+    unparsed_extensions: dict[str, int] = {}
+    degraded_languages: list[str] = []
+    detected_stack: list[str] = []
+    truncated: bool = False
+
+
 class ArchitectureDeltaRequest(BaseModel):
     repo_full_name: str = Field(..., max_length=200)
     base_sha: str = Field(..., max_length=100)

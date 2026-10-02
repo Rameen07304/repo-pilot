@@ -121,6 +121,48 @@ Capping the drawing never trims the evidence: `edges` keeps every dependency, `d
 
 **The handbook** gathers the reading order, the stack, the file counts and the maintainability findings into one Markdown document a team can commit next to the code.
 
+## Use it from your own agent (MCP)
+
+Repo Pilot also speaks MCP, so Claude Code or Claude Desktop can onboard itself
+onto a repository without anyone opening the site.
+
+```bash
+pip install -r requirements-mcp.txt
+python -m uvicorn app.interface.main:app --port 8000   # Repo Pilot itself
+claude mcp add repo-pilot -- python /abs/path/to/repo-pilot/mcp_server.py
+```
+
+Point it at a deployed instance instead with `REPO_PILOT_URL`. Eight tools:
+`ingest_repo`, `onboarding_guide`, `ask`, `architecture_evidence`,
+`call_sequence`, `code_health`, `explain_pull_request`, `read_file`. Call
+`ingest_repo` first; the rest default to that repository.
+
+`architecture_evidence` is the one worth reaching for. Asked about a single file
+it answers like this, on real output:
+
+```
+# src/requests/sessions.py @ 611c616
+
+## Imports (11)
+- src/requests/_internal_utils.py  (line 19)
+- src/requests/_types.py  (line 20, line 66)
+- src/requests/adapters.py  (line 21, line 67)
+...
+## Imported by (2)
+- src/requests/__init__.py  (line 185)
+- src/requests/api.py  (line 15)
+```
+
+Those line numbers are resolved from the parse, so an agent can open line 19 and
+check. Called without a file it leads with what the parser could *not* see —
+unreadable files, extensions with no import parser, grammars that did not load —
+because an agent cannot infer a caveat it was never told.
+
+`mcp_server.py` is an HTTP client of the API above, not a second wiring of the
+app: the API already owns the rate limiting, quota and cache rules, and keeping a
+second copy of them in step is a bug waiting to happen. The MCP process holds no
+state but the last repository you ingested.
+
 ## Tests
 
 ```bash

@@ -1,0 +1,13 @@
+# Optional: only needed to run mcp_server.py, which exposes Repo Pilot
+# as an MCP server to Claude Code / Claude Desktop.
+#
+# Deliberately not in requirements.txt. The deployed web image never
+# imports it, and the MCP process is a plain HTTP client of that image,
+# so making every install carry the SDK would be paying for a dependency
+# one entry point needs. The suite skips its tests when it is absent.
+#
+#     pip install -r requirements-mcp.txt
+#
+# Note this is the 2.x SDK, where FastMCP became MCPServer. 1.x will not
+# import.
+mcp==2.2.0
