@@ -195,6 +195,67 @@ class ArchitectureEvidenceResponse(BaseModel):
     truncated: bool = False
 
 
+class CallStepResponse(BaseModel):
+    depth: int
+    from_file: str
+    from_symbol: str
+    to_file: str
+    to_symbol: str
+    # The call SITE, inside from_file -- not the callee's definition.
+    line: int
+    is_recursive: bool = False
+
+
+class CallSequenceDataResponse(BaseModel):
+    """
+    A traced call sequence as data.
+
+    /api/sequence returns a standalone page, which is right for a person
+    and unreadable to an agent. Same trace, same use case, no markup.
+    """
+    repo_full_name: str
+    commit_sha: str
+    entry_file: str
+    entry_symbol: str
+    steps: list[CallStepResponse] = []
+    # Calls that left the repository, and calls whose name matched
+    # several symbols. Both are the reason a step is NOT in the list, so
+    # an agent that cannot see them will read the trace as complete.
+    unresolved_calls: dict[str, int] = {}
+    ambiguous_calls: dict[str, int] = {}
+    truncated: bool = False
+    max_depth: int = 0
+
+
+class ChangedEdgeResponse(BaseModel):
+    from_path: str
+    to_path: str
+    lines: list[int] = []
+
+
+class MovedNodeResponse(BaseModel):
+    from_path: str
+    to_path: str
+
+
+class PullRequestDataResponse(BaseModel):
+    """What a pull request changes structurally, as data rather than a page."""
+    repo_full_name: str
+    number: int
+    title: str
+    state: str
+    author: str = ""
+    base_sha: str
+    head_sha: str
+    added_nodes: list[str] = []
+    removed_nodes: list[str] = []
+    moved_nodes: list[MovedNodeResponse] = []
+    added_edges: list[ChangedEdgeResponse] = []
+    removed_edges: list[ChangedEdgeResponse] = []
+    rerouted_nodes: list[str] = []
+    unchanged_edge_count: int = 0
+
+
 class ArchitectureDeltaRequest(BaseModel):
     repo_full_name: str = Field(..., max_length=200)
     base_sha: str = Field(..., max_length=100)

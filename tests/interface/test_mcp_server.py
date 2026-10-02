@@ -130,6 +130,132 @@ class EvidenceToolTest(unittest.IsolatedAsyncioTestCase):
 
 
 @needs_mcp
+class CallSequenceToolTest(unittest.IsolatedAsyncioTestCase):
+    """
+    This tool used to hand the agent a whole HTML document. What matters
+    now is that the compact form keeps the two things the page carried:
+    the call-site line for every step, and the reasons a call is absent.
+    """
+
+    TRACE = {
+        "repo_full_name": REPO,
+        "commit_sha": SHA,
+        "entry_file": "app/main.py",
+        "entry_symbol": "run",
+        "steps": [
+            {"depth": 0, "from_file": "app/main.py", "from_symbol": "run",
+             "to_file": "app/db.py", "to_symbol": "save", "line": 12, "is_recursive": False},
+            {"depth": 1, "from_file": "app/db.py", "from_symbol": "save",
+             "to_file": "app/db.py", "to_symbol": "save", "line": 30, "is_recursive": True},
+        ],
+        "unresolved_calls": {"json.dumps": 3},
+        "ambiguous_calls": {"save": 2},
+        "truncated": False,
+        "max_depth": 2,
+    }
+
+    def setUp(self):
+        ingested()
+
+    async def call(self, trace):
+        with patch.object(mcp_server, "_post", return_value=trace):
+            return await mcp_server.call_sequence("app/main.py", "run")
+
+    async def test_every_step_names_the_file_and_line_it_was_called_from(self):
+        out = await self.call(self.TRACE)
+
+        self.assertIn("run -> save()", out)
+        self.assertIn("app/main.py:12", out)
+        self.assertIn("app/db.py:30", out)
+        self.assertNotIn("<html", out.lower())
+        self.assertNotIn("<div", out.lower())
+
+    async def test_recursion_is_marked_rather_than_expanded(self):
+        self.assertIn("[recurses]", await self.call(self.TRACE))
+
+    async def test_depth_survives_being_flattened_into_text(self):
+        out = await self.call(self.TRACE)
+        lines = [ln for ln in out.splitlines() if "->" in ln]
+        self.assertTrue(lines[0].startswith("- "), lines[0])
+        self.assertTrue(lines[1].startswith("  - "), lines[1])
+
+    async def test_the_reasons_a_call_is_missing_are_stated(self):
+        out = await self.call(self.TRACE)
+
+        self.assertIn("Not shown", out)
+        self.assertIn("json.dumps (3)", out)
+        self.assertIn("save (2)", out)
+
+    async def test_a_cut_trace_says_the_tail_is_missing(self):
+        out = await self.call(dict(self.TRACE, truncated=True))
+        self.assertIn("hit its cap", out)
+
+    async def test_no_steps_does_not_read_as_no_behaviour(self):
+        # A function that only calls libraries traces to nothing. Saying
+        # just that would imply it does nothing at all.
+        out = await self.call(dict(self.TRACE, steps=[]))
+        self.assertIn("No calls into this repository", out)
+        self.assertIn("json.dumps", out)
+
+
+@needs_mcp
+class PullRequestToolTest(unittest.IsolatedAsyncioTestCase):
+    PR = {
+        "repo_full_name": REPO,
+        "number": 42,
+        "title": "Split the parser",
+        "state": "open",
+        "author": "rameen",
+        "base_sha": "base111aaa",
+        "head_sha": "head222bbb",
+        "added_nodes": ["app/new.py"],
+        "removed_nodes": [],
+        "moved_nodes": [{"from_path": "app/a.py", "to_path": "core/a.py"}],
+        "added_edges": [{"from_path": "app/main.py", "to_path": "app/new.py", "lines": [4]}],
+        "removed_edges": [],
+        "rerouted_nodes": ["app/main.py"],
+        "unchanged_edge_count": 7,
+    }
+
+    async def call(self, pr):
+        with patch.object(mcp_server, "_post", return_value=pr):
+            return await mcp_server.explain_pull_request(
+                "https://github.com/acme/widgets/pull/42"
+            )
+
+    async def test_it_leads_with_the_pull_request_itself(self):
+        out = await self.call(self.PR)
+
+        self.assertIn("#42", out)
+        self.assertIn("Split the parser", out)
+        self.assertIn("rameen", out)
+        self.assertNotIn("<html", out.lower())
+
+    async def test_a_new_dependency_carries_the_line_it_appears_on(self):
+        out = await self.call(self.PR)
+        self.assertIn("app/main.py -> app/new.py", out)
+        self.assertIn("line 4", out)
+
+    async def test_a_move_is_one_fact_not_an_add_and_a_delete(self):
+        self.assertIn("app/a.py -> core/a.py", await self.call(self.PR))
+
+    async def test_a_pull_request_that_changes_no_structure_says_so(self):
+        # Otherwise it renders as a heading and some zeroes, which reads
+        # like the tool failed rather than like a real answer.
+        quiet = dict(
+            self.PR, added_nodes=[], removed_nodes=[], moved_nodes=[],
+            added_edges=[], removed_edges=[], rerouted_nodes=[],
+        )
+        out = await self.call(dict(quiet, unchanged_edge_count=0))
+        self.assertIn("Nothing structural changed", out)
+        # "0 dependencies were untouched" reads like a finding.
+        self.assertNotIn("0 dependencies were untouched", out)
+
+    async def test_untouched_dependencies_are_counted_when_there_are_any(self):
+        self.assertIn("7 dependencies were untouched", await self.call(self.PR))
+
+
+@needs_mcp
 class IngestToolTest(unittest.IsolatedAsyncioTestCase):
     async def test_ingest_records_the_repo_for_later_tools(self):
         mcp_server._current.clear()

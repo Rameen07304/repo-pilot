@@ -252,7 +252,7 @@ async def architecture_evidence(file_path: str | None = None, repo: str | None =
 async def call_sequence(entry_file: str, entry_symbol: str, repo: str | None = None) -> str:
     name, sha = _target(repo)
     data = await _post(
-        "/api/sequence",
+        "/api/sequence/steps",
         {
             "repo_full_name": name,
             "commit_sha": sha,
@@ -260,7 +260,40 @@ async def call_sequence(entry_file: str, entry_symbol: str, repo: str | None = N
             "entry_symbol": entry_symbol,
         },
     )
-    return data if isinstance(data, str) else str(data)
+    steps = data.get("steps", [])
+    out = [f"# {data['entry_symbol']}() in {data['entry_file']} @ {sha[:7]}"]
+    if not steps:
+        out.append("")
+        out.append(
+            "No calls into this repository from here. It may only call out to "
+            "libraries, which are counted below rather than traced."
+        )
+    else:
+        out += ["", f"## Calls, in order ({len(steps)} shown, max depth {data['max_depth']})"]
+        for step in steps:
+            # Indent by depth so the shape of the call tree survives being
+            # flattened into text.
+            pad = "  " * step["depth"]
+            mark = " [recurses]" if step.get("is_recursive") else ""
+            out.append(
+                f"{pad}- {step['from_symbol']} -> {step['to_symbol']}()"
+                f"  ({step['from_file']}:{step['line']}){mark}"
+            )
+
+    # What is NOT in the list above, and why. Without these an agent reads
+    # a partial trace as the whole story.
+    gaps = []
+    if data.get("unresolved_calls"):
+        top = ", ".join(f"{k} ({v})" for k, v in list(data["unresolved_calls"].items())[:8])
+        gaps.append(f"Left the repository, so not traced: {top}.")
+    if data.get("ambiguous_calls"):
+        top = ", ".join(f"{k} ({v})" for k, v in list(data["ambiguous_calls"].items())[:8])
+        gaps.append(f"Matched several symbols with nothing to choose between them: {top}.")
+    if data.get("truncated"):
+        gaps.append("The trace hit its cap, so the tail is missing.")
+    if gaps:
+        out += ["", "## Not shown"] + [f"- {g}" for g in gaps]
+    return "\n".join(out)
 
 
 @server.tool(
@@ -299,11 +332,64 @@ async def code_health(repo: str | None = None) -> str:
 )
 async def explain_pull_request(pull_request_url: str) -> str:
     data = await _post(
-        "/api/architecture/pull",
+        "/api/architecture/pull/data",
         {"pull_request_url": pull_request_url},
         timeout=INGEST_TIMEOUT,
     )
-    return data if isinstance(data, str) else str(data)
+
+    def edge_lines(edges: list[dict]) -> list[str]:
+        return [
+            f"- {e['from_path']} -> {e['to_path']}"
+            + ("  (" + ", ".join(f"line {n}" for n in e["lines"]) + ")" if e.get("lines") else "")
+            for e in edges
+        ]
+
+    out = [
+        f"# {data['repo_full_name']} #{data['number']}: {data['title']}",
+        f"{data['state']}"
+        + (f", by {data['author']}" if data.get("author") else "")
+        + f". {data['base_sha'][:7]}..{data['head_sha'][:7]} (compared against the merge base).",
+    ]
+
+    # Structure first: this tool answers "what moved", not "what the
+    # diff says". A file list is something git already gives you.
+    if data.get("rerouted_nodes"):
+        out += [
+            "",
+            "## Files whose dependencies changed",
+            "These kept their path but changed what they rely on, which is "
+            "usually the real content of a review.",
+        ] + [f"- {p}" for p in data["rerouted_nodes"]]
+
+    for title, key in (("Added files", "added_nodes"), ("Removed files", "removed_nodes")):
+        if data.get(key):
+            out += ["", f"## {title} ({len(data[key])})"] + [f"- {p}" for p in data[key]]
+
+    if data.get("moved_nodes"):
+        out += ["", "## Moved"] + [
+            f"- {m['from_path']} -> {m['to_path']}" for m in data["moved_nodes"]
+        ]
+
+    if data.get("added_edges"):
+        out += ["", f"## New dependencies ({len(data['added_edges'])})"]
+        out += edge_lines(data["added_edges"])
+    if data.get("removed_edges"):
+        out += ["", f"## Dependencies removed ({len(data['removed_edges'])})"]
+        out += edge_lines(data["removed_edges"])
+
+    # Only worth saying when there were any: "0 dependencies were
+    # untouched" reads like a finding rather than an empty set.
+    if data.get("unchanged_edge_count"):
+        out += ["", f"{data['unchanged_edge_count']} dependencies were untouched."]
+    if not any(
+        data.get(k)
+        for k in ("added_nodes", "removed_nodes", "moved_nodes", "added_edges", "removed_edges")
+    ):
+        out.append(
+            "Nothing structural changed: this pull request alters code inside "
+            "files without changing what depends on what."
+        )
+    return "\n".join(out)
 
 
 @server.tool(

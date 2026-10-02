@@ -22,6 +22,7 @@ from fastapi.templating import Jinja2Templates  # noqa: E402
 
 from app.interface.dependencies import build_container  # noqa: E402
 from app.interface.routes import (  # noqa: E402
+    agent_data,
     agent_tooling,
     architecture,
     architecture_delta,
@@ -126,6 +127,7 @@ app.include_router(impact.router)
 app.include_router(code_health.router)
 app.include_router(handbook.router)
 app.include_router(agent_tooling.router)
+app.include_router(agent_data.router)
 app.include_router(architecture.router)
 app.include_router(architecture_evidence.router)
 app.include_router(architecture_delta.router)

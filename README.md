@@ -158,6 +158,23 @@ check. Called without a file it leads with what the parser could *not* see —
 unreadable files, extensions with no import parser, grammars that did not load —
 because an agent cannot infer a caveat it was never told.
 
+`call_sequence` works the same way, indenting by depth and ending with the
+reasons a call is absent:
+
+```
+- get -> request()  (src/requests/api.py:87)
+  - request -> Session()  (src/requests/api.py:70)
+    - Session -> default_headers()  (src/requests/sessions.py:446)
+
+## Not shown
+- Left the repository, so not traced: OSError (3), exists (3), getattr (3)...
+- Matched several symbols with nothing to choose between them: __init__ (1)...
+- The trace hit its cap, so the tail is missing.
+```
+
+Every tool returns text shaped for an agent rather than a rendered page: the
+same analysis the website draws, minus the markup.
+
 `mcp_server.py` is an HTTP client of the API above, not a second wiring of the
 app: the API already owns the rate limiting, quota and cache rules, and keeping a
 second copy of them in step is a bug waiting to happen. The MCP process holds no
