@@ -244,6 +244,60 @@ ingestForm.addEventListener("submit", async (e) => {
     }
 });
 
+// --- The phone navigation drawer ---
+//
+// Below 768px the sidebar is off-canvas. Everything here is a no-op on
+// a desktop width, where the drawer parts are display:none and the
+// sidebar is an ordinary column.
+const navToggle = document.getElementById("nav-toggle");
+const navScrim = document.getElementById("nav-scrim");
+const sidebarEl = document.getElementById("sidebar");
+
+function setNavOpen(open) {
+    if (!navToggle || !sidebarEl || !navScrim) return;
+    sidebarEl.classList.toggle("is-open", open);
+    navScrim.classList.toggle("is-open", open);
+    navToggle.setAttribute("aria-expanded", String(open));
+    // hidden rather than only transparent, so a closed scrim cannot
+    // swallow taps meant for the page under it.
+    navScrim.hidden = !open;
+    // The page behind a drawer should not scroll with it.
+    document.body.classList.toggle("nav-locked", open);
+    navToggle.querySelector(".visually-hidden").textContent =
+        open ? "Close the menu" : "Open the menu";
+}
+
+if (navToggle) {
+    navToggle.addEventListener("click", () => {
+        const open = navToggle.getAttribute("aria-expanded") === "true";
+        setNavOpen(!open);
+        // Opening moves the eye to the drawer; focus should follow it,
+        // and come back to the button when it closes.
+        if (!open) {
+            const first = sidebarEl.querySelector(".tab-btn");
+            // The drawer is visibility:hidden until .is-open lands, and a
+            // hidden element cannot take focus -- calling focus() right
+            // after the class change was a silent no-op, which left a
+            // keyboard user tabbing through the page behind the drawer.
+            // Reading a layout property forces the style recalc now.
+            // Deliberately not requestAnimationFrame: this has to work on
+            // a tab that is not painting.
+            void sidebarEl.offsetWidth;
+            if (first) first.focus();
+        }
+    });
+    navScrim.addEventListener("click", () => {
+        setNavOpen(false);
+        navToggle.focus();
+    });
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && navToggle.getAttribute("aria-expanded") === "true") {
+            setNavOpen(false);
+            navToggle.focus();
+        }
+    });
+}
+
 // --- Tabs ---
 document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -251,6 +305,8 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
         document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("active"));
         btn.classList.add("active");
         document.getElementById(btn.dataset.tab).classList.add("active");
+        // Picking a tab is the whole reason the drawer was open.
+        setNavOpen(false);
     });
 });
 

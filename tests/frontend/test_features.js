@@ -646,3 +646,84 @@ test("ingest: re-ingesting the same repo at a new commit also clears results", a
 
     assert.ok(doc.getElementById("handbook-btn").classList.contains("hidden"));
 });
+
+
+// --- The phone navigation drawer ---
+//
+// Below 768px the sidebar is off-canvas and a hamburger opens it. jsdom
+// applies no media queries, so these test the behaviour and the ARIA
+// contract, which are what break silently; the widths themselves are
+// checked in a real browser.
+
+test("nav drawer: starts closed and says so", () => {
+    const doc = harnessWithRepo().document;
+    const toggle = doc.getElementById("nav-toggle");
+
+    assert.equal(toggle.getAttribute("aria-expanded"), "false");
+    assert.ok(!doc.getElementById("sidebar").classList.contains("is-open"));
+    assert.ok(doc.getElementById("nav-scrim").hidden,
+        "a closed scrim must not sit over the page swallowing taps");
+});
+
+test("nav drawer: the toggle opens it and locks the page behind it", () => {
+    const doc = harnessWithRepo().document;
+    const toggle = doc.getElementById("nav-toggle");
+    toggle.click();
+
+    assert.equal(toggle.getAttribute("aria-expanded"), "true");
+    assert.ok(doc.getElementById("sidebar").classList.contains("is-open"));
+    assert.ok(!doc.getElementById("nav-scrim").hidden);
+    assert.ok(doc.body.classList.contains("nav-locked"),
+        "the page must not scroll behind an open drawer");
+    assert.match(toggle.textContent, /Close the menu/);
+});
+
+test("nav drawer: opening it moves focus into it", () => {
+    // It opened because someone wants the menu. Leaving focus on the
+    // button sends the next Tab into the page behind the drawer, which
+    // is exactly the trap this pattern is supposed to avoid.
+    const doc = harnessWithRepo().document;
+    doc.getElementById("nav-toggle").click();
+
+    assert.notEqual(doc.activeElement, doc.body, "focus should have moved");
+    assert.ok(doc.activeElement.classList.contains("tab-btn"),
+        "focus belongs on the first option in the drawer");
+});
+
+test("nav drawer: closing it gives focus back to the button", () => {
+    const h = harnessWithRepo();
+    const doc = h.document;
+    const toggle = doc.getElementById("nav-toggle");
+
+    toggle.click();
+    doc.dispatchEvent(new h.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    assert.equal(doc.activeElement, toggle);
+});
+
+test("nav drawer: choosing a tab closes it", () => {
+    // The only reason it was open. Leaving it covering the thing the
+    // reader just asked for would be the obvious bug here.
+    const doc = harnessWithRepo().document;
+    doc.getElementById("nav-toggle").click();
+    doc.querySelector('.tab-btn[data-tab="ask-tab"]').click();
+
+    assert.ok(!doc.getElementById("sidebar").classList.contains("is-open"));
+    assert.equal(doc.getElementById("nav-toggle").getAttribute("aria-expanded"), "false");
+    assert.ok(!doc.body.classList.contains("nav-locked"));
+    assert.ok(doc.getElementById("ask-tab").classList.contains("active"),
+        "and the tab it was opened to reach is the one now showing");
+});
+
+test("nav drawer: the scrim and Escape both close it", () => {
+    const h = harnessWithRepo();
+    const doc = h.document;
+
+    doc.getElementById("nav-toggle").click();
+    doc.getElementById("nav-scrim").click();
+    assert.ok(!doc.getElementById("sidebar").classList.contains("is-open"), "scrim");
+
+    doc.getElementById("nav-toggle").click();
+    doc.dispatchEvent(new h.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    assert.ok(!doc.getElementById("sidebar").classList.contains("is-open"), "Escape");
+    assert.equal(doc.getElementById("nav-toggle").getAttribute("aria-expanded"), "false");
+});

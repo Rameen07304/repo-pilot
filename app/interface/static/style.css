@@ -1675,8 +1675,12 @@ code, pre, #citations-list, #repo-files, #repo-stack, #answer-meta {
 }
 .mode-text { max-width: 68ch; }
 .mode-title { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 8px 0; color: var(--ink); }
-.mode-desc { font-size: 13.5px; line-height: 1.65; color: var(--ink-body); margin: 0; }
-.mode-note { font-size: 12px; line-height: 1.6; color: var(--ink-faint); margin: 8px 0 0 0; }
+/* The sentence at the top of each tab is the first thing a newcomer
+   reads there, and it decides whether the rest of the screen makes
+   sense. It was running to 81 characters a line, and the note under it
+   to 91. #answer-text already had a measure; these did not. */
+.mode-desc { font-size: 13.5px; line-height: 1.65; color: var(--ink-body); margin: 0; max-width: 72ch; }
+.mode-note { font-size: 12px; line-height: 1.6; color: var(--ink-faint); margin: 8px 0 0 0; max-width: 76ch; }
 .mode-note::before { content: "// "; }
 .mode-header .cmd-btn { flex-shrink: 0; margin-top: 2px; }
 
@@ -2109,73 +2113,113 @@ body.has-fullscreen-diagram { overflow: hidden; }
 
 /* ---------- App shell on narrow screens ---------- */
 
+/* The phone bar and the drawer it opens. Desktop never sees either. */
+.mobile-bar, .nav-scrim { display: none; }
+/* Set only while the drawer is open, so the page cannot scroll behind it. */
+body.nav-locked { overflow: hidden; }
+
 @media (max-width: 768px) {
     .app-shell { flex-direction: column; }
 
-    /* The sidebar stops being a box and lets its children join the
-       shell's column directly. Stacked as one block it was 351px of
-       nav sitting on top of the content: scroll down to read anything
-       and all six tabs were off-screen with no way back. As loose
-       children they can be reordered and the nav alone can stick. */
-    .sidebar { display: contents; }
-
-    .sidebar-top {
-        order: 0;
-        padding: 16px 20px 12px;
-        background: var(--surface-alt);
-    }
-
-    .sidebar-nav {
-        order: 1;
+    .mobile-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
         position: sticky;
         top: 0;
-        z-index: 20;
-        flex-direction: row;
-        flex-wrap: nowrap;
-        gap: 2px;
-        padding: 0 12px;
+        z-index: 40;
+        padding: 10px 14px;
         background: var(--surface-alt);
         border-bottom: 1px solid var(--hairline);
-        /* Six tabs will not fit 375px, so the strip scrolls sideways
-           rather than wrapping into rows that change height as you
-           move between tabs. */
-        overflow-x: auto;
-        overscroll-behavior-x: contain;
-        scrollbar-width: none;
     }
-    .sidebar-nav::-webkit-scrollbar { display: none; }
+    .mobile-bar-brand { display: flex; align-items: center; font-size: 14px; }
 
-    .sidebar-nav .tab-btn {
+    .nav-toggle {
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
         flex: 0 0 auto;
-        width: auto;
-        align-items: center;
-        gap: 7px;
-        padding: 13px 12px;
-        /* A left bar reads as nothing in a horizontal strip. */
-        border-left: none;
-        border-bottom: 2px solid transparent;
-        white-space: nowrap;
+        padding: 0;
+        background: transparent;
+        border: 1px solid var(--hairline);
+        border-radius: 9px;
+        color: var(--ink-body);
+        cursor: pointer;
     }
-    .sidebar-nav .tab-btn.active {
-        border-left-color: transparent;
-        border-bottom-color: var(--accent);
+    .nav-toggle-box { display: grid; gap: 4px; width: 17px; }
+    .nav-toggle-bar {
+        height: 2px;
+        border-radius: 2px;
+        background: currentColor;
+        transition: transform 0.22s ease, opacity 0.18s ease;
     }
-    .nav-desc { display: none; }
-
-    .app-main { order: 2; padding: 24px 20px; }
-
-    /* Below the content: useful, but not worth another 200px between
-       the tabs and what you came to read. */
-    .sidebar-repo-info, .sidebar-recent {
-        order: 3;
-        margin-top: 0;
-        padding: 18px 20px;
-        border-top: 1px solid var(--hairline);
-        background: var(--surface-alt);
+    /* The three bars fold into a cross, so the control says what it will
+       do next rather than needing a second icon. */
+    .nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(1) {
+        transform: translateY(6px) rotate(45deg);
+    }
+    .nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(2) { opacity: 0; }
+    .nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(3) {
+        transform: translateY(-6px) rotate(-45deg);
     }
 
-    /* Touch targets. The close buttons were 18px squares. */
+    /* The drawer. A horizontal tab strip fitted on a phone but had to
+       hide every description to do it, which is most of what tells you
+       what a tab is for. Off-canvas, it can show the labels in full. */
+    .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 60;
+        width: min(310px, 86vw);
+        height: 100dvh;
+        padding: 20px 18px 28px;
+        border-right: 1px solid var(--hairline);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        transform: translateX(-101%);
+        /* visibility, not just transform: an off-canvas panel that is
+           still "visible" keeps its links in the tab order, so a
+           keyboard user tabs through a menu they cannot see.
+
+           The timing matters. Transitioning visibility over 0.26s means
+           it reads as hidden for the whole opening slide, and a hidden
+           element cannot take focus -- which silently broke moving
+           focus into the drawer. So it flips instantly on open, and is
+           only delayed on close, to stay visible while it slides out. */
+        visibility: hidden;
+        transition: transform 0.26s cubic-bezier(0.32, 0.72, 0, 1),
+                    visibility 0s linear 0.26s;
+    }
+    .sidebar.is-open {
+        transform: translateX(0);
+        visibility: visible;
+        transition: transform 0.26s cubic-bezier(0.32, 0.72, 0, 1), visibility 0s;
+    }
+
+    .nav-scrim {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        background: rgba(6, 10, 18, 0.5);
+        opacity: 0;
+        transition: opacity 0.26s ease;
+    }
+    .nav-scrim.is-open { opacity: 1; }
+
+    /* The drawer already carries the brand in the bar above it. */
+    .sidebar-top { display: none; }
+    .sidebar-nav { flex-direction: column; gap: 2px; }
+    .sidebar-nav .tab-btn { width: 100%; padding: 12px 12px; }
+    .nav-desc { display: block; }
+
+    .app-main { padding: 22px 18px; }
     .tool-btn { min-width: 40px; min-height: 40px; }
+}
+
+@media (max-width: 768px) and (prefers-reduced-motion: reduce) {
+    .sidebar, .nav-scrim, .nav-toggle-bar { transition: none; }
 }
 
 /* ==============================================================

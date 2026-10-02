@@ -39,8 +39,27 @@
 </head>
 <body class="app-body">
     <a href="#main" class="skip-link">skip to content</a>
+
+    {# Phone only. The sidebar becomes an off-canvas drawer below 768px,
+       so something has to open it and the brand has to live somewhere
+       that is always on screen. Hidden from desktop entirely rather
+       than styled away, so there is one set of controls at a time. #}
+    <div class="mobile-bar">
+        <button type="button" id="nav-toggle" class="nav-toggle"
+                aria-expanded="false" aria-controls="sidebar">
+            <span class="nav-toggle-box" aria-hidden="true">
+                <span class="nav-toggle-bar"></span>
+                <span class="nav-toggle-bar"></span>
+                <span class="nav-toggle-bar"></span>
+            </span>
+            <span class="visually-hidden">Open the menu</span>
+        </button>
+        <span class="mobile-bar-brand">{% include "_brand.html" %}</span>
+    </div>
+    <div class="nav-scrim" id="nav-scrim" hidden></div>
+
     <div class="app-shell">
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="sidebar-top">
             <h1 class="sidebar-logo-heading">{% include "_brand.html" %}</h1>
             <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false">
