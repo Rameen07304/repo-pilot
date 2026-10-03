@@ -31,6 +31,7 @@ from pathlib import Path
 from app.application.use_cases.ingest_repo import RepoCache
 from app.domain.entities import (
     CachedCommit,
+    DetectedTech,
     FileNode,
     ParsedRepoIndex,
     ParsedSymbol,
@@ -248,6 +249,7 @@ class SqliteRepoCache(RepoCache):
             "commit_sha": manifest.commit_sha,
             "files": [asdict(f) for f in manifest.files],
             "detected_stack": manifest.detected_stack,
+            "stack_detail": [asdict(t) for t in manifest.stack_detail],
             "entry_points": manifest.entry_points,
             "readme_content": manifest.readme_content,
             "summary": manifest.summary,
@@ -263,6 +265,9 @@ class SqliteRepoCache(RepoCache):
             commit_sha=data["commit_sha"],
             files=[FileNode(**f) for f in data["files"]],
             detected_stack=data["detected_stack"],
+            # Entries cached before stack_detail existed simply have none;
+            # the flat list above still works, so an old row stays usable.
+            stack_detail=[DetectedTech(**t) for t in data.get("stack_detail", [])],
             entry_points=data["entry_points"],
             readme_content=data["readme_content"],
             summary=data["summary"],

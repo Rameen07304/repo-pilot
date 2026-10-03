@@ -351,6 +351,23 @@ class GitHubApiClient(GitHubClient):
             try:
                 async with httpx.AsyncClient(timeout=self._timeout) as client:
                     resp = await client.get(url, headers=self._headers, params=params)
+                    # A renamed or transferred repository answers 301 to its
+                    # new location, and that is common enough that refusing
+                    # it turned an old-but-valid URL into "Ingestion failed
+                    # unexpectedly" -- tiangolo/fastapi is now
+                    # fastapi/fastapi. Followed by hand rather than with
+                    # follow_redirects=True so the rate-limit headers on the
+                    # first response are still checked, and so the hop can
+                    # be refused if it ever leaves the API host, which is
+                    # what keeps our token from being sent elsewhere.
+                    if resp.is_redirect:
+                        target = resp.headers.get("location", "")
+                        if not target.startswith(_GITHUB_API_BASE + "/"):
+                            raise GitHubRepoNotFoundError(
+                                "That repository redirects somewhere unexpected, "
+                                "so it was not followed."
+                            )
+                        resp = await client.get(target, headers=self._headers, params=params)
                     self._raise_for_rate_limit(resp)
                     resp.raise_for_status()
                     return resp.json()

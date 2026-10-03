@@ -727,3 +727,119 @@ test("nav drawer: the scrim and Escape both close it", () => {
     assert.ok(!doc.getElementById("sidebar").classList.contains("is-open"), "Escape");
     assert.equal(doc.getElementById("nav-toggle").getAttribute("aria-expanded"), "false");
 });
+
+
+// --- The "what this is built with" panel ---
+//
+// It appears on ingest, before the reader has thought of a question, so
+// its job is to answer "what IS this" without being asked.
+
+test("stack panel: appears on ingest, grouped, with the file that proved each", () => {
+    const h = harnessWithRepo({
+        "/api/ingest": async () => ({
+            repo_full_name: "acme/app", commit_sha: "sha1", summary: "A thing.",
+            file_count: 9, detected_stack: ["python", "fastapi", "docker"],
+            stack_detail: [
+                { name: "python", kind: "language", evidence: "requirements.txt" },
+                { name: "fastapi", kind: "framework", evidence: "requirements.txt" },
+                { name: "docker", kind: "tool", evidence: "Dockerfile" },
+            ],
+            skipped_file_count: 0, was_cached: false,
+        }),
+    });
+    const doc = h.document;
+
+    doc.getElementById("repo-url").value = "https://github.com/acme/app";
+    doc.getElementById("ingest-form").dispatchEvent(
+        new h.window.Event("submit", { bubbles: true, cancelable: true }));
+    return h.flush(30).then(() => {
+        const panel = doc.getElementById("stack-panel");
+        assert.ok(!panel.classList.contains("hidden"), "the panel should be showing");
+
+        const headings = [...doc.querySelectorAll(".stack-group-title")].map((h) => h.textContent);
+        assert.deepEqual(headings, ["Languages", "Frameworks", "Tooling"],
+            "grouped, and in that order");
+
+        const names = [...doc.querySelectorAll(".stack-name")].map((n) => n.textContent);
+        assert.deepEqual(names, ["python", "fastapi", "docker"]);
+
+        const evidence = [...doc.querySelectorAll(".stack-evidence")].map((e) => e.textContent);
+        assert.deepEqual(evidence, ["requirements.txt", "requirements.txt", "Dockerfile"],
+            "every entry names the file it was read from");
+        assert.ok(doc.getElementById("stack-empty").classList.contains("hidden"));
+    });
+});
+
+test("stack panel: a repo with no stack says so rather than showing an empty box", () => {
+    // A documentation or config repository genuinely has none. An empty
+    // panel would read as a failed request.
+    const h = harnessWithRepo({
+        "/api/ingest": async () => ({
+            repo_full_name: "acme/docs", commit_sha: "sha1", summary: "Docs.",
+            file_count: 40, detected_stack: [], stack_detail: [],
+            skipped_file_count: 0, was_cached: false,
+        }),
+    });
+    const doc = h.document;
+
+    doc.getElementById("repo-url").value = "https://github.com/acme/docs";
+    doc.getElementById("ingest-form").dispatchEvent(
+        new h.window.Event("submit", { bubbles: true, cancelable: true }));
+    return h.flush(30).then(() => {
+        assert.ok(!doc.getElementById("stack-panel").classList.contains("hidden"));
+        assert.ok(!doc.getElementById("stack-empty").classList.contains("hidden"),
+            "it should explain why there is nothing");
+        assert.equal(doc.querySelectorAll(".stack-name").length, 0);
+    });
+});
+
+test("stack panel: a cached ingest from before evidence existed still names the stack", () => {
+    // Entries cached before stack_detail existed come back without it.
+    // Falling through to "no build files were found" would state
+    // something false about the repository, which is the one thing this
+    // panel exists not to do. It shows what it knows, minus the file.
+    const h = harnessWithRepo({
+        "/api/ingest": async () => ({
+            repo_full_name: "acme/old", commit_sha: "sha1", summary: "Old.",
+            file_count: 5, detected_stack: ["python"],
+            skipped_file_count: 0, was_cached: true,
+        }),
+    });
+    const doc = h.document;
+
+    doc.getElementById("repo-url").value = "https://github.com/acme/old";
+    doc.getElementById("ingest-form").dispatchEvent(
+        new h.window.Event("submit", { bubbles: true, cancelable: true }));
+    return h.flush(30).then(() => {
+        assert.ok(!doc.getElementById("tabs").classList.contains("hidden"),
+            "the rest of the page must still work");
+        assert.ok(doc.getElementById("stack-empty").classList.contains("hidden"),
+            "it must NOT claim no build files were found");
+
+        const names = [...doc.querySelectorAll(".stack-name")].map((n) => n.textContent);
+        assert.deepEqual(names, ["python"]);
+        assert.equal(doc.querySelectorAll(".stack-evidence").length, 0,
+            "no evidence chip, because none was recorded");
+    });
+});
+
+test("stack panel: the python-entrypoint signal is never shown as a technology", () => {
+    // It is a hint for the summary prompt, not something a reader should
+    // see listed under "what this is built with".
+    const h = harnessWithRepo({
+        "/api/ingest": async () => ({
+            repo_full_name: "acme/app", commit_sha: "sha1", summary: "A thing.",
+            file_count: 9, detected_stack: ["python", "python-entrypoint"],
+            skipped_file_count: 0, was_cached: true,
+        }),
+    });
+    const doc = h.document;
+
+    doc.getElementById("repo-url").value = "https://github.com/acme/app";
+    doc.getElementById("ingest-form").dispatchEvent(
+        new h.window.Event("submit", { bubbles: true, cancelable: true }));
+    return h.flush(30).then(() => {
+        const names = [...doc.querySelectorAll(".stack-name")].map((n) => n.textContent);
+        assert.deepEqual(names, ["python"]);
+    });
+});

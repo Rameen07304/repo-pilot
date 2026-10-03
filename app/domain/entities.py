@@ -21,6 +21,22 @@ class FileNode:
 
 
 @dataclass
+class DetectedTech:
+    """
+    One technology found in a repository, and the file that proves it.
+
+    The evidence is the point. "django" on its own is a claim; "django,
+    because manage.py is there" is something a reader can check, which
+    is the same bargain every other number in this project makes.
+    """
+    name: str
+    # language | framework | tool. Only used to group them for reading.
+    kind: str
+    # The file whose presence (or contents) established it.
+    evidence: str
+
+
+@dataclass
 class RepoManifest:
     """
     The Explorer Agent's output. This is the shared context that both
@@ -30,6 +46,12 @@ class RepoManifest:
     commit_sha: str
     files: list[FileNode] = field(default_factory=list)
     detected_stack: list[str] = field(default_factory=list)
+    # The same findings with their evidence, for showing a person. Kept
+    # beside detected_stack rather than replacing it: that flat list
+    # feeds the summary prompt and the cache, and carries signals like
+    # "python-entrypoint" that are useful to a model and meaningless in
+    # a list headed "tech stack".
+    stack_detail: list[DetectedTech] = field(default_factory=list)
     entry_points: list[str] = field(default_factory=list)
     readme_content: Optional[str] = None
     summary: Optional[str] = None

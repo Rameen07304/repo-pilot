@@ -10,11 +10,19 @@ class IngestRequest(BaseModel):
     repo_url: str = Field(..., max_length=300, description="e.g. https://github.com/owner/repo")
 
 
+class DetectedTechResponse(BaseModel):
+    name: str
+    kind: str
+    # The file that established it, so the claim is checkable like the rest.
+    evidence: str
+
+
 class IngestResponse(BaseModel):
     repo_full_name: str
     commit_sha: str
     file_count: int
     detected_stack: list[str]
+    stack_detail: list[DetectedTechResponse] = []
     summary: str
     was_cached: bool
     skipped_file_count: int = 0

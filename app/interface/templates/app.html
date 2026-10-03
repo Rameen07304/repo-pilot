@@ -140,6 +140,24 @@
                 </details>
             </section>
 
+            {# Sits between the ingest bar and the tabs on purpose: it is
+               the first thing to read once a repo loads, and it answers
+               "what IS this project" before anyone has to think of a
+               question to ask. Every entry names the file that proved it,
+               for the same reason every arrow in a diagram carries a line
+               number. #}
+            <section id="stack-panel" class="stack-panel hidden" aria-label="Detected tech stack">
+                <h2 class="stack-title">What this is built with</h2>
+                <p class="stack-lede">Read from the files below, not guessed. Nothing here came from a model.</p>
+                <div id="stack-groups" class="stack-groups"></div>
+                <p id="stack-empty" class="stack-empty hidden">
+                    No build or dependency files were found, so there is nothing
+                    to report here. That usually means the repository is
+                    documentation, configuration or data rather than an
+                    application.
+                </p>
+            </section>
+
             <section id="tabs" class="hidden">
                 <div id="onboarding-tab" class="tab-content active">
                     <header class="mode-header">

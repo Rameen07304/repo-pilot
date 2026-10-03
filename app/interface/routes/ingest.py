@@ -14,7 +14,11 @@ from app.application.interfaces.github_client import (
 )
 from app.application.use_cases.ingest_repo import IngestionLimitExceeded
 from app.infrastructure.llm.quota_aware_llm_client import DailyQuotaExceededError
-from app.interface.schemas import IngestRequest, IngestResponse
+from app.interface.schemas import (
+    DetectedTechResponse,
+    IngestRequest,
+    IngestResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -52,6 +56,10 @@ async def ingest_repo(payload: IngestRequest, request: Request) -> IngestRespons
         commit_sha=manifest.commit_sha,
         file_count=manifest.file_count,
         detected_stack=manifest.detected_stack,
+        stack_detail=[
+            DetectedTechResponse(name=t.name, kind=t.kind, evidence=t.evidence)
+            for t in manifest.stack_detail
+        ],
         summary=manifest.summary or "",
         was_cached=was_cached,
         skipped_file_count=manifest.skipped_file_count,

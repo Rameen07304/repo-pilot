@@ -7,6 +7,7 @@ import asyncio
 import io
 import tarfile
 import unittest
+from unittest.mock import patch
 
 import httpx
 
@@ -197,3 +198,53 @@ class VisibilityGuardTest(unittest.IsolatedAsyncioTestCase):
         await self._assert_public({"private": False})
         with self.assertRaises(RepoIsPrivateError):
             await self._assert_public({"private": True})
+
+
+class RenamedRepositoryTest(unittest.IsolatedAsyncioTestCase):
+    """
+    A renamed or transferred repository answers 301 with its new home.
+    This is common -- tiangolo/fastapi is fastapi/fastapi now -- and
+    refusing the redirect turned a perfectly valid old URL into a 500
+    reading "Ingestion failed unexpectedly".
+    """
+
+    def _client(self, handler):
+        client = GitHubApiClient(token=None)
+        transport = httpx.MockTransport(handler)
+        original = httpx.AsyncClient
+
+        def patched(*args, **kwargs):
+            kwargs["transport"] = transport
+            return original(*args, **kwargs)
+
+        self._patch = patch("httpx.AsyncClient", patched)
+        self._patch.start()
+        self.addCleanup(self._patch.stop)
+        return client
+
+    async def test_a_renamed_repository_is_followed_to_its_new_home(self):
+        seen = []
+
+        def handler(request):
+            seen.append(str(request.url))
+            if "tiangolo" in str(request.url):
+                return httpx.Response(
+                    301,
+                    headers={"location": "https://api.github.com/repositories/160919119"},
+                )
+            return httpx.Response(200, json={"private": False, "full_name": "fastapi/fastapi"})
+
+        client = self._client(handler)
+        await client.assert_public(RepoUrl("https://github.com/tiangolo/fastapi"))
+        self.assertEqual(len(seen), 2, "it should have followed the redirect")
+        self.assertIn("repositories/160919119", seen[1])
+
+    async def test_a_redirect_off_the_api_host_is_refused(self):
+        # The token rides on these requests. A redirect that leaves
+        # api.github.com must not carry it along.
+        def handler(request):
+            return httpx.Response(301, headers={"location": "https://evil.example.com/x"})
+
+        client = self._client(handler)
+        with self.assertRaises(GitHubRepoNotFoundError):
+            await client.assert_public(RepoUrl("https://github.com/acme/widgets"))

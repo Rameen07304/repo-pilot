@@ -227,6 +227,8 @@ ingestForm.addEventListener("submit", async (e) => {
         document.getElementById("repo-files").textContent = `${data.file_count} files`;
         document.getElementById("repo-stack").textContent = data.detected_stack.join(", ") || "stack not detected";
 
+        renderStackPanel(data.stack_detail || [], data.detected_stack || []);
+
         repoInfo.classList.remove("hidden");
         tabsSection.classList.remove("hidden");
 
@@ -243,6 +245,87 @@ ingestForm.addEventListener("submit", async (e) => {
         btn.disabled = false;
     }
 });
+
+// --- What the repository is built with ---
+//
+// Shown the moment an ingest finishes, before anyone has to think of a
+// question. Built with DOM calls rather than innerHTML: the names and
+// the file paths come from someone else's repository, and this screen
+// is the first place they are displayed.
+
+const KIND_HEADING = {
+    language: "Languages",
+    framework: "Frameworks",
+    tool: "Tooling",
+};
+
+function renderStackPanel(detail, names) {
+    const panel = document.getElementById("stack-panel");
+    const groups = document.getElementById("stack-groups");
+    const empty = document.getElementById("stack-empty");
+    if (!panel || !groups) return;
+
+    groups.textContent = "";
+    panel.classList.remove("hidden");
+
+    // A repo cached before the evidence was recorded still knows WHAT it
+    // found, just not from which file. Falling through to "no build files
+    // were found" would state something false about the repository, which
+    // is the one thing this panel exists not to do. "python-entrypoint" is
+    // an internal signal, not a technology, so it is not shown.
+    if (!detail.length && names.length) {
+        detail = names
+            .filter((n) => n !== "python-entrypoint")
+            .map((n) => ({ name: n, kind: "language", evidence: "" }));
+    }
+
+    // A repository of docs or config really has no stack. Saying so is
+    // better than an empty box that looks like a failed request.
+    empty.classList.toggle("hidden", detail.length > 0);
+    if (!detail.length) return;
+
+    ["language", "framework", "tool"].forEach((kind) => {
+        const items = detail.filter((t) => t.kind === kind);
+        if (!items.length) return;
+
+        const group = document.createElement("div");
+        group.className = "stack-group";
+
+        const heading = document.createElement("h3");
+        heading.className = "stack-group-title";
+        heading.textContent = KIND_HEADING[kind] || kind;
+        group.appendChild(heading);
+
+        const list = document.createElement("ul");
+        list.className = "stack-list";
+        items.forEach((tech) => {
+            const li = document.createElement("li");
+            li.className = "stack-item";
+
+            const name = document.createElement("span");
+            name.className = "stack-name";
+            name.textContent = tech.name;
+
+            li.appendChild(name);
+
+            // The evidence is the whole reason this panel is trustworthy,
+            // so it is printed, not hidden behind a tooltip. Absent only
+            // on a cached copy from before it was recorded.
+            if (tech.evidence) {
+                const why = document.createElement("button");
+                why.type = "button";
+                why.className = "stack-evidence";
+                why.textContent = tech.evidence;
+                why.title = "Open " + tech.evidence;
+                why.addEventListener("click", () => window.RepoPilot.openFile(tech.evidence));
+                li.appendChild(why);
+            }
+            list.appendChild(li);
+        });
+        group.appendChild(list);
+        groups.appendChild(group);
+    });
+}
 
 // --- The phone navigation drawer ---
 //

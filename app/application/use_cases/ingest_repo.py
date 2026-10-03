@@ -31,7 +31,13 @@ from app.application.interfaces.code_parser import CodeParser
 from app.application.interfaces.github_client import GitHubClient
 from app.application.interfaces.llm_client import LLMClient, LLMProviderError
 from app.application.interfaces.vector_store import VectorStore
-from app.domain.entities import CachedCommit, FileNode, ParsedRepoIndex, RepoManifest
+from app.domain.entities import (
+    CachedCommit,
+    DetectedTech,
+    FileNode,
+    ParsedRepoIndex,
+    RepoManifest,
+)
 from app.domain.value_objects import RepoUrl
 
 logger = logging.getLogger(__name__)
@@ -215,7 +221,7 @@ class IngestRepoUseCase:
         # arriving here is already expected to be redacted.
 
         # Step 6: detect stack, chunk, embed, store
-        detected_stack = self._detect_stack(file_nodes)
+        detected_stack, stack_detail = self._detect_stack(file_nodes)
 
         chunks = self._collect_chunks(file_nodes)
 
@@ -297,6 +303,7 @@ class IngestRepoUseCase:
             commit_sha=commit_sha,
             files=file_nodes,
             detected_stack=detected_stack,
+            stack_detail=stack_detail,
             entry_points=entry_points,
             readme_content=readme,
             summary=summary,
@@ -350,13 +357,18 @@ class IngestRepoUseCase:
         )
         return kept
 
-    def _detect_stack(self, files: list[FileNode]) -> list[str]:
+    def _detect_stack(self, files: list[FileNode]) -> tuple[list[str], list[DetectedTech]]:
         """
         Cheap heuristic based on filenames present — no LLM needed.
         Matches by BASENAME, not full path — most real repos nest marker
         files inside a project subfolder.
+
+        Returns the flat list (which feeds the summary prompt and the
+        cache) and the same findings with the file that proved each one,
+        for showing a person.
         """
         stack: set[str] = set()
+        found: dict[str, DetectedTech] = {}
         basename_to_path: dict[str, str] = {}
         for f in files:
             basename = f.path.rsplit("/", 1)[-1]
@@ -364,64 +376,75 @@ class IngestRepoUseCase:
         basenames = set(basename_to_path.keys())
         content_by_path = {f.path: f.content for f in files if f.content}
 
+        def note(name: str, kind: str, marker: str) -> None:
+            """Record a technology and the file that established it."""
+            stack.add(name)
+            found.setdefault(
+                name, DetectedTech(name=name, kind=kind, evidence=basename_to_path.get(marker, marker))
+            )
+
         if "package.json" in basenames:
-            stack.add("node")
+            note("node", "language", "package.json")
             pkg_content = content_by_path.get(basename_to_path["package.json"])
             if pkg_content:
                 try:
                     pkg = json.loads(pkg_content)
                     deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
-                    if "react" in deps:
-                        stack.add("react")
-                    if "vue" in deps:
-                        stack.add("vue")
-                    if "next" in deps:
-                        stack.add("next.js")
-                    if "@angular/core" in deps:
-                        stack.add("angular")
-                    if "express" in deps:
-                        stack.add("express")
-                    if "svelte" in deps:
-                        stack.add("svelte")
+                    for dep, label in (
+                        ("react", "react"),
+                        ("vue", "vue"),
+                        ("next", "next.js"),
+                        ("@angular/core", "angular"),
+                        ("express", "express"),
+                        ("svelte", "svelte"),
+                    ):
+                        if dep in deps:
+                            note(label, "framework", "package.json")
                 except (ValueError, TypeError):
                     logger.debug("Could not parse package.json for stack detection")
 
         py_manifest_text = ""
+        py_marker = ""
         for marker in ("requirements.txt", "pyproject.toml"):
             if marker in basenames:
-                stack.add("python")
+                note("python", "language", marker)
+                py_marker = py_marker or marker
                 content = content_by_path.get(basename_to_path[marker])
                 if content:
                     py_manifest_text += content
 
         if re.search(r"(?i)\bflask\b", py_manifest_text):
-            stack.add("flask")
+            note("flask", "framework", py_marker)
         if re.search(r"(?i)\bfastapi\b", py_manifest_text):
-            stack.add("fastapi")
+            note("fastapi", "framework", py_marker)
 
         if "manage.py" in basenames:
-            stack.add("django")
+            note("django", "framework", "manage.py")
         if any(b == "main.py" for b in basenames):
+            # A signal for the summary prompt, not a technology: it would
+            # read as nonsense in a list headed "tech stack", so it gets
+            # no evidence entry.
             stack.add("python-entrypoint")
-        if "Cargo.toml" in basenames:
-            stack.add("rust")
-        if "go.mod" in basenames:
-            stack.add("go")
-        if "Gemfile" in basenames:
-            stack.add("ruby")
+        for marker, name, kind in (
+            ("Cargo.toml", "rust", "language"),
+            ("go.mod", "go", "language"),
+            ("Gemfile", "ruby", "language"),
+            ("composer.json", "php", "language"),
+            ("Dockerfile", "docker", "tool"),
+        ):
+            if marker in basenames:
+                note(name, kind, marker)
         if "pom.xml" in basenames or "build.gradle" in basenames:
-            stack.add("java")
-        if "composer.json" in basenames:
-            stack.add("php")
-        if "Dockerfile" in basenames:
-            stack.add("docker")
+            note("java", "language", "pom.xml" if "pom.xml" in basenames else "build.gradle")
         if "pubspec.yaml" in basenames:
-            stack.add("dart")
+            note("dart", "language", "pubspec.yaml")
             pubspec_content = content_by_path.get(basename_to_path["pubspec.yaml"])
             if pubspec_content and re.search(r"(?i)^\s*flutter\s*:", pubspec_content, re.MULTILINE):
-                stack.add("flutter")
+                note("flutter", "framework", "pubspec.yaml")
 
-        return sorted(stack)
+        order = {"language": 0, "framework": 1, "tool": 2}
+        detail = sorted(found.values(), key=lambda t: (order.get(t.kind, 3), t.name))
+        return sorted(stack), detail
 
     def _detect_entry_points(self, files: list[FileNode]) -> list[str]:
         candidates = {"main.py", "app.py", "manage.py", "index.js", "server.js", "main.go"}

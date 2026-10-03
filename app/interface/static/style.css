@@ -1851,6 +1851,74 @@ button { font-family: inherit; cursor: pointer; }
 .empty-steps li::marker { color: var(--accent); font-weight: 600; }
 #tabs:not(.hidden) ~ .empty-state { display: none; }
 
+/* ---------- What this is built with ---------- */
+
+.stack-panel {
+    margin: 26px 0 8px;
+    padding: 20px 22px;
+    max-width: 900px;
+    background: var(--surface-alt);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+}
+.stack-title {
+    margin: 0 0 4px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink);
+}
+.stack-lede {
+    margin: 0 0 16px;
+    max-width: 64ch;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--ink-muted);
+}
+.stack-groups {
+    display: grid;
+    gap: 18px 28px;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.stack-group-title {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+}
+.stack-list { list-style: none; margin: 0; padding: 0; }
+.stack-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 7px;
+}
+.stack-name { font-size: 13.5px; color: var(--ink); font-weight: 500; }
+/* The file that proved it. A button because it opens that file. */
+.stack-evidence {
+    padding: 1px 6px;
+    border: 1px solid var(--hairline);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    cursor: pointer;
+}
+.stack-evidence:hover { border-color: var(--accent); color: var(--accent); }
+.stack-empty {
+    margin: 0;
+    max-width: 64ch;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--ink-muted);
+}
+
+@media (max-width: 640px) {
+    .stack-panel { padding: 16px 16px; }
+    .stack-groups { grid-template-columns: 1fr; gap: 14px; }
+}
+
 /* ---------- Tab content ---------- */
 
 .tab-content { display: none; }
