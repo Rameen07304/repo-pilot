@@ -405,7 +405,11 @@ class IngestRepoUseCase:
 
         py_manifest_text = ""
         py_marker = ""
-        for marker in ("requirements.txt", "pyproject.toml"):
+        # setup.py counts: it is the oldest and still very common way to
+        # declare a Python package, and plenty of repositories carry it
+        # with no requirements.txt or pyproject.toml beside it. Without
+        # it, a pure-Python package reported no stack at all.
+        for marker in ("requirements.txt", "pyproject.toml", "setup.py"):
             if marker in basenames:
                 note("python", "language", marker)
                 py_marker = py_marker or marker

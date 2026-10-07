@@ -498,7 +498,15 @@ class TreeSitterCodeParser:
         if language == "python":
             for lineno, line in enumerate(content.splitlines(), start=1):
                 stripped = line.strip()
-                from_match = re.match(r"^from\s+([\w.]+)\s+import\s+\(?([\w.,\s]+)", stripped)
+                # `*` belongs in the name group: without it `from pkg.mod
+                # import *` matched nothing at all, so even the module it
+                # imports was lost. That idiom is most common in
+                # __init__.py, which is exactly the file that wires a
+                # package together -- a package whose __init__ re-exports
+                # its core had no edge to that core at all. The `!= "*"`
+                # guard below was already written for this case; the
+                # pattern just never let it run.
+                from_match = re.match(r"^from\s+([\w.]+)\s+import\s+\(?([\w.,\s*]+)", stripped)
                 if from_match:
                     base = from_match.group(1)
                     imports.append((base, lineno))

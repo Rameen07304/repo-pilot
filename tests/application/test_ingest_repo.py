@@ -12,6 +12,7 @@ from app.application.interfaces.github_client import (
     RepoIsPrivateError,
 )
 from app.application.use_cases.ingest_repo import IngestRepoUseCase
+from app.domain.entities import FileNode
 
 
 class FakeGitHub:
@@ -390,3 +391,49 @@ class StaleParsedIndexTest(unittest.TestCase):
         self._ingest(cache)
         index = cache.indexes[("acme/widgets", "abc123")]
         self.assertEqual(index.parser_version, StubParser.version)
+
+
+class SetupPyIsAPythonMarkerTest(unittest.TestCase):
+    """
+    setup.py is the oldest way to declare a Python package and plenty of
+    repositories still carry only that. Checking just requirements.txt
+    and pyproject.toml meant megadose/nqntnqnqmb -- a pure Python
+    package -- reported no stack at all, and the panel that shows it
+    said no build files were found.
+    """
+
+    def _detect(self, files):
+        use_case = IngestRepoUseCase.__new__(IngestRepoUseCase)
+        nodes = [
+            FileNode(path=path, size_bytes=len(body), language=None, content=body)
+            for path, body in files.items()
+        ]
+        return IngestRepoUseCase._detect_stack(use_case, nodes)
+
+    def test_setup_py_alone_identifies_python(self):
+        names, detail = self._detect({"setup.py": "from setuptools import setup\nsetup()\n"})
+
+        self.assertIn("python", names)
+        self.assertEqual(
+            [(t.name, t.kind, t.evidence) for t in detail],
+            [("python", "language", "setup.py")],
+        )
+
+    def test_a_nested_setup_py_still_counts(self):
+        # Marker files are matched by basename, because real repos nest
+        # the package inside a subfolder.
+        names, _ = self._detect({"src/setup.py": "setup()\n"})
+        self.assertIn("python", names)
+
+    def test_requirements_txt_stays_the_evidence_when_both_exist(self):
+        # The first marker checked is the more informative one.
+        _, detail = self._detect({
+            "setup.py": "setup()\n",
+            "requirements.txt": "requests\n",
+        })
+        self.assertEqual(detail[0].evidence, "requirements.txt")
+
+    def test_a_framework_named_in_setup_py_is_found(self):
+        # setup.py lists install_requires, so the same text scan applies.
+        names, _ = self._detect({"setup.py": "setup(install_requires=['fastapi'])\n"})
+        self.assertIn("fastapi", names)

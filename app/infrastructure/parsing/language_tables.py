@@ -142,9 +142,12 @@ _DEFINITION_NODE_TYPES.update(_GRAMMAR_NODE_TYPES)
 # import resolution. Caches carrying an older value are re-parsed.
 #   1 - python, javascript, typescript, dart
 #   2 - go, rust, ruby, java, php fully parsed; .mjs/.cjs on the JS grammar
+#   7 - `from x import *` resolves. It matched nothing before, so any
+#       cached graph is missing those edges entirely -- including the
+#       __init__.py -> core edge that wires most Python packages.
 # Lives here because this is what it versions: a cached index is stale
 # exactly when one of the tables above changes.
-PARSER_VERSION = "6"
+PARSER_VERSION = "7"
 
 _NAME_FIELD = "name"  # consistent across these grammars for def/class nodes
 

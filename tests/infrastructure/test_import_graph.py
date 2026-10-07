@@ -516,3 +516,56 @@ class ControlFlowTest(unittest.TestCase):
             current = stack.pop()
             yield current
             stack.extend(current.children)
+
+
+class StarImportTest(unittest.TestCase):
+    """
+    `from pkg.mod import *` is how most Python packages re-export their
+    own insides from __init__.py. The name group in the import pattern
+    had no `*` in it, so the line matched nothing at all and even the
+    module being imported was lost -- a package whose __init__ pulls in
+    its core had no edge to that core.
+
+    Found by running megadose/nqntnqnqmb through the real app: six
+    files, and an import graph with zero edges in it.
+    """
+
+    def test_a_star_import_still_produces_an_edge(self):
+        parser = TreeSitterCodeParser()
+        edges = parser.build_module_graph({
+            "nqntnqnqmb/__init__.py": "from nqntnqnqmb.core import *\n",
+            "nqntnqnqmb/core.py": "def getCompanyFromName(): pass\n",
+        })
+
+        self.assertEqual(
+            [(e.from_module, e.to_module) for e in edges],
+            [("nqntnqnqmb/__init__.py", "nqntnqnqmb/core.py")],
+        )
+        self.assertEqual(edges[0].line, 1, "and it still carries the line it came from")
+
+    def test_a_relative_star_import_resolves_too(self):
+        parser = TreeSitterCodeParser()
+        edges = parser.build_module_graph({
+            "pkg/__init__.py": "from .core import *\n",
+            "pkg/core.py": "def f(): pass\n",
+        })
+        self.assertEqual(
+            [(e.from_module, e.to_module) for e in edges],
+            [("pkg/__init__.py", "pkg/core.py")],
+        )
+
+    def test_the_star_itself_is_not_treated_as_a_submodule(self):
+        # The base module is what resolves; "pkg.core.*" is not a file
+        # and must not be looked up as one.
+        parser = TreeSitterCodeParser()
+        found = parser._extract_imports(content="from pkg.core import *\n", language="python")
+        self.assertEqual(found, [("pkg.core", 1)])
+
+    def test_named_imports_still_work_unchanged(self):
+        parser = TreeSitterCodeParser()
+        found = parser._extract_imports(
+            content="from pkg.core import alpha, beta\n", language="python"
+        )
+        self.assertIn(("pkg.core", 1), found)
+        self.assertIn(("pkg.core.alpha", 1), found)
+        self.assertIn(("pkg.core.beta", 1), found)
