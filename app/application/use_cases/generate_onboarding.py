@@ -250,6 +250,27 @@ class GenerateOnboardingUseCase:
             )
 
         found = order(named) + order(roots[:5])
+
+        # All three signals can miss at once: a single-script tool whose
+        # file is not called main.py has no recognised name, and with no
+        # internal imports it has no graph root either. That left "where
+        # do I start" -- the question this whole screen exists to answer
+        # -- returning nothing, for a repository where the answer was the
+        # only source file in it. Falls back to the best single file
+        # rather than a list, since without a graph there is nothing to
+        # rank a list by.
+        if not found:
+            # _is_readable_code only excludes things it recognises, which
+            # is enough when the graph does the ranking and not enough
+            # here: with nothing to rank by, the list falls back to
+            # alphabetical and LICENSE beats the only script in the repo.
+            # So require an extension. Every language this reads has one,
+            # and the extensionless files in a repository root -- LICENSE,
+            # NOTICE, CODEOWNERS -- are exactly the ones nobody starts
+            # reading code from.
+            named_like_code = [p for p in repo_paths if "." in p.rsplit("/", 1)[-1]]
+            found = order(named_like_code)[:1]
+
         # Prefer real-source entry points, but never return nothing:
         # a repo that is only examples still has a best place to start.
         primary = [p for p in found if not self._is_supporting_code(p)]

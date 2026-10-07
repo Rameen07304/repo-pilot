@@ -316,3 +316,42 @@ class SupportingCodeRankingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SingleScriptEntryPointTest(unittest.TestCase):
+    """
+    All three entry-point signals can miss at once. A one-file tool
+    whose script is not called main.py has no recognised basename, and
+    with no internal imports it has no graph root either -- so "where do
+    I start" came back empty for a repository whose answer was the only
+    source file in it.
+
+    Found by running martinvigo/email2phonenumber through the real app:
+    one 1076-line script, and no entry point.
+    """
+
+    def test_a_lone_script_is_the_entry_point(self):
+        guide = run(build(manifest_for(["email2phonenumber.py"]), index_for([])))
+        self.assertEqual(guide.entry_points, ["email2phonenumber.py"])
+
+    def test_the_readme_is_not_offered_as_a_place_to_start_reading_code(self):
+        m = manifest_for(["email2phonenumber.py", "README.md", "LICENSE"])
+        guide = run(build(m, index_for([])))
+        self.assertEqual(guide.entry_points, ["email2phonenumber.py"])
+
+    def test_the_fallback_names_one_file_not_a_list(self):
+        # Without a graph there is nothing to rank a list by, so five
+        # equally-unsupported guesses would be worse than one.
+        m = manifest_for(["alpha.py", "beta.py", "gamma.py"])
+        guide = run(build(m, index_for([])))
+        self.assertEqual(len(guide.entry_points), 1)
+
+    def test_a_real_entry_point_still_wins_over_the_fallback(self):
+        m = manifest_for(["app/main.py", "app/core.py"], entry_points=["app/main.py"])
+        guide = run(build(m, index_for([("app/main.py", "app/core.py")])))
+        self.assertEqual(guide.entry_points, ["app/main.py"])
+
+    def test_a_graph_root_still_wins_over_the_fallback(self):
+        m = manifest_for(["runner.py", "lib.py"])
+        guide = run(build(m, index_for([("runner.py", "lib.py")])))
+        self.assertEqual(guide.entry_points, ["runner.py"])
