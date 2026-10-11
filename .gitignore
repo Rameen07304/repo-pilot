@@ -57,3 +57,9 @@ Thumbs.db
 
 # Editor / assistant tooling
 .claude/
+
+# Competition and explainer documents: written for people, not part of
+# the project. GitHub cannot render .docx inline anyway, so a reader
+# just gets a download prompt.
+Repo-Pilot-Explained.docx
+Repo-Pilot-Proposal.md
